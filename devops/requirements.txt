@@ -1,0 +1,37 @@
+# ── dbt core + Databricks adapter ────────────────────────────────────────────
+dbt-core
+dbt-databricks==1.11.6
+
+# ── AutomateDV (Data Vault 2.0 macros for dbt) ───────────────────────────────
+# Installed via packages.yml (dbt hub) — listed here for reference only
+# automate_dv==0.10.2
+
+# ── Data generation & utilities ──────────────────────────────────────────────
+faker==26.0.0
+pandas==2.2.2
+pyarrow==17.0.0
+openpyxl==3.1.5                 # Excel export if needed
+
+# ── Databricks connectivity ───────────────────────────────────────────────────
+# databricks-sdk==0.30.0
+databricks-connect
+
+# ── Delta Lake local testing (optional) ──────────────────────────────────────
+deltalake==0.18.2               # Python bindings for Delta Lake (local dev/test)
+
+# ── Development tooling ───────────────────────────────────────────────────────
+pre-commit==3.8.0
+sqlfluff==3.1.0                 # SQL linting
+sqlfluff-templater-dbt==3.1.0   # dbt-aware linting
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.2
+dbt-unit-test==0.0.4
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+pyyaml==6.0.2
+rich==13.7.1                    # pretty CLI output
+
+# ── DataValidations ──────────────────────────────────────────────────────────────────────
+pydantic==2.12.5

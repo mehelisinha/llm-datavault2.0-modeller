@@ -1,0 +1,21 @@
+version: 2
+models:
+- name: sat_conducting_equipment_details
+  description: Data Vault satellite for sat_conducting_equipment_details
+  meta:
+    dv_type: satellite
+    source_models:
+    - stg_conducting_equipment
+    src_pk: HK_CONDUCTING_EQUIPMENT
+    src_hashdiff: HD_CONDUCTING_EQUIPMENT_S
+    src_payload:
+    - name
+    - equipment_type
+    - base_voltage_kv
+    - in_service
+    - asset_status
+    - manufacturer
+    - model
+    - serial_number
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE

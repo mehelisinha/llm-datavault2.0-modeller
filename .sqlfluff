@@ -1,0 +1,37 @@
+[sqlfluff]
+dialect = databricks
+templater = dbt
+max_line_length = 120
+runaway_limit = 10
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = ~/.dbt
+
+[sqlfluff:rules]
+tab_space_size = 4
+indent_unit = space
+
+[sqlfluff:rules:L010]  # keywords uppercase
+capitalisation_policy = upper
+
+[sqlfluff:rules:L014]  # identifiers lowercase
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:L016]
+ignore_comment_lines = True
+
+[sqlfluff:rules:L031]
+force_enable = True
+
+[sqlfluff:rules:L034]
+force_enable = True
+
+[sqlfluff:layout:type:comma]
+line_position = trailing
+
+[sqlfluff:layout:type:binary_operator]
+line_position = leading
+
+[sqlfluff:indentation]
+indented_joins = True

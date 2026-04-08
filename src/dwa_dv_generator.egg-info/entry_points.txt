@@ -1,0 +1,2 @@
+[console_scripts]
+generate-dv-models = dwa_dv_generator.cli:main

@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: iec_cim_raw
+    description: "Raw IEC61968 CIM source data landing zone (Bronze)"
+    schema: bronze          # your bronze_db value
+    tables:
+      - name: conducting_equipment
+      - name: connectivity_nodes
+      - name: terminals

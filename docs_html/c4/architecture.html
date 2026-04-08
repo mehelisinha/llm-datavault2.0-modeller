@@ -1,0 +1,1521 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture - EDH Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .nav {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #007acc;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #007acc;
+            margin-top: 1.5em;
+        }
+        h1 { border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        blockquote {
+            border-left: 4px solid #007acc;
+            padding-left: 15px;
+            margin-left: 0;
+            color: #666;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .toc {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .toc ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .breadcrumb {
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        .breadcrumb a {
+            color: #666;
+        }
+        /* Mermaid diagram styling */
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+    <!-- Mermaid.js for diagram rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'arial',
+            fontSize: 14
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Architecture</h1>
+            
+            <div class="breadcrumb"><a href="index.html">docs</a> / <a href="c4/index.html">c4</a> / <span>architecture</span></div>
+            
+        </div>
+
+        <div class="nav">
+            <a href="index.html">🏠 Home</a>
+            
+            <a href="structurizr-run-guide.html">📄 Structurizr-Run-Guide</a>
+            
+        </div>
+
+        <div class="content">
+            <h1 id="data-warehouse-automation-dwa-architecture">Data Warehouse Automation (DWA) - Architecture</h1>
+<h2 id="table-of-contents">Table of Contents</h2>
+<h3 id="1-purpose-objectives">1. Purpose &amp; Objectives</h3>
+<ul>
+<li><a href="#purpose">Purpose</a></li>
+<li><a href="#key-constraints--patterns">Key Constraints &amp; Patterns</a></li>
+</ul>
+<h3 id="2-high-level-architecture">2. High-Level Architecture</h3>
+<ul>
+<li><a href="#21-system-overview-diagram">2.1 System Overview Diagram</a></li>
+<li><a href="#22-data-flow-pipeline">2.2 Data Flow Pipeline</a></li>
+</ul>
+<h3 id="3-project-folder-structure">3. Project Folder Structure</h3>
+<ul>
+<li><a href="#3-project-folder-structure">3. Project Folder Structure</a></li>
+</ul>
+<h3 id="4-core-components">4. Core Components</h3>
+<ul>
+<li><a href="#41-metadata-configuration">4.1 Metadata Configuration</a></li>
+<li><a href="#metadata-structure-diagram">Metadata Structure Diagram</a></li>
+<li><a href="#key-metadata-components">Key Metadata Components</a></li>
+<li><a href="#42-datavault-project-builder">4.2 DataVault Project Builder</a></li>
+<li><a href="#builder-architecture">Builder Architecture</a></li>
+<li><a href="#core-responsibilities">Core Responsibilities</a></li>
+<li><a href="#process-flow">Process Flow</a></li>
+<li><a href="#macro-examples">Macro Examples</a></li>
+<li><a href="#43-datavault-project-runner">4.3 DataVault Project Runner</a></li>
+<li><a href="#execution-flow">Execution Flow</a></li>
+<li><a href="#runner-responsibilities">Runner Responsibilities</a></li>
+<li><a href="#audit-logging-strategy-recommended">Audit Logging Strategy</a></li>
+</ul>
+<h3 id="5-recommended-supporting-libraries-tools">5. Recommended Supporting Libraries &amp; Tools</h3>
+<ul>
+<li><a href="#51-core-data-vault-framework">5.1 Core Data Vault Framework</a></li>
+<li><a href="#52-supporting-dbt-packages">5.2 Supporting DBT Packages</a></li>
+<li><a href="#53-python-libraries-for-project-builder">5.3 Python Libraries for Project Builder</a></li>
+<li><a href="#54-library-recommendation-matrix">5.4 Library Recommendation Matrix</a></li>
+<li><a href="#55-installation-reference">5.5 Installation Reference</a></li>
+</ul>
+<h3 id="6-architecture-patterns">6. Architecture Patterns</h3>
+<ul>
+<li><a href="#61-data-vault-20-layers">6.1 Data Vault 2.0 Layers</a></li>
+<li><a href="#62-hub-link-satellite-relationships">6.2 Hub-Link-Satellite Relationships</a></li>
+</ul>
+<h3 id="7-implementation-roadmap">7. Implementation Roadmap</h3>
+<h3 id="8-technology-stack-summary">8. Technology Stack Summary</h3>
+<h3 id="9-best-practices-recommendations">9. Best Practices &amp; Recommendations</h3>
+<h3 id="10-troubleshooting-common-issues">10. Troubleshooting &amp; Common Issues</h3>
+<h3 id="11-next-steps">11. Next Steps</h3>
+<h3 id="references-resources">References &amp; Resources</h3>
+<hr />
+<h2 id="1-purpose-objectives_1">1. Purpose &amp; Objectives</h2>
+<h3 id="purpose">Purpose</h3>
+<p>The DWA system is designed to:<br />
+- <strong>Automate Data Warehouse construction</strong> using DBT framework with Data Vault 2.0 and Star Schema patterns<br />
+- <strong>Dynamic code generation</strong> based on metadata configuration<br />
+- <strong>Multi-system support</strong> with independent system deployments<br />
+- <strong>Object-Oriented Python design</strong> for maintainability and extensibility<br />
+- <strong>DBT best practices</strong> integration while preserving lineage and documentation capabilities<br />
+- <strong>Scalability</strong> for various data sources and transformation complexity levels</p>
+<h3 id="key-constraints-patterns">Key Constraints &amp; Patterns:</h3>
+<ul>
+<li>Preserve DBT native features: data lineage graphs and documentation</li>
+<li>If needed, implement alternatives using Python/Databricks for enhanced functionality</li>
+<li>Support orchestration through schedulers (Databricks Workflows, Airflow, etc.)</li>
+</ul>
+<hr />
+<h2 id="2-high-level-architecture_1">2. High-Level Architecture</h2>
+<h3 id="21-system-overview-diagram">2.1 System Overview Diagram</h3>
+<div class="mermaid">
+graph LR
+    User["👤 User/Administrator"]
+    Metadata["📊 Metadata Configuration<br/>(CSV/Excel/UI)"]
+    Builder["🔨 DataVault<br/>Project Builder"]
+    Scheduler["⏱️ Scheduler<br/>(Workflows/Airflow)"]
+    Runner["▶️ DataVault<br/>Project Runner"]
+    RawVault["🗄️ Raw Vault<br/>(Delta Tables)"]
+    PIT["📈 PIT Tables<br/>(Point in Time)"]
+    StarSchema["⭐ Star Schema<br/>(Dimensional)"]
+    Audit["🔍 Audit Logs<br/>(Lineage/Versioning)"]
+    EntityRelashionship["📄 Docs and Entity Relashionship<br/>(Docs)"]
+
+    User -->|Configures| Metadata
+    Metadata -->|Triggers| Builder
+    Builder -->|Generates| Runner
+    Scheduler -->|Triggers| Runner
+    Runner -->|Uses| Builder
+    Runner -->|Generates| RawVault
+    RawVault -->|Creates| PIT
+    PIT -->|Builds| StarSchema
+    RawVault -->|Logs to| Audit
+    Runner -->|Logs to| Audit
+    Runner -->|Provides artifacts for| EntityRelashionship
+</div>
+
+<h3 id="22-data-flow-pipeline">2.2 Data Flow Pipeline</h3>
+<div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Metadata as Metadata Store
+    participant Builder as Project Builder
+    participant DBT as DBT Engine
+    participant APP as DBT Doc App
+    participant DatabricksWS as Databricks Workspace
+    participant RawVault as Raw Vault
+    participant PIT as PIT Layer
+    participant StarSchema as Star Schema
+
+    User->>Metadata: 1. Configure System Metadata
+    Metadata->>Builder: 2. Trigger Code Generation
+    Builder->>DatabricksWS: 3. Generate dbt project structure
+    Builder->>Metadata: 4. Read model specifications
+    DBT->>DatabricksWS: 5. Execute compiled models
+    DBT->>RawVault: 6. Load Hubs & Links
+    DBT->>RawVault: 7. Load Satellites
+    RawVault->>PIT: 8. Create Point-in-Time tables
+    PIT->>StarSchema: 9. Build dimensional schema
+    StarSchema->>User: 10. Query results available
+    DBT->>APP: 11. Generates artifacts for app
+</div>
+
+<hr />
+<h2 id="3-project-folder-structure_1">3. Project Folder Structure</h2>
+<p>The project is organized into three independent subprojects that correspond to the main DWA components:<br />
+- <code>metadata</code> — metadata ingestion, validation, and metadata-driven model definitions<br />
+- <code>dbt_builder</code> — DBT project generation and template management<br />
+- <code>dbt_runner</code> — DBT execution, orchestration, and audit logging</p>
+<p>Shared code is placed in a <code>shared/</code> package and consumed by all three subprojects.<br />
+Each subproject has its own <code>devops/</code> folder so it can be deployed independently, while the shared folder is included by all deploys.</p>
+<div class="codehilite"><pre><span></span><code>project_root/
+├── metadata/
+│   ├── src/                  # Metadata ingestion and configuration code
+│   ├── tests/                # Unit/integration tests for metadata logic
+│   ├── devops/               # CI/CD and deployment artifacts for metadata service
+│   │   ├── azure-pipelines.yml
+│   │   ├── deploy.sh
+│   │   └── README.md
+│   ├── README.md             # Component-specific usage and deployment notes
+│   └── pyproject.toml        # Optional component packaging config
+│
+├── dbt_builder/
+│   ├── src/                  # DBT generation engine and template logic
+│   ├── tests/                # Unit/integration tests for builder logic
+│   ├── devops/               # CI/CD and deployment artifacts for dbt_builder
+│   │   ├── azure-pipelines.yml
+│   │   ├── deploy.sh
+│   │   └── README.md
+│   ├── README.md
+│   └── pyproject.toml
+│
+├── dbt_runner/
+│   ├── src/                  # DBT execution orchestration and audit runtime
+│   ├── tests/                # Unit/integration tests for runner logic
+│   ├── devops/               # CI/CD and deployment artifacts for dbt_runner
+│   │   ├── azure-pipelines.yml
+│   │   ├── deploy.sh
+│   │   └── README.md
+│   ├── README.md
+│   └── pyproject.toml
+│
+├── shared/
+│   ├── src/                  # Reusable utilities, helpers, and common libraries
+│   ├── tests/                # Shared tests for common functionality
+│   └── README.md             # Shared usage and packaging notes
+│
+├── devops/                   # Top-level deployment orchestration and reusable templates
+│   ├── metadata/
+│   │   ├── pipeline.yml
+│   │   └── deploy.sh
+│   ├── dbt_builder/
+│   │   ├── pipeline.yml
+│   │   └── deploy.sh
+│   ├── dbt_runner/
+│   │   ├── pipeline.yml
+│   │   └── deploy.sh
+│   ├── shared/               # Shared deployment scripts and conventions
+│   │   └── deploy_common.sh
+│   └── templates/            # Reusable CI/CD pipeline templates
+│       └── build-and-deploy.yml
+│
+├── docs/                     # Architecture docs, run guides, and diagrams
+├── README.md
+└── pyproject.toml            # Optional top-level packaging / tooling config
+</code></pre></div>
+
+<h3 id="folder-structure-notes">Folder structure notes</h3>
+<ul>
+<li><code>metadata/</code>, <code>dbt_builder/</code>, and <code>dbt_runner/</code> are independent subprojects and can each be deployed separately.</li>
+<li><code>shared/</code> contains common code, utilities, and tests used by all three subprojects.</li>
+<li>Each subproject has a <code>devops/</code> folder for its own deployment pipeline and release definition.</li>
+<li>A top-level <code>devops/</code> folder contains reusable templates and shared deployment helpers that can be referenced by each component pipeline.</li>
+<li><code>docs/</code> holds documentation such as architecture, run guides, and deployment instructions.</li>
+</ul>
+<hr />
+<h2 id="4-core-components_1">4. Core Components</h2>
+<h3 id="41-metadata-configuration">4.1 Metadata Configuration</h3>
+<p>Metadata is the single source of truth for all system configurations. It defines how source data flows through the Data Vault layers.</p>
+<h4 id="metadata-structure-diagram">Metadata Structure Diagram</h4>
+<div class="mermaid">
+graph TD
+    MD["📋 Metadata Repository"]
+
+    Systems["🖥️ SYSTEMS<br/>- system_id<br/>- system_name<br/>- source_type"]
+
+    Tables["📑 SOURCE TABLES<br/>- table_id<br/>- source_table<br/>- business_process"]
+
+    Columns["🔑 COLUMNS<br/>- column_id<br/>- column_name<br/>- data_type<br/>- is_business_key<br/>- is_primary_key<br/>- is_derived"]
+
+    Staging["🔀 STAGING CONFIG<br/>- model_name<br/>- target_schema<br/>- derived_columns<br/>- filters<br/>- materialization"]
+
+    RawVault["🏶 RAW VAULT CONFIG<br/>- Hub definitions<br/>- Link relationships<br/>- Satellite schedules<br/>- is_scd_type2"]
+
+    Marts["📊 MART CONFIG<br/>- Dimension specs<br/>- Fact tables<br/>- Aggregations"]
+
+    Tests["✅ TEST CONFIG<br/>- Uniqueness tests<br/>- Not null tests<br/>- Custom tests"]
+
+    MD --> Systems
+    MD --> Tables
+    MD --> Columns
+    MD --> Staging
+    MD --> RawVault
+    MD --> Marts
+    MD --> Tests
+
+    Systems --> Tables
+    Tables --> Columns
+    Columns --> Staging
+    Staging --> RawVault
+    RawVault --> Marts
+</div>
+
+<h4 id="key-metadata-components">Key Metadata Components</h4>
+<ul>
+<li>
+<ol>
+<li><strong>Systems Configuration</strong> - Define source systems. Slim table with minimal detail on the system</li>
+<li>system_id, system_name, source_type, credentials( secret names to be retrieved..), load_frequency, description</li>
+</ol>
+</li>
+<li>
+<ol start="2">
+<li><strong>Table Structure</strong> - Specify source tables and fields. (Most important part of the config)</li>
+<li>Fields, data types, business keys, primary keys, alias</li>
+<li>is Hub Link or Satellite</li>
+<li>group ( to separate satellites)</li>
+<li>Satellite refresh frequency,</li>
+<li>descriptions (optional)</li>
+</ol>
+</li>
+</ul>
+<ol start="3">
+<li><strong>Transformations</strong> - Specify transformations<ul>
+<li>model name, transformation, arguments ...</li>
+</ul>
+</li>
+</ol>
+<p>Below can potentially be derived from above:<br />
+- 1. <strong>Staging Configuration</strong> - Define staging layer models<br />
+    - Model name, target schema, derived columns, filters, materialization (view/table)<br />
+    - Data quality tests</p>
+<ul>
+<li>
+<ol start="2">
+<li><strong>Raw Vault Configuration</strong></li>
+<li>Hub definitions (business keys, descriptions)</li>
+<li>Link definitions (relationships between hubs)</li>
+<li>Satellite definitions (attributes, SCD type, refresh frequency)</li>
+</ol>
+</li>
+<li>
+<ol start="3">
+<li><strong>Mart Configuration</strong> - Star schema definitions</li>
+<li>Dimension definitions, fact table specifications, aggregations</li>
+</ol>
+</li>
+</ul>
+<p>Can be provided via CSV/Excel files and transformed into Databricks Delta tables for versioning.</p>
+<hr />
+<h3 id="42-datavault-project-builder">4.2 DataVault Project Builder</h3>
+<p>The <strong>Project Builder</strong> is the core code generation engine that transforms metadata into fully-functional DBT projects.</p>
+<h4 id="builder-architecture">Builder Architecture</h4>
+<div class="mermaid">
+graph LR
+    Metadata["📊 Metadata<br/>Reader"]
+    Validator["✓ Validator<br/>(Schema check)"]
+    Parser["🔍 Parser<br/>(Extract specs)"]
+
+    HubGen["🏷️ Hub<br/>Generator"]
+    LinkGen["🔗 Link<br/>Generator"]
+    SatGen["📡 Satellite<br/>Generator"]
+
+    MacroGen["⚙️ Macro<br/>Generator"]
+    TestGen["✅ Test<br/>Generator"]
+    ConfigGen["⚙️ Config<br/>Generator"]
+
+    FileWriter["💾 File<br/>Writer"]
+    DBTProject["📦 DBT<br/>Project Output"]
+
+    Metadata --> Validator
+    Validator --> Parser
+
+    Parser --> HubGen
+    Parser --> LinkGen
+    Parser --> SatGen
+    Parser --> MacroGen
+    Parser --> TestGen
+    Parser --> ConfigGen
+
+    HubGen --> FileWriter
+    LinkGen --> FileWriter
+    SatGen --> FileWriter
+    MacroGen --> FileWriter
+    TestGen --> FileWriter
+    ConfigGen --> FileWriter
+
+    FileWriter --> DBTProject
+</div>
+
+<h4 id="core-responsibilities">Core Responsibilities</h4>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Metadata Reader</strong></td>
+<td>Load and parse metadata from CSV/Delta tables</td>
+</tr>
+<tr>
+<td><strong>Validator</strong></td>
+<td>Validate metadata schema and cross-references</td>
+</tr>
+<tr>
+<td><strong>Hub Generator</strong></td>
+<td>Create <code>hub_*.sql</code> and corresponding <code>.yml</code> files</td>
+</tr>
+<tr>
+<td><strong>Link Generator</strong></td>
+<td>Create <code>lnk_*.sql</code> and relationship definitions</td>
+</tr>
+<tr>
+<td><strong>Satellite Generator</strong></td>
+<td>Create <code>sat_*.sql</code> with ESD/SCD type 2 support</td>
+</tr>
+<tr>
+<td><strong>Macro Generator</strong></td>
+<td>Generate custom dbt macros (hashing, surrogate keys, etc.)</td>
+</tr>
+<tr>
+<td><strong>Test Generator</strong></td>
+<td>Create <code>.yml</code> with dbt test definitions</td>
+</tr>
+<tr>
+<td><strong>Config Generator</strong></td>
+<td>Generate <code>dbt_project.yml</code> and <code>sources.yml</code></td>
+</tr>
+<tr>
+<td><strong>File Writer</strong></td>
+<td>Write all generated files to Databricks workspace</td>
+</tr>
+</tbody>
+</table>
+<h4 id="process-flow">Process Flow</h4>
+<div class="mermaid">
+sequenceDiagram
+    participant Input as Metadata Input
+    participant Builder as Project Builder
+    participant Python as Python OOP
+    participant Templates as SQL Templates
+    participant Workspace as Databricks Workspace
+
+    Input->>Builder: 1. Provide metadata (CSV/Delta)
+    Builder->>Python: 2. Initialize builder instance
+    Python->>Python: 3. Validate metadata schema
+    Python->>Python: 4. Extract system specifications
+
+    Python->>Templates: 5. Load template files
+    Python->>Python: 6. Generate Hub models
+    Python->>Python: 7. Generate Link models
+    Python->>Python: 8. Generate Satellite models
+
+    Python->>Python: 9. Generate macros
+    Python->>Python: 10. Generate tests
+    Python->>Python: 11. Generate configurations
+
+    Python->>Workspace: 12. Write all files
+    Workspace->>Input: 13. dbt project ready
+</div>
+<h4 id="macro-examples">Macro Examples:</h4>
+<p>(AutomateDv) model</p>
+<h5 id="hub">Hub:</h5>
+<div class="codehilite"><pre><span></span><code><span class="c1">-- 1. Configure the model for incremental loading</span>
+<span class="err">{{</span><span class="w"> </span><span class="n">config</span><span class="p">(</span><span class="n">materialized</span><span class="o">=</span><span class="s1">&#39;incremental&#39;</span><span class="p">,</span><span class="w"> </span><span class="k">schema</span><span class="o">=</span><span class="s1">&#39;data_vault&#39;</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+
+<span class="c1">-- 2. Provide metadata for the hub</span>
+<span class="err">{</span><span class="o">%-</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">src_pk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{HUB_NAME}_HK&#39;</span><span class="w"> </span><span class="o">-%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%-</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">src_nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{HUB_NAME}_ID&#39;</span><span class="w"> </span><span class="o">-%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%-</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">src_ldts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;LOAD_DATETIME&#39;</span><span class="w"> </span><span class="o">-%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%-</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">src_source</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;RECORD_SOURCE&#39;</span><span class="w"> </span><span class="o">-%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%-</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">source_model</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;v_stg_orders&#39;</span><span class="w"> </span><span class="o">-%</span><span class="err">}</span>
+
+<span class="c1">-- 3. Call the hub macro</span>
+<span class="err">{{</span><span class="w"> </span><span class="n">automate_dv</span><span class="p">.</span><span class="n">hub</span><span class="p">(</span><span class="n">src_pk</span><span class="o">=</span><span class="n">src_pk</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">src_nk</span><span class="o">=</span><span class="n">src_nk</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">src_ldts</span><span class="o">=</span><span class="n">src_ldts</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">src_source</span><span class="o">=</span><span class="n">src_source</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">source_model</span><span class="o">=</span><span class="n">source_model</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+</code></pre></div>
+
+<p>Breakdown of Parameters<br />
+- src_pk: The hash key column (hash of the natural key).<br />
+- src_nk: The natural key(s) column from the source system.<br />
+- src_ldts: The Load Date Timestamp column.<br />
+- src_source: The record source column.<br />
+- source_model: The name of the staging model (minus .sql).<br />
+ for mire details see automate dv [docs](https://automate-dv.readthedocs.io/en/latest/tutorial/tut_hubs/#:~:text=%7B%7B%20automate_dv.hub(src_pk=,6%207%208%209%2010)</p>
+<p>Example of Python</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DBTSnippetGenerator</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Class to generate DBT SQL snippets using automate_dv.link.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">materialized</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_model</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">src_pk</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">src_fk</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">src_ldts</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">src_source</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">materialized</span> <span class="o">=</span> <span class="n">materialized</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">source_model</span> <span class="o">=</span> <span class="n">source_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">src_pk</span> <span class="o">=</span> <span class="n">src_pk</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">src_fk</span> <span class="o">=</span> <span class="n">src_fk</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">src_ldts</span> <span class="o">=</span> <span class="n">src_ldts</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">src_source</span> <span class="o">=</span> <span class="n">src_source</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_sql</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate DBT SQL snippet.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            str: Formatted DBT SQL snippet.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Format lists for Jinja</span>
+        <span class="n">source_model_str</span> <span class="o">=</span> <span class="s2">&quot;,</span><span class="se">\n</span><span class="s2">                        &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s1">&quot;&#39;</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">source_model</span><span class="p">)</span>
+        <span class="n">src_fk_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="n">fk</span><span class="si">}</span><span class="s1">&quot;&#39;</span> <span class="k">for</span> <span class="n">fk</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">src_fk</span><span class="p">)</span>
+
+        <span class="n">sql_snippet</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span><span class="se">{{{{</span><span class="s2"> config(materialized=&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">materialized</span><span class="si">}</span><span class="s2">&#39;) </span><span class="se">}}}}</span>
+
+<span class="se">{{</span><span class="s2">%- set source_model = [</span><span class="si">{</span><span class="n">source_model_str</span><span class="si">}</span><span class="s2">] -%</span><span class="se">}}</span>
+
+<span class="se">{{</span><span class="s2">%- set src_pk = &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">src_pk</span><span class="si">}</span><span class="s2">&quot; -%</span><span class="se">}}</span>
+<span class="se">{{</span><span class="s2">%- set src_fk = [</span><span class="si">{</span><span class="n">src_fk_str</span><span class="si">}</span><span class="s2">] -%</span><span class="se">}}</span>
+<span class="se">{{</span><span class="s2">%- set src_ldts = &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">src_ldts</span><span class="si">}</span><span class="s2">&quot; -%</span><span class="se">}}</span>
+<span class="se">{{</span><span class="s2">%- set src_source = &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">src_source</span><span class="si">}</span><span class="s2">&quot; -%</span><span class="se">}}</span>
+
+<span class="se">{{{{</span><span class="s2"> automate_dv.link(</span>
+<span class="s2">    src_pk=src_pk,</span>
+<span class="s2">    src_fk=src_fk,</span>
+<span class="s2">    src_ldts=src_ldts,</span>
+<span class="s2">    src_source=src_source,</span>
+<span class="s2">    source_model=source_model</span>
+<span class="s2">) </span><span class="se">}}}}</span>
+<span class="s2">&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">sql_snippet</span>
+
+
+<span class="c1"># ===== Example usage =====</span>
+<span class="n">generator</span> <span class="o">=</span> <span class="n">DBTSnippetGenerator</span><span class="p">(</span>
+    <span class="n">materialized</span><span class="o">=</span><span class="s2">&quot;incremental&quot;</span><span class="p">,</span>
+    <span class="n">source_model</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;v_stg_orders_web&quot;</span><span class="p">,</span> <span class="s2">&quot;v_stg_orders_crm&quot;</span><span class="p">,</span> <span class="s2">&quot;v_stg_orders_sap&quot;</span><span class="p">],</span>
+    <span class="n">src_pk</span><span class="o">=</span><span class="s2">&quot;CUSTOMER_ORDER_HK&quot;</span><span class="p">,</span>
+    <span class="n">src_fk</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;CUSTOMER_HK&quot;</span><span class="p">,</span> <span class="s2">&quot;ORDER_HK&quot;</span><span class="p">],</span>
+    <span class="n">src_ldts</span><span class="o">=</span><span class="s2">&quot;LOAD_DATETIME&quot;</span><span class="p">,</span>
+    <span class="n">src_source</span><span class="o">=</span><span class="s2">&quot;RECORD_SOURCE&quot;</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">generator</span><span class="o">.</span><span class="n">generate_sql</span><span class="p">())</span>
+</code></pre></div>
+
+<h4 id="output-directory-structure">Output Directory Structure</h4>
+<div class="codehilite"><pre><span></span><code>{system}_dwh/
+├── dbt/
+│   ├── models/
+│   │   ├── 01_staging/
+│   │   │   ├── stg_*.sql
+│   │   │   └── sources.yml
+│   │   ├── 02_raw_vault/
+│   │   │   ├── hub/
+│   │   │   │   ├── hub_*.sql
+│   │   │   │   └── <span class="gs">*.yml</span>
+<span class="gs">│   │   │   ├── link/</span>
+<span class="gs">│   │   │   │   └── lnk_*</span>.sql
+│   │   │   └── satellite/
+│   │   │       ├── sat_*.sql
+│   │   │       └── eff_sat_*.sql
+│   │   ├── 03_pit/
+│   │   │   └── pit_*.sql
+│   │   └── 04_marts/ (optional)
+│   │       └── dim_*.sql, fact_*.sql
+│   ├── macros/
+│   ├── tests/
+│   ├── dbt_project.yml
+│   └── profiles.yml
+└── audit/
+    └── execution_logs.csv
+</code></pre></div>
+
+<hr />
+<h3 id="43-datavault-project-runner">4.3 DataVault Project Runner</h3>
+<p>The <strong>Project Runner</strong> orchestrates the execution of generated DBT models following Data Vault loading patterns.</p>
+<h4 id="execution-flow">Execution Flow</h4>
+<div class="mermaid">
+graph TD
+    Start["🚀 Start Execution"] --> Extract["1️⃣ Extract Models<br/>(from metadata)"]
+    Extract --> Validate["2️⃣ Validate<br/>Dependencies"]
+
+    Validate --> AuditStart["3️⃣ Create Audit Log<br/>(IN PROGRESS)"]
+
+    AuditStart --> HubLoop["🔄 Hub Iteration"]
+    HubLoop --> HubExec["Execute: dbt run<br/>-m hub_*"]
+    HubExec --> HubLog["Log Results"]
+    HubLog --> HubCheck{All?}
+    HubCheck -->|No| HubLoop
+    HubCheck -->|Yes| LinkLoop
+
+    LinkLoop["🔄 Link Iteration"] --> LinkExec["Execute: dbt run<br/>-m lnk_*"]
+    LinkExec --> LinkLog["Log Results"]
+    LinkLog --> LinkCheck{All?}
+    LinkCheck -->|No| LinkLoop
+    LinkCheck -->|Yes| SatLoop
+
+    SatLoop["🔄 Satellite Iteration"] --> SatExec["Execute: dbt run<br/>-m sat_*"]
+    SatExec --> SatLog["Log Results"]
+    SatLog --> SatCheck{All?}
+    SatCheck -->|No| SatLoop
+    SatCheck -->|Yes| PIT
+
+    PIT["4️⃣ Execute PIT Layer"] --> Marts["5️⃣ Execute Marts"]
+    Marts --> Tests["6️⃣ Run Data Quality Tests"]
+    Tests --> Success["7️⃣ Update Audit<br/>SUCCESS"]
+    Success --> End["✅ Complete"]
+
+    HubExec -->|Error| Fail["❌ Audit<br/>FAILED"]
+    LinkExec -->|Error| Fail
+    SatExec -->|Error| Fail
+    Tests -->|Failed| Fail
+    Fail --> End
+</div>
+
+<h4 id="runner-responsibilities">Runner Responsibilities</h4>
+<ul>
+<li><strong>Model Extraction</strong> - Read models from workspace and metadata</li>
+<li><strong>Dependency Analysis</strong> - Determine execution order: Hub → Link → Satellite → PIT → Marts</li>
+<li><strong>Sequential Execution</strong> - Execute models with error handling</li>
+<li><strong>Audit Logging</strong> - Log execution start/progress/completion with timestamps<br />
+    Steps:<ul>
+<li>audit pipeline start</li>
+<li>audit model start with version</li>
+<li>adjust finish status : success or fail</li>
+</ul>
+</li>
+<li><strong>Error Handling</strong> - Capture failures and update audit status</li>
+<li><strong>Test Execution</strong> - Run dbt tests post-load for quality checks</li>
+<li><strong>Performance Monitoring</strong> - Track execution time and row counts</li>
+</ul>
+<h4 id="audit-logging-strategy-recommended">Audit Logging Strategy (Recommended)</h4>
+<p>Below is example on how to log models</p>
+<p><strong>Scenario 1: Status-Based Tracking with In Progress Status</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">-- AUDIT TABLE SCHEMA (Create once)</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">your_schema</span><span class="p">.</span><span class="n">audit_log</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">execution_id</span><span class="w"> </span><span class="n">STRING</span><span class="p">,</span>
+<span class="w">    </span><span class="n">system_id</span><span class="w"> </span><span class="n">STRING</span><span class="p">,</span>
+<span class="w">    </span><span class="n">model_name</span><span class="w"> </span><span class="n">STRING</span><span class="p">,</span>
+<span class="w">    </span><span class="n">status</span><span class="w"> </span><span class="n">STRING</span><span class="p">,</span><span class="w">           </span><span class="c1">-- &#39;IN PROGRESS&#39;, &#39;SUCCESS&#39;, &#39;FAILED&#39;</span>
+<span class="w">    </span><span class="n">start_time</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">,</span>
+<span class="w">    </span><span class="n">end_time</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">,</span>
+<span class="w">    </span><span class="k">row_count</span><span class="w"> </span><span class="nb">BIGINT</span><span class="p">,</span>
+<span class="w">    </span><span class="n">error_message</span><span class="w"> </span><span class="n">STRING</span><span class="p">,</span>
+<span class="w">    </span><span class="n">created_at</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">()</span>
+<span class="p">);</span>
+
+<span class="c1">-- Before execution (Pre-hook)</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">audit_log</span><span class="w"> </span><span class="p">(</span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">)</span>
+<span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">UUID</span><span class="p">(),</span><span class="w"> </span><span class="s1">&#39;SYS_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;hub_equipment&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;IN PROGRESS&#39;</span><span class="p">,</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">());</span>
+
+<span class="c1">-- After successful execution (Post-hook)</span>
+<span class="k">UPDATE</span><span class="w"> </span><span class="n">audit_log</span>
+<span class="k">SET</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">end_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">(),</span>
+<span class="w">    </span><span class="k">row_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="n">this</span><span class="w"> </span><span class="err">}}</span><span class="p">)</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">execution_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&lt;execution_id&gt;&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ this.name }}&#39;</span><span class="p">;</span>
+
+<span class="c1">-- On error (ON FAIL hook)</span>
+<span class="k">UPDATE</span><span class="w"> </span><span class="n">audit_log</span>
+<span class="k">SET</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;FAILED&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">end_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">(),</span>
+<span class="w">    </span><span class="n">error_message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&lt;error_details&gt;&#39;</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">execution_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&lt;execution_id&gt;&#39;</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ this.name }}&#39;</span><span class="p">;</span>
+</code></pre></div>
+
+<p><strong>Scenario 2: Status-Based Tracking with Temporary Views</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1">-- Before execution: Create temporary view with source version</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="k">REPLACE</span><span class="w"> </span><span class="k">TEMPORARY</span><span class="w"> </span><span class="k">VIEW</span><span class="w"> </span><span class="n">sys_01_hub_equipment_audit</span><span class="w"> </span><span class="k">AS</span>
+<span class="k">SELECT</span>
+<span class="w">    </span><span class="k">version</span><span class="p">,</span>
+<span class="w">    </span><span class="n">UUID</span><span class="p">()</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">execution_id</span><span class="p">,</span>
+<span class="w">    </span><span class="s1">&#39;SYS_001&#39;</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span>
+<span class="w">    </span><span class="s1">&#39;hub_equipment&#39;</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span>
+<span class="w">    </span><span class="s1">&#39;IN PROGRESS&#39;</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">status</span><span class="p">,</span>
+<span class="w">    </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">()</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">start_time</span>
+<span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">version</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">DESCRIBE</span><span class="w"> </span><span class="n">HISTORY</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="k">source</span><span class="p">(</span><span class="s1">&#39;src&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;equipment&#39;</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">1</span><span class="p">));</span>
+
+<span class="c1">-- After successful execution: Insert from temp view</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">audit_log</span><span class="w"> </span><span class="p">(</span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">,</span><span class="w"> </span><span class="n">end_time</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">,</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">()</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">sys_01_hub_equipment_audit</span><span class="p">;</span>
+
+<span class="c1">-- On error: Mark as failed</span>
+<span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">audit_log</span><span class="w"> </span><span class="p">(</span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">,</span><span class="w"> </span><span class="n">end_time</span><span class="p">,</span><span class="w"> </span><span class="n">error_message</span><span class="p">)</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;FAILED&#39;</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">,</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">(),</span><span class="w"> </span><span class="s1">&#39;&lt;error_detail&gt;&#39;</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">sys_01_hub_equipment_audit</span><span class="p">;</span>
+</code></pre></div>
+
+<hr />
+<h3 id="411-custom-dbt-macros-for-audit-logging">4.1.1 Custom DBT Macros for Audit Logging</h3>
+<p><strong>Macro 1: Get Delta Version</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">macro</span><span class="w"> </span><span class="n">get_delta_version</span><span class="p">(</span><span class="n">source_name</span><span class="p">,</span><span class="w"> </span><span class="k">table_name</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">#</span><span class="w"> </span><span class="k">Extract</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">latest</span><span class="w"> </span><span class="k">version</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">Delta</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="n">history</span><span class="w"> </span><span class="o">#</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">get_version_query</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="k">SELECT</span><span class="w"> </span><span class="k">version</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="k">DESCRIBE</span><span class="w"> </span><span class="n">HISTORY</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="k">source</span><span class="p">(</span><span class="n">source_name</span><span class="p">,</span><span class="w"> </span><span class="k">table_name</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endset</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">results</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">run_query</span><span class="p">(</span><span class="n">get_version_query</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="k">execute</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">current_version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">results</span><span class="p">.</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="k">values</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{{</span><span class="w"> </span><span class="k">return</span><span class="p">(</span><span class="n">current_version</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endif</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endmacro</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+</code></pre></div>
+
+<p><strong>Macro 2: Log Execution Start</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">macro</span><span class="w"> </span><span class="n">log_execution_start</span><span class="p">(</span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">#</span><span class="w"> </span><span class="n">Log</span><span class="w"> </span><span class="n">model</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="k">start</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">audit</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="o">#</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">execution_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">run_query_with_timeout</span><span class="p">(</span><span class="ss">&quot;SELECT UUID() as id&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">fetch_result</span><span class="o">=</span><span class="k">True</span><span class="p">).</span><span class="n">columns</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="k">values</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="k">execute</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">insert_query</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">            </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="n">var</span><span class="p">(</span><span class="s1">&#39;audit_schema&#39;</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span><span class="p">.</span><span class="n">audit_log</span>
+<span class="w">            </span><span class="p">(</span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="p">)</span>
+<span class="w">            </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span>
+<span class="w">                </span><span class="s1">&#39;{{ execution_id }}&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="s1">&#39;{{ system_id }}&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="s1">&#39;{{ model_name }}&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="s1">&#39;IN PROGRESS&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">()</span>
+<span class="w">            </span><span class="p">)</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endset</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">do</span><span class="w"> </span><span class="n">run_query</span><span class="p">(</span><span class="n">insert_query</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{{</span><span class="w"> </span><span class="n">log</span><span class="p">(</span><span class="ss">&quot;Audit log created for &quot;</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="ss">&quot; with execution_id: &quot;</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="n">execution_id</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="o">=</span><span class="k">True</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endif</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endmacro</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+</code></pre></div>
+
+<p><strong>Macro 3: Log Execution Success</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">macro</span><span class="w"> </span><span class="n">log_execution_success</span><span class="p">(</span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="k">row_count</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">#</span><span class="w"> </span><span class="n">Log</span><span class="w"> </span><span class="n">model</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">success</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">audit</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="o">#</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="k">execute</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">update_query</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">            </span><span class="k">UPDATE</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="n">var</span><span class="p">(</span><span class="s1">&#39;audit_schema&#39;</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span><span class="p">.</span><span class="n">audit_log</span>
+<span class="w">            </span><span class="k">SET</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;SUCCESS&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="n">end_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">(),</span>
+<span class="w">                </span><span class="k">row_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="k">row_count</span><span class="w"> </span><span class="err">}}</span>
+<span class="w">            </span><span class="k">WHERE</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ model_name }}&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">system_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ system_id }}&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;IN PROGRESS&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">end_time</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+<span class="w">            </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">start_time</span><span class="w"> </span><span class="k">DESC</span>
+<span class="w">            </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endset</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">do</span><span class="w"> </span><span class="n">run_query</span><span class="p">(</span><span class="n">update_query</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{{</span><span class="w"> </span><span class="n">log</span><span class="p">(</span><span class="ss">&quot;Audit log updated to SUCCESS for &quot;</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="o">=</span><span class="k">True</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endif</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endmacro</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+</code></pre></div>
+
+<p><strong>Macro 4: Log Execution Failure</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">macro</span><span class="w"> </span><span class="n">log_execution_failure</span><span class="p">(</span><span class="n">system_id</span><span class="p">,</span><span class="w"> </span><span class="n">model_name</span><span class="p">,</span><span class="w"> </span><span class="n">error_message</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">#</span><span class="w"> </span><span class="n">Log</span><span class="w"> </span><span class="n">model</span><span class="w"> </span><span class="n">execution</span><span class="w"> </span><span class="n">failure</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">audit</span><span class="w"> </span><span class="k">table</span><span class="w"> </span><span class="o">#</span><span class="err">}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="k">execute</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">set</span><span class="w"> </span><span class="n">update_query</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">            </span><span class="k">UPDATE</span><span class="w"> </span><span class="err">{{</span><span class="w"> </span><span class="n">var</span><span class="p">(</span><span class="s1">&#39;audit_schema&#39;</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span><span class="p">.</span><span class="n">audit_log</span>
+<span class="w">            </span><span class="k">SET</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;FAILED&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="n">end_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_TIMESTAMP</span><span class="p">(),</span>
+<span class="w">                </span><span class="n">error_message</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ error_message }}&#39;</span>
+<span class="w">            </span><span class="k">WHERE</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ model_name }}&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">system_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;{{ system_id }}&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;IN PROGRESS&#39;</span>
+<span class="w">              </span><span class="k">AND</span><span class="w"> </span><span class="n">end_time</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+<span class="w">            </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">start_time</span><span class="w"> </span><span class="k">DESC</span>
+<span class="w">            </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endset</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+
+<span class="w">        </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="k">do</span><span class="w"> </span><span class="n">run_query</span><span class="p">(</span><span class="n">update_query</span><span class="p">)</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="w">        </span><span class="err">{{</span><span class="w"> </span><span class="n">log</span><span class="p">(</span><span class="ss">&quot;Audit log updated to FAILED for &quot;</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="n">model_name</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="ss">&quot;: &quot;</span><span class="w"> </span><span class="o">~</span><span class="w"> </span><span class="n">error_message</span><span class="p">,</span><span class="w"> </span><span class="n">info</span><span class="o">=</span><span class="k">false</span><span class="p">)</span><span class="w"> </span><span class="err">}}</span>
+<span class="w">    </span><span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endif</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+<span class="err">{</span><span class="o">%</span><span class="w"> </span><span class="n">endmacro</span><span class="w"> </span><span class="o">%</span><span class="err">}</span>
+</code></pre></div>
+
+<p><strong>Usage in dbt_project.yml:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;1.0&#39;</span>
+
+<span class="nt">config-version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+
+<span class="nt">vars</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">audit_schema</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;audit&#39;</span><span class="w"> </span><span class="c1"># Update with the audit schema</span>
+<span class="w">  </span><span class="nt">system_id</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;SYS_001&#39;</span>
+
+<span class="nt">models</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">your_project</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">raw_vault</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">hub</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">meta</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">owner</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;Data</span><span class="nv"> </span><span class="s">Engineering&#39;</span>
+<span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;Hub</span><span class="nv"> </span><span class="s">entities&#39;</span>
+<span class="w">        </span><span class="nt">+pre-hook</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{{</span><span class="nv"> </span><span class="s">log_execution_start(var(&#39;system_id&#39;),</span><span class="nv"> </span><span class="s">this.name)</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<span class="w">        </span><span class="nt">+post-hook</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{{</span><span class="nv"> </span><span class="s">log_execution_success(var(&#39;system_id&#39;),</span><span class="nv"> </span><span class="s">this.name,</span><span class="nv"> </span><span class="s">execute_result.rows_affected)</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<span class="w">        </span><span class="nt">+on-fail</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;{{</span><span class="nv"> </span><span class="s">log_execution_failure(var(&#39;system_id&#39;),</span><span class="nv"> </span><span class="s">this.name,</span><span class="nv"> </span><span class="s">sql_now_macro_context.exception)</span><span class="nv"> </span><span class="s">}}&quot;</span>
+</code></pre></div>
+
+<hr />
+<hr />
+<h2 id="5-recommended-supporting-libraries-tools_1">5. Recommended Supporting Libraries &amp; Tools</h2>
+<h3 id="51-core-data-vault-framework">5.1 ⭐ Core Data Vault Framework</h3>
+<h4 id="automateddv-recommended-active-maintained"><strong>AutomatedDV</strong> (RECOMMENDED - Active &amp; Maintained)</h4>
+<ul>
+<li><strong>Status</strong>: Actively maintained, production-ready (Latest v0.11.5 - Feb 2026)</li>
+<li><strong>Website</strong>: https://github.com/Datavault-UK/automate-dv</li>
+<li><strong>Organization</strong>: Datavault-UK community-led</li>
+<li><strong>Purpose</strong>: DBT-native Data Vault 2.0 automation framework</li>
+<li><strong>Key Features</strong>:</li>
+<li>Automated hub/link/satellite generation from metadata</li>
+<li>Built-in MD5/SHA256 hashing macros for business keys</li>
+<li>Multi-threaded execution of generated SQL (in case dbt is run outside databricks)</li>
+<li>Staging table validation and loading patterns</li>
+<li>Excellent ReadTheDocs documentation</li>
+<li>Type 0, 1, 2, and 3 SCD support (Effective Satellite, Satellites)</li>
+<li>Integration with dbt best practices</li>
+<li>Supported on: Snowflake, Databricks, BigQuery, Redshift, DuckDB, Postgres</li>
+<li>582 GitHub stars, active community on Slack</li>
+<li><strong>Installation</strong>: Add to <code>packages.yml</code></li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="nt">packages</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Datavault-UK/automate_dv</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.11.5</span><span class="w">  </span><span class="c1"># Use latest stable from dbt Hub</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Documentation</strong>: https://automate-dv.readthedocs.io/</li>
+<li><strong>Slack Community</strong>: https://join.slack.com/t/dbtvault/shared_invite/enQtODY5MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA</li>
+<li><strong>When to Use</strong>: Primary choice for all DV2.0 implementations</li>
+<li><strong>Cost</strong>: Free/Open Source (Apache 2.0 License)</li>
+</ul>
+<h4 id="dbtvault-deprecated-no-longer-maintained"><strong>dbtvault</strong> (DEPRECATED - No Longer Maintained)</h4>
+<ul>
+<li><strong>Status</strong>: Repository no longer available (404 - Towards-Data-Science/dbtvault)</li>
+<li><strong>Note</strong>: Historical reference only. Original codebase was rebranded and is now maintained as <strong>AutomatedDV</strong>. Do not use for new projects - use AutomatedDV instead</li>
+<li><strong>Migration</strong>: The AutomatedDV package includes all capabilities previously in dbtvault with modern enhancements</li>
+</ul>
+<h4 id="scalefree-enterprise-alternative"><strong>ScaleFree</strong> (Enterprise Alternative)</h4>
+<ul>
+<li><strong>Status</strong>: Commercial product</li>
+<li><strong>Purpose</strong>: Enterprise Data Vault acceleration and scaling</li>
+<li><strong>Key Features</strong>:</li>
+<li>Visual metadata modeling UI</li>
+<li>Integrated data quality checks</li>
+<li>Performance optimization tuning</li>
+<li>Multi-platform support (Snowflake, Databricks, etc.)</li>
+<li>Advanced hierarchical support</li>
+<li>Change data capture (CDC) patterns</li>
+<li><strong>Cost</strong>: Enterprise licensing required</li>
+<li><strong>When to Use</strong>: Large-scale implementations (1000+ tables), complex hierarchies</li>
+<li><strong>Contact</strong>: scalefree.com</li>
+</ul>
+<hr />
+<h3 id="52-supporting-dbt-packages">5.2 🔧 Supporting DBT Packages</h3>
+<p>check official link for dbt utility packages <a href="https://hub.getdbt.com">link</a></p>
+<h4 id="dbt-utils"><strong>dbt-utils</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="nt">packages</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dbt-labs/dbt_utils</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.3.3</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Key Macros for DV2.0</strong>: <code>generate_surrogate_key</code>, <code>get_query_results_as_dict</code>, <code>date_spine</code></li>
+<li><strong>Use</strong>: Hash key generation, utility operations, cross-database compatibility</li>
+</ul>
+<h4 id="audit_helper-audit-lineage"><strong>audit_helper</strong> (Audit &amp; Lineage)</h4>
+<div class="codehilite"><pre><span></span><code><span class="nt">packages</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dbt-labs/audit_helper</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.13.0</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Purpose</strong>: Data reconciliation and audit support</li>
+<li><strong>Key Features</strong>: Record count comparisons, delta identification</li>
+<li><strong>Use</strong>: Validate data loads, reconcile source→target, identify discrepancies</li>
+</ul>
+<h4 id="dbt-expectations-advanced-testing"><strong>dbt-expectations</strong> (Advanced Testing)</h4>
+<div class="codehilite"><pre><span></span><code><span class="nt">packages</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metaplane/dbt_expectations</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.10.10</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Key Tests</strong>:</li>
+<li><code>expect_column_values_to_be_not_null</code></li>
+<li><code>expect_column_values_to_match_regex_pattern</code></li>
+<li><code>expect_table_row_count_to_equal_zero</code></li>
+<li><code>expect_table_columns_to_match_set</code></li>
+<li>Custom threshold-based tests</li>
+<li><strong>Use</strong>: Comprehensive data quality validation beyond basic tests</li>
+</ul>
+<h4 id="dbt-meta-testing-metadata-driven-tests"><strong>dbt-meta-testing</strong> (Metadata-Driven Tests)</h4>
+<ul>
+<li><strong>Purpose</strong>: Auto-generate tests from model metadata</li>
+<li><strong>Use</strong>: Scale test coverage without manual YAML</li>
+</ul>
+<h4 id="dbt-docs-as-code-documentation"><strong>dbt-docs-as-code</strong> (Documentation)</h4>
+<ul>
+<li><strong>Purpose</strong>: Better documentation version control</li>
+<li><strong>Use</strong>: Keep docs alongside code in Git</li>
+</ul>
+<hr />
+<h3 id="53-python-libraries-for-project-builder">5.3 🐍 Python Libraries for Project Builder</h3>
+<h4 id="essential-core-libraries"><strong>Essential Core Libraries</strong></h4>
+<table>
+<thead>
+<tr>
+<th>Library</th>
+<th>Purpose</th>
+<th>Version Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pydantic</strong></td>
+<td>Data validation &amp; settings</td>
+<td>2.0+</td>
+</tr>
+<tr>
+<td><strong>PyYAML</strong></td>
+<td>YAML parsing/generation</td>
+<td>6.0+</td>
+</tr>
+<tr>
+<td><strong>Jinja2</strong></td>
+<td>SQL template rendering</td>
+<td>3.1+</td>
+</tr>
+<tr>
+<td><strong>Pathlib</strong></td>
+<td>File I/O, path operations</td>
+<td>Built-in</td>
+</tr>
+<tr>
+<td><strong>Logging</strong></td>
+<td>Execution logging &amp; audits</td>
+<td>Built-in</td>
+</tr>
+<tr>
+<td><strong>Dataclasses</strong></td>
+<td>Type-safe data structures</td>
+<td>Built-in (3.7+)</td>
+</tr>
+<tr>
+<td><strong>Dbt_Core</strong></td>
+<td>Type-safe data structures</td>
+<td>1.11.0+</td>
+</tr>
+<tr>
+<td><strong>dbt-databricks</strong></td>
+<td>Type-safe data structures</td>
+<td>1.11.0+</td>
+</tr>
+</tbody>
+</table>
+<p>Extra:<br />
+| Library | Purpose | Version Range | Possible Use Cases|<br />
+|---------|---------|----------------|----------------|<br />
+| <strong>SQLAlchemy</strong> | SQL metadata operations | 2.0+ |outside Databricks<br />
+| <strong>Pandas</strong> or <strong>Polars</strong> | Metadata CSV/Excel processing | Latest | Web App</p>
+<h4 id="databricks-integration"><strong>Databricks Integration</strong></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Add to requirements.txt</span>
+<span class="n">databricks</span><span class="o">-</span><span class="n">sql</span><span class="o">-</span><span class="n">connector</span><span class="o">==</span><span class="mf">3.1.0</span><span class="o">+</span>  <span class="c1"># Execute SQL</span>
+<span class="n">databricks</span><span class="o">-</span><span class="n">cli</span><span class="o">==</span><span class="mf">0.17.0</span><span class="o">+</span>           <span class="c1"># Workspace API</span>
+<span class="n">mlflow</span><span class="o">==</span><span class="mf">2.8.0</span><span class="o">+</span>                    <span class="c1"># Experiment tracking ! Not in scope for the moment</span>
+<span class="n">delta</span><span class="o">-</span><span class="n">spark</span><span class="o">==</span><span class="mf">3.0.0</span><span class="o">+</span>               <span class="c1"># Delta Lake support</span>
+</code></pre></div>
+
+<h4 id="optional-advanced-enhancements"><strong>Optional: Advanced Enhancements</strong></h4>
+<table>
+<thead>
+<tr>
+<th>Library</th>
+<th>Purpose</th>
+<th>Benefit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Great Expectations</strong></td>
+<td>Data profiling &amp; validation</td>
+<td>Auto schema inference, quality metrics</td>
+</tr>
+<tr>
+<td><strong>DBT Cloud API</strong></td>
+<td>Programmatic dbt runs</td>
+<td>Remote execution, webhooks</td>
+</tr>
+<tr>
+<td><strong>Prefect</strong></td>
+<td>Workflow orchestration</td>
+<td>Modern, Databricks-native</td>
+</tr>
+<tr>
+<td><strong>Apache Airflow</strong></td>
+<td>Complex scheduling</td>
+<td>DAG-based, multi-source support</td>
+</tr>
+<tr>
+<td><strong>Plotly Dash</strong></td>
+<td>Interactive UI</td>
+<td>Metadata editor, monitoring dashboard</td>
+</tr>
+<tr>
+<td><strong>Pydantic-Settings</strong></td>
+<td>Config management</td>
+<td>Multi-environment support</td>
+</tr>
+<tr>
+<td><strong>pytest</strong></td>
+<td>Unit testing</td>
+<td>Test project builder code</td>
+</tr>
+<tr>
+<td><strong>black</strong></td>
+<td>Code formatting</td>
+<td>Consistent Python style</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="54-library-recommendation-matrix">5.4 Library Recommendation Matrix</h3>
+<div class="mermaid">
+graph TD
+    A["📦 Data Vault Layer"]
+    A1["✅ AutomatedDV<br/>- ACTIVE & RECOMMENDED<br/>- Free/OSS<br/>- Production-ready<br/>- Excellent docs"]
+    A2["❌ dbtvault<br/>- DISCONTINUED<br/>- Repository unavailable (404)<br/>- Use AutomatedDV instead"]
+    A3["💼 ScaleFree<br/>- Commercial<br/>- Enterprise focus<br/>- High cost"]
+
+    B["🔨 Code Generation"]
+    B1["Jinja2<br/>SQL templates"]
+    B2["Pydantic<br/>Validation"]
+    B3["PyYAML<br/>Config parsing"]
+
+    C["🧪 Testing & Quality"]
+    C1["dbt-expectations<br/>Advanced tests"]
+    C2["Great Expectations<br/>Data profiling"]
+    C3["pytest<br/>Python tests"]
+
+    D["📡 Orchestration"]
+    D1["Databricks Workflows<br/>Native, simple"]
+    D2["Prefect<br/>Modern, Pythonic"]
+    D3["Airflow<br/>Enterprise, complex"]
+
+    A --> A1
+    A --> A2
+    A --> A3
+
+    B --> B1
+    B --> B2
+    B --> B3
+
+    C --> C1
+    C --> C2
+    C --> C3
+
+    D --> D1
+    D --> D2
+    D --> D3
+</div>
+
+<hr />
+<h3 id="55-installation-reference">5.5 Installation Reference</h3>
+<ul>
+<li>Env and project creation:<br />
+Use uv and MakeFile for env configurations</li>
+<li>Linting:<ul>
+<li>ruff</li>
+<li>sqlfluff</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="6-architecture-patterns_1">6. Architecture Patterns</h2>
+<h3 id="61-data-vault-20-layers">6.1 Data Vault 2.0 Layers</h3>
+<div class="codehilite"><pre><span></span><code><span class="err">┌─────────────────────────────────────────────────┐</span>
+<span class="err">│</span><span class="w">           </span><span class="n">PRESENTATION</span><span class="w"> </span><span class="n">LAYER</span><span class="w">                     </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">⭐</span><span class="w"> </span><span class="n">Star</span><span class="w"> </span><span class="n">Schema</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">Dimensional</span><span class="w"> </span><span class="n">Models</span><span class="w">             </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="p">(</span><span class="n">Facts</span><span class="p">,</span><span class="w"> </span><span class="n">Dimensions</span><span class="p">,</span><span class="w"> </span><span class="n">Aggregates</span><span class="p">)</span><span class="w">                 </span><span class="err">│</span>
+<span class="err">└──────────────────┬──────────────────────────────┘</span>
+<span class="w">                   </span><span class="err">│</span>
+<span class="err">┌──────────────────▼──────────────────────────────┐</span>
+<span class="err">│</span><span class="w">           </span><span class="n">INFORMATION</span><span class="w"> </span><span class="n">LAYER</span><span class="w">                      </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">📈</span><span class="w"> </span><span class="n">PIT</span><span class="w"> </span><span class="n">Tables</span><span class="w"> </span><span class="p">(</span><span class="n">Point</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="n">Time</span><span class="p">)</span><span class="w">                   </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="p">(</span><span class="n">Joined</span><span class="w"> </span><span class="n">Hub</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Satellite</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Link</span><span class="w"> </span><span class="n">histories</span><span class="p">)</span><span class="w">       </span><span class="err">│</span>
+<span class="err">└──────────────────┬──────────────────────────────┘</span>
+<span class="w">                   </span><span class="err">│</span>
+<span class="err">┌──────────────────▼──────────────────────────────┐</span>
+<span class="err">│</span><span class="w">           </span><span class="n">RAW</span><span class="w"> </span><span class="n">VAULT</span><span class="w"> </span><span class="n">LAYER</span><span class="w">                        </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">🏶</span><span class="w"> </span><span class="n">Data</span><span class="w"> </span><span class="n">Vault</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="n">Core</span><span class="w">                          </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="err">🏷️</span><span class="w"> </span><span class="n">Hubs</span><span class="w"> </span><span class="p">(</span><span class="n">Business</span><span class="w"> </span><span class="n">entities</span><span class="p">)</span><span class="w">                </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="err">🔗</span><span class="w"> </span><span class="n">Links</span><span class="w"> </span><span class="p">(</span><span class="n">Relationships</span><span class="p">)</span><span class="w">                   </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└──</span><span class="w"> </span><span class="err">📡</span><span class="w"> </span><span class="n">Satellites</span><span class="w"> </span><span class="p">(</span><span class="n">Attributes</span><span class="p">)</span><span class="w">                 </span><span class="err">│</span>
+<span class="err">└──────────────────┬──────────────────────────────┘</span>
+<span class="w">                   </span><span class="err">│</span>
+<span class="err">┌──────────────────▼──────────────────────────────┐</span>
+<span class="err">│</span><span class="w">           </span><span class="n">STAGING</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">PERSISTENCE</span><span class="w"> </span><span class="n">LAYER</span><span class="w">             </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">🔀</span><span class="w"> </span><span class="n">Staging</span><span class="w"> </span><span class="n">Tables</span><span class="w"> </span><span class="p">(</span><span class="n">Bronze</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">Cleansed</span><span class="p">)</span><span class="w">          </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="o">-</span><span class="w"> </span><span class="n">Data</span><span class="w"> </span><span class="n">validation</span><span class="w">                               </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="o">-</span><span class="w"> </span><span class="n">Column</span><span class="w"> </span><span class="n">standardization</span><span class="w">                        </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="o">-</span><span class="w"> </span><span class="n">Surrogate</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="n">preparation</span><span class="w">                     </span><span class="err">│</span>
+<span class="err">└──────────────────┬──────────────────────────────┘</span>
+<span class="w">                   </span><span class="err">│</span>
+<span class="err">┌──────────────────▼──────────────────────────────┐</span>
+<span class="err">│</span><span class="w">           </span><span class="n">SOURCE</span><span class="w"> </span><span class="n">SYSTEMS</span><span class="w">                         </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">🖥️</span><span class="w"> </span><span class="n">External</span><span class="w"> </span><span class="n">Data</span><span class="w"> </span><span class="n">Sources</span><span class="w">                        </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="p">(</span><span class="n">Databases</span><span class="p">,</span><span class="w"> </span><span class="n">APIs</span><span class="p">,</span><span class="w"> </span><span class="n">Files</span><span class="p">,</span><span class="w"> </span><span class="n">Streams</span><span class="p">)</span><span class="w">               </span><span class="err">│</span>
+<span class="err">└─────────────────────────────────────────────────┘</span>
+</code></pre></div>
+
+<h3 id="62-hub-link-satellite-relationships">6.2 Hub-Link-Satellite Relationships</h3>
+<div class="mermaid">
+graph LR
+    Hub1["🏷️ Hub A<br/>(Hub Key)<br/>Business Key: A_ID"]
+    Hub2["🏷️ Hub B<br/>(Hub Key)<br/>Business Key: B_ID"]
+
+    Link["🔗 Link<br/>(Link Key)<br/>FK: A_Key, B_Key<br/>Load Date"]
+
+    Sat1["📡 Sat A<br/>Attributes of A<br/>Hash Diff, SCD Type"]
+    Sat2["📡 Sat Link<br/>Relationship details<br/>Valid From/To"]
+
+    Hub1 --> Link
+    Hub2 --> Link
+    Hub1 --> Sat1
+    Link --> Sat2
+</div>
+
+<hr />
+<h2 id="7-implementation-roadmap_1">7. Implementation Roadmap</h2>
+<p>👥 Team assumption<br />
+2 senior engineers → architecture + core engine<br />
+2 mid engineers → generators + tests + integration</p>
+<h3 id="phase-0-architecture-design-poc-sprint-1">Phase 0 — Architecture &amp; Design &amp; POC (Sprint 1)</h3>
+<p>Goal: build <strong>POC</strong> and <strong>architecture</strong></p>
+<ul>
+<li>[ ] Architecture<ul>
+<li>High-level architecture diagram</li>
+<li>Component interaction diagram</li>
+<li>Repository structure</li>
+<li>Configuration strategy (env-based)</li>
+</ul>
+</li>
+<li>[ ] Metadata Contract<ul>
+<li>Define Data Vault metadata structure</li>
+<li>Naming convention strategy</li>
+<li>Hashing strategy (MD5/SHA)</li>
+<li>Surrogate key strategy</li>
+<li>Incremental loading strategy</li>
+<li>Model dependency strategy (Hub → Link → Sat)</li>
+</ul>
+</li>
+<li>[ ] Templates<ul>
+<li>Choose template engine (Jinja2 recommended)</li>
+<li>Define template folder structure</li>
+</ul>
+</li>
+<li>[ ] <strong>Small PoC</strong><ul>
+<li>[ ] Build a thin vertical slice:<ul>
+<li>Hardcoded metadata (1 Hub + 1 Sat)</li>
+<li>Simple Jinja SQL template</li>
+<li>Generate dbt model</li>
+<li>Write file to Databricks workspace</li>
+<li>Run dbt run</li>
+<li>Validate table created</li>
+<li>Test hashing logic<br />
+🎯 Deliverable<br />
+Architecture + metadata contract + POC - run one hub model</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="phase-1-foundation-core-code-generation">Phase 1: Foundation - Core Code Generation</h3>
+<p>Goal: build <strong>core platform skeleton</strong></p>
+<ul>
+<li>[ ] Shared Core<ul>
+<li>Logger</li>
+<li>Secret getter</li>
+<li>Storage abstraction</li>
+<li>Path resolver</li>
+<li>Config loader</li>
+<li>Databricks workspace file writer</li>
+</ul>
+</li>
+<li>[ ] Metadata Layer<ul>
+<li>Design metadata schema (Delta Tables)</li>
+<li>Metadata loader</li>
+<li>Metadata Getter:<ul>
+<li>Pydantic Models:<ul>
+<li>DBT Models:<ul>
+<li>Base</li>
+<li>Hub</li>
+<li>Link</li>
+<li>Satellite</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Pydantic models</li>
+<li>Metadata validation engine</li>
+</ul>
+</li>
+<li>[ ] DBT Builder Core<ul>
+<li>[ ] Generator Classes:<ul>
+<li>Generator Classes:<ul>
+<li>Base generator class</li>
+<li>Hub generator (hash key)</li>
+<li>Link generator (composite keys)</li>
+<li>Satellite generator</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Base Project class</li>
+<li>Staging Generator</li>
+</ul>
+</li>
+<li>[ ] DBT Runner (minimal)<ul>
+<li>Runner interface</li>
+<li>CLI wrapper (dbt run, dbt test)</li>
+</ul>
+</li>
+<li>[ ] Dependency Engine<ul>
+<li>Model dependency resolver<br />
+<!-- - DAG builder ( ) --></li>
+<li>Load order resolver<br />
+🎯 Milestone:<br />
+👉 Able to generate one simple Hub model from metadata</li>
+</ul>
+</li>
+</ul>
+<h3 id="phase-2-dbt-builder-framework">Phase 2: DBT Builder Framework</h3>
+<ul>
+<li>[ ] Model Generators:<ul>
+<li>Satellite generator<ul>
+<li>SCD0</li>
+<li>SCD1</li>
+<li>SCD2</li>
+<li>SCD3</li>
+</ul>
+</li>
+<li>Link:<br />
+    -Same as Link</li>
+</ul>
+</li>
+<li>[ ] Macro Framework<ul>
+<li>Macro generator base</li>
+<li>Hash macro</li>
+<li>Surrogate key macro</li>
+<li>Audit macro</li>
+</ul>
+</li>
+<li>[ ] Core Classes<ul>
+<li>Project class</li>
+<li>Mart class</li>
+<li>Naming strategy class</li>
+<li>Template loader</li>
+</ul>
+</li>
+</ul>
+<p>🎯 Deliverable<br />
+Framework ready for model generation</p>
+<h3 id="phase-2-model-generation">Phase 2: Model Generation</h3>
+<p>Goal: full <strong>Data Vault generation</strong><br />
+- [ ] DBT Builder<br />
+        - Factory for model generators<br />
+    - Mart class<br />
+    - Template loader<br />
+    - SQL template library (skeleton)<br />
+    - [ ] Supporting Generators<br />
+        - Source model generator<br />
+        - Staging model generator<br />
+        - PIT (optional but recommended early)<br />
+        - Bridge (optional)<br />
+    - [ ] Macro Generation<br />
+        - hash macro<br />
+        - surrogate key macro<br />
+        - audit macros<br />
+        - load date macro<br />
+    - [ ] Tests Generation<br />
+        - YAML test generator<br />
+        - uniqueness tests<br />
+        - not null tests<br />
+        - relationship tests<br />
+-</p>
+<p>🎯 Milestone<br />
+👉 Generate full DV structure for one source</p>
+<h3 id="phase-3-execution-orchestration">Phase 3: Execution &amp; Orchestration</h3>
+<p>Goal: production-ready execution</p>
+<ul>
+<li>[ ] Runner<ul>
+<li>Project Runner</li>
+<li>Environment config (dev/qa/prod)</li>
+<li>Selective model run support</li>
+</ul>
+</li>
+<li>[ ] Observability<br />
+ Audit logging (Delta)<br />
+ Run metadata logging<br />
+ Model execution time tracking<br />
+ Error logging</li>
+<li>[ ] Orchestration<br />
+ Databricks Workflows integration<br />
+ Retry mechanism<br />
+ Failure recovery</li>
+</ul>
+<p>🎯 Milestone<br />
+👉 Fully automated metadata → generate → run → log</p>
+<h3 id="phase-4-enhancement-scale">Phase 4: Enhancement &amp; Scale</h3>
+<p>Goal: enterprise readiness</p>
+<ul>
+<li>[ ] Data Quality<br />
+ Great Expectations integration<br />
+ Data profiling</li>
+<li>[ ] Documentation<br />
+ Auto-generate dbt docs<br />
+ Metadata documentation generator</li>
+<li>[ ] Lineage<br />
+ Column lineage<br />
+ Source to DV lineage</li>
+<li>[ ] Performance<br />
+ Incremental optimization<br />
+ Partition strategy<br />
+ Caching strategy</li>
+<li>[ ] UX Improvements<br />
+ CLI for generation<br />
+ Dry-run mode<br />
+ Diff mode (only changed models)<br />
+🎯 Milestone<br />
+👉 Enterprise-ready metadata-driven dbt generator</li>
+</ul>
+<hr />
+<h2 id="8-technology-stack-summary_1">8. Technology Stack Summary</h2>
+<div class="codehilite"><pre><span></span><code>Layer                 | Technology &amp; Tools
+----------------------|----------------------------------------
+Metadata Storage      | CSV/Excel → Databricks Delta Tables
+Orchestration         | Databricks Workflows, Airflow, Prefect
+Code Generation       | Python OOP + Jinja2 Templates
+Transform Engine      | DBT 1.6+ + AutomatedDV Package
+Execution Platform    | Databricks (Apache Spark)
+Storage Layer         | Databricks Delta Lake (ACID, Time Travel)
+Testing &amp; Validation  | dbt tests + Great Expectations + pytest
+Logging &amp; Audit       | Delta tables + Databricks Event logs
+Documentation         | DBT native docs + Auto-generated Markdown
+Version Control       | Git + DBT artifacts
+CI/CD Pipeline        | GitHub Actions / Azure DevOps Pipelines
+Monitoring            | Databricks Job UI, Custom Dashboards
+</code></pre></div>
+
+<hr />
+<h2 id="9-best-practices-recommendations_1">9. Best Practices &amp; Recommendations</h2>
+<h3 id="metadata-management">✅ Metadata Management</h3>
+<ul>
+<li>Store metadata in version-controlled CSV files (easier Git diffs)</li>
+<li>Create Delta table snapshots for historical change tracking</li>
+<li>Validate all metadata with Pydantic schemas before processing</li>
+<li>Use consistent naming: system_id, table_id, column_id for traceability</li>
+</ul>
+<h3 id="code-generation">✅ Code Generation</h3>
+<ul>
+<li>Generate idempotent SQL (safe to re-run without side effects)</li>
+<li>Use DBT incremental models for large fact tables</li>
+<li>Include helpful comments in generated SQL (sourced from metadata descriptions)</li>
+<li>Generate <code>.yml</code> files alongside <code>.sql</code> files for documentation</li>
+</ul>
+<h3 id="execution-loading">✅ Execution &amp; Loading</h3>
+<ul>
+<li>Implement circuit breaker pattern (fail fast, prevent cascade)</li>
+<li>Use DBT snapshot feature for Type 2 slowly changing dimensions</li>
+<li>Log ALL model executions with row counts, timing, and status</li>
+<li>Implement data quality gates (tests before downstream marts)</li>
+<li>Use post-load reconciliation queries</li>
+</ul>
+<h3 id="scaling-for-production">✅ Scaling for Production</h3>
+<ul>
+<li>Partition large Delta tables by load_date for performance</li>
+<li>Use DBT on-disk cache for faster incremental builds</li>
+<li>Separate projects by domain/business process</li>
+<li>Leverage DBT's DAG-based graph execution for parallelization</li>
+<li>Monitor query performance, optimize hot paths</li>
+</ul>
+<hr />
+<h2 id="10-troubleshooting-common-issues_1">10. Troubleshooting &amp; Common Issues</h2>
+<h3 id="issue-generated-sql-fails-to-compile">Issue: Generated SQL fails to compile</h3>
+<p><strong>Solution</strong>:<br />
+- Validate metadata schema with Pydantic before generation<br />
+- Add metadata sanity checks (cross-reference validation)<br />
+- Check Databricks syntax compatibility</p>
+<h3 id="issue-audit-log-shows-inconsistent-row-counts">Issue: Audit log shows inconsistent row counts</h3>
+<p><strong>Solution</strong>:<br />
+- Verify source data hasn't changed between Hub and Satellite loads<br />
+- Check for natural key duplicates in source<br />
+- Review dbt models for unexpected filters or transforms</p>
+<h3 id="issue-link-table-creation-fails">Issue: Link table creation fails</h3>
+<p><strong>Solution</strong>:<br />
+- Ensure all referenced hubs exist before link execution<br />
+- Verify business key relationships in metadata<br />
+- Check for NULL values in linking columns</p>
+<hr />
+<h2 id="11-next-steps_1">11. Next Steps</h2>
+<ol>
+<li><strong>Finalize Metadata Schema</strong> - Create comprehensive YAML/CSV specifications</li>
+<li><strong>Choose Orchestration Tool</strong> - Evaluate Databricks Workflows vs. Airflow vs. Prefect based on needs</li>
+<li><strong>Establish Naming Conventions</strong> - Standardize object, field, and parameter names</li>
+<li><strong>Design Audit/Lineage Strategy</strong> - Implement comprehensive tracking</li>
+<li><strong>Build MVP Generator</strong> - Prototype for single system end-to-end</li>
+<li><strong>Select Library Stack</strong> - Finalize AutomatedDV, Great Expectations, testing framework</li>
+<li><strong>Documentation</strong> - Create runbooks, troubleshooting guides, operator manuals</li>
+</ol>
+<hr />
+<h2 id="references-resources_1">References &amp; Resources</h2>
+<ul>
+<li><strong>Data Vault 2.0 Book</strong>: "The Data Vault 2.0 Guidebook" by Dan Linstedt &amp; Michael Olschimke</li>
+<li><strong>DBT Documentation</strong>: https://docs.getdbt.com/</li>
+<li><strong>AutomatedDV Package</strong>: https://github.com/Datavault-UK/automate-dv</li>
+<li><strong>AutomatedDV Documentation</strong>: https://automate-dv.readthedocs.io/</li>
+<li><strong>AutomatedDV Community</strong>: https://join.slack.com/t/dbtvault/shared_invite/enQtODY3MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA</li>
+<li><strong>Databricks Best Practices</strong>: https://docs.databricks.com/</li>
+<li><strong>Data Quality with dbt</strong>: https://docs.getdbt.com/guides/dbt-best-practices</li>
+<li><strong>Great Expectations</strong>: https://greatexpectations.io/</li>
+<li><strong>Data Vault Institute</strong>: https://www.datavaultinstitute.com/</li>
+</ul>
+        </div>
+
+        <div class="footer">
+            <p>Generated from markdown documentation. Last updated: 2026-03-25</p>
+            <p><a href="https://github.com/microsoft/vscode">EDH Data Pipeline Documentation</a></p>
+        </div>
+    </div>
+</body>
+</html>
+        

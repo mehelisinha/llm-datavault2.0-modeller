@@ -1,0 +1,14 @@
+version: 2
+models:
+- name: lnk_terminal_equipment_node
+  description: Data Vault link for lnk_terminal_equipment_node
+  meta:
+    dv_type: link
+    source_models:
+    - stg_terminals
+    src_pk: HK_TERMINAL_EQUIPMENT_NODE_L
+    src_fk:
+    - HK_CONDUCTING_EQUIPMENT
+    - HK_CONNECTIVITY_NODE
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE

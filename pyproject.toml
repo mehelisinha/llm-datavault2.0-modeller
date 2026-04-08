@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dwa-dv-generator"
+version = "0.1.0"
+description = "Data Vault v2 model generator for dbt projects"
+authors = [
+    {name = "Contributor", email = "contributor@example.com"}
+]
+requires-python = ">=3.12"
+
+dependencies = [
+    # ── templating ─────────────────────────────
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+
+    # ── dbt ────────────────────────────────────
+    "dbt-core~=1.11.0",
+    "dbt-databricks~=1.11.0",
+
+    # ── dagster ───────────────────────────────
+    "dagster-dbt~=0.28.0",
+    "dagster-webserver~=1.12.0",
+
+    # ── validation ─────────────────────────────
+    "pydantic>=2.7,<3",
+
+    # ── utilities ──────────────────────────────
+    "pandas>=2.2,<4",
+
+    # -- docs ----------------
+    "mistune",
+    "markdown"
+]
+
+[project.scripts]
+generate-dv-models = "dwa_dv_generator.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "build",
+    "twine",
+
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

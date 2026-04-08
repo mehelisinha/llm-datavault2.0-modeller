@@ -1,0 +1,1151 @@
+{
+  "configuration" : { },
+  "description" : "C4 model for the Data Warehouse Automation project",
+  "documentation" : {
+    "sections" : [ {
+      "content" : "\n# Data Warehouse Automation (DWA) - Architecture\n\n## Table of Contents\n\n### 1. Purpose & Objectives\n- [Purpose](#purpose)\n- [Key Constraints & Patterns](#key-constraints--patterns)\n\n### 2. High-Level Architecture\n- [2.1 System Overview Diagram](#21-system-overview-diagram)\n- [2.2 Data Flow Pipeline](#22-data-flow-pipeline)\n\n### 3. Project Folder Structure\n- [3. Project Folder Structure](#3-project-folder-structure)\n\n### 4. Core Components\n- [4.1 Metadata Configuration](#41-metadata-configuration)\n  - [Metadata Structure Diagram](#metadata-structure-diagram)\n  - [Key Metadata Components](#key-metadata-components)\n- [4.2 DataVault Project Builder](#42-datavault-project-builder)\n  - [Builder Architecture](#builder-architecture)\n  - [Core Responsibilities](#core-responsibilities)\n  - [Process Flow](#process-flow)\n  - [Macro Examples](#macro-examples)\n- [4.3 DataVault Project Runner](#43-datavault-project-runner)\n  - [Execution Flow](#execution-flow)\n  - [Runner Responsibilities](#runner-responsibilities)\n  - [Audit Logging Strategy](#audit-logging-strategy-recommended)\n\n### 5. Recommended Supporting Libraries & Tools\n- [5.1 Core Data Vault Framework](#51-core-data-vault-framework)\n- [5.2 Supporting DBT Packages](#52-supporting-dbt-packages)\n- [5.3 Python Libraries for Project Builder](#53-python-libraries-for-project-builder)\n- [5.4 Library Recommendation Matrix](#54-library-recommendation-matrix)\n- [5.5 Installation Reference](#55-installation-reference)\n\n### 6. Architecture Patterns\n- [6.1 Data Vault 2.0 Layers](#61-data-vault-20-layers)\n- [6.2 Hub-Link-Satellite Relationships](#62-hub-link-satellite-relationships)\n\n### 7. Implementation Roadmap\n### 8. Technology Stack Summary\n### 9. Best Practices & Recommendations\n### 10. Troubleshooting & Common Issues\n### 11. Next Steps\n### References & Resources\n\n---\n\n## 1. Purpose & Objectives\n### Purpose\nThe DWA system is designed to:\n- **Automate Data Warehouse construction** using DBT framework with Data Vault 2.0 and Star Schema patterns\n- **Dynamic code generation** based on metadata configuration\n- **Multi-system support** with independent system deployments\n- **Object-Oriented Python design** for maintainability and extensibility\n- **DBT best practices** integration while preserving lineage and documentation capabilities\n- **Scalability** for various data sources and transformation complexity levels\n\n### Key Constraints & Patterns:\n- Preserve DBT native features: data lineage graphs and documentation\n- If needed, implement alternatives using Python/Databricks for enhanced functionality\n- Support orchestration through schedulers (Databricks Workflows, Airflow, etc.)\n\n---\n\n## 2. High-Level Architecture\n\n### 2.1 System Overview Diagram\n```html\n<pre class=\"mermaid\">\ngraph LR\n    User[\"👤 User/Administrator\"]\n    Metadata[\"📊 Metadata Configuration<br/>(CSV/Excel/UI)\"]\n    Builder[\"🔨 DataVault<br/>Project Builder\"]\n    Scheduler[\"⏱️ Scheduler<br/>(Workflows/Airflow)\"]\n    Runner[\"▶️ DataVault<br/>Project Runner\"]\n    RawVault[\"🗄️ Raw Vault<br/>(Delta Tables)\"]\n    PIT[\"📈 PIT Tables<br/>(Point in Time)\"]\n    StarSchema[\"⭐ Star Schema<br/>(Dimensional)\"]\n    Audit[\"🔍 Audit Logs<br/>(Lineage/Versioning)\"]\n    EntityRelashionship[\"📄 Docs and Entity Relashionship<br/>(Docs)\"]\n\n    User -->|Configures| Metadata\n    Metadata -->|Triggers| Builder\n    Builder -->|Generates| Runner\n    Scheduler -->|Triggers| Runner\n    Runner -->|Uses| Builder\n    Runner -->|Generates| RawVault\n    RawVault -->|Creates| PIT\n    PIT -->|Builds| StarSchema\n    RawVault -->|Logs to| Audit\n    Runner -->|Logs to| Audit\n    Runner -->|Provides artifacts for| EntityRelashionship\n    </pre>\n```\n\n### 2.2 Data Flow Pipeline\n\n```mermaid\nsequenceDiagram\n    participant User\n    participant Metadata as Metadata Store\n    participant Builder as Project Builder\n    participant DBT as DBT Engine\n    participant APP as DBT Doc App\n    participant DatabricksWS as Databricks Workspace\n    participant RawVault as Raw Vault\n    participant PIT as PIT Layer\n    participant StarSchema as Star Schema\n\n    User->>Metadata: 1. Configure System Metadata\n    Metadata->>Builder: 2. Trigger Code Generation\n    Builder->>DatabricksWS: 3. Generate dbt project structure\n    Builder->>Metadata: 4. Read model specifications\n    DBT->>DatabricksWS: 5. Execute compiled models\n    DBT->>RawVault: 6. Load Hubs & Links\n    DBT->>RawVault: 7. Load Satellites\n    RawVault->>PIT: 8. Create Point-in-Time tables\n    PIT->>StarSchema: 9. Build dimensional schema\n    StarSchema->>User: 10. Query results available\n    DBT->>APP: 11. Generates artifacts for app\n```\n\n---\n\n## 3. Project Folder Structure\n\nThe project is organized into three independent subprojects that correspond to the main DWA components:\n- `metadata` — metadata ingestion, validation, and metadata-driven model definitions\n- `dbt_builder` — DBT project generation and template management\n- `dbt_runner` — DBT execution, orchestration, and audit logging\n\nShared code is placed in a `shared/` package and consumed by all three subprojects.\nEach subproject has its own `devops/` folder so it can be deployed independently, while the shared folder is included by all deploys.\n\n```text\nproject_root/\n├── metadata/\n│   ├── src/                  # Metadata ingestion and configuration code\n│   ├── tests/                # Unit/integration tests for metadata logic\n│   ├── devops/               # CI/CD and deployment artifacts for metadata service\n│   │   ├── azure-pipelines.yml\n│   │   ├── deploy.sh\n│   │   └── README.md\n│   ├── README.md             # Component-specific usage and deployment notes\n│   └── pyproject.toml        # Optional component packaging config\n│\n├── dbt_builder/\n│   ├── src/                  # DBT generation engine and template logic\n│   ├── tests/                # Unit/integration tests for builder logic\n│   ├── devops/               # CI/CD and deployment artifacts for dbt_builder\n│   │   ├── azure-pipelines.yml\n│   │   ├── deploy.sh\n│   │   └── README.md\n│   ├── README.md\n│   └── pyproject.toml\n│\n├── dbt_runner/\n│   ├── src/                  # DBT execution orchestration and audit runtime\n│   ├── tests/                # Unit/integration tests for runner logic\n│   ├── devops/               # CI/CD and deployment artifacts for dbt_runner\n│   │   ├── azure-pipelines.yml\n│   │   ├── deploy.sh\n│   │   └── README.md\n│   ├── README.md\n│   └── pyproject.toml\n│\n├── shared/\n│   ├── src/                  # Reusable utilities, helpers, and common libraries\n│   ├── tests/                # Shared tests for common functionality\n│   └── README.md             # Shared usage and packaging notes\n│\n├── devops/                   # Top-level deployment orchestration and reusable templates\n│   ├── metadata/\n│   │   ├── pipeline.yml\n│   │   └── deploy.sh\n│   ├── dbt_builder/\n│   │   ├── pipeline.yml\n│   │   └── deploy.sh\n│   ├── dbt_runner/\n│   │   ├── pipeline.yml\n│   │   └── deploy.sh\n│   ├── shared/               # Shared deployment scripts and conventions\n│   │   └── deploy_common.sh\n│   └── templates/            # Reusable CI/CD pipeline templates\n│       └── build-and-deploy.yml\n│\n├── docs/                     # Architecture docs, run guides, and diagrams\n├── README.md\n└── pyproject.toml            # Optional top-level packaging / tooling config\n```\n\n### Folder structure notes\n- `metadata/`, `dbt_builder/`, and `dbt_runner/` are independent subprojects and can each be deployed separately.\n- `shared/` contains common code, utilities, and tests used by all three subprojects.\n- Each subproject has a `devops/` folder for its own deployment pipeline and release definition.\n- A top-level `devops/` folder contains reusable templates and shared deployment helpers that can be referenced by each component pipeline.\n- `docs/` holds documentation such as architecture, run guides, and deployment instructions.\n\n---\n\n## 4. Core Components\n\n### 4.1 Metadata Configuration\n\nMetadata is the single source of truth for all system configurations. It defines how source data flows through the Data Vault layers.\n\n#### Metadata Structure Diagram\n\n```mermaid\ngraph TD\n    MD[\"📋 Metadata Repository\"]\n\n    Systems[\"🖥️ SYSTEMS<br/>- system_id<br/>- system_name<br/>- source_type\"]\n\n    Tables[\"📑 SOURCE TABLES<br/>- table_id<br/>- source_table<br/>- business_process\"]\n\n    Columns[\"🔑 COLUMNS<br/>- column_id<br/>- column_name<br/>- data_type<br/>- is_business_key<br/>- is_primary_key<br/>- is_derived\"]\n\n    Staging[\"🔀 STAGING CONFIG<br/>- model_name<br/>- target_schema<br/>- derived_columns<br/>- filters<br/>- materialization\"]\n\n    RawVault[\"🏶 RAW VAULT CONFIG<br/>- Hub definitions<br/>- Link relationships<br/>- Satellite schedules<br/>- is_scd_type2\"]\n\n    Marts[\"📊 MART CONFIG<br/>- Dimension specs<br/>- Fact tables<br/>- Aggregations\"]\n\n    Tests[\"✅ TEST CONFIG<br/>- Uniqueness tests<br/>- Not null tests<br/>- Custom tests\"]\n\n    MD --> Systems\n    MD --> Tables\n    MD --> Columns\n    MD --> Staging\n    MD --> RawVault\n    MD --> Marts\n    MD --> Tests\n\n    Systems --> Tables\n    Tables --> Columns\n    Columns --> Staging\n    Staging --> RawVault\n    RawVault --> Marts\n```\n\n#### Key Metadata Components\n\n - 1. **Systems Configuration** - Define source systems. Slim table with minimal detail on the system\n    - system_id, system_name, source_type, credentials( secret names to be retrieved..), load_frequency, description\n\n- 2. **Table Structure** - Specify source tables and fields. (Most important part of the config)\n    - Fields, data types, business keys, primary keys, alias\n    - is Hub Link or Satellite\n    - group ( to separate satellites)\n    - Satellite refresh frequency,\n    - descriptions (optional)\n\n3. **Transformations** - Specify transformations\n    - model name, transformation, arguments ...\n\nBelow can potentially be derived from above:\n- 1. **Staging Configuration** - Define staging layer models\n    - Model name, target schema, derived columns, filters, materialization (view/table)\n    - Data quality tests\n\n-   2. **Raw Vault Configuration**\n    - Hub definitions (business keys, descriptions)\n    - Link definitions (relationships between hubs)\n    - Satellite definitions (attributes, SCD type, refresh frequency)\n\n-   3. **Mart Configuration** - Star schema definitions\n    - Dimension definitions, fact table specifications, aggregations\n\nCan be provided via CSV/Excel files and transformed into Databricks Delta tables for versioning.\n\n---\n\n### 4.2 DataVault Project Builder\n\nThe **Project Builder** is the core code generation engine that transforms metadata into fully-functional DBT projects.\n\n#### Builder Architecture\n\n```mermaid\ngraph LR\n    Metadata[\"📊 Metadata<br/>Reader\"]\n    Validator[\"✓ Validator<br/>(Schema check)\"]\n    Parser[\"🔍 Parser<br/>(Extract specs)\"]\n\n    HubGen[\"🏷️ Hub<br/>Generator\"]\n    LinkGen[\"🔗 Link<br/>Generator\"]\n    SatGen[\"📡 Satellite<br/>Generator\"]\n\n    MacroGen[\"⚙️ Macro<br/>Generator\"]\n    TestGen[\"✅ Test<br/>Generator\"]\n    ConfigGen[\"⚙️ Config<br/>Generator\"]\n\n    FileWriter[\"💾 File<br/>Writer\"]\n    DBTProject[\"📦 DBT<br/>Project Output\"]\n\n    Metadata --> Validator\n    Validator --> Parser\n\n    Parser --> HubGen\n    Parser --> LinkGen\n    Parser --> SatGen\n    Parser --> MacroGen\n    Parser --> TestGen\n    Parser --> ConfigGen\n\n    HubGen --> FileWriter\n    LinkGen --> FileWriter\n    SatGen --> FileWriter\n    MacroGen --> FileWriter\n    TestGen --> FileWriter\n    ConfigGen --> FileWriter\n\n    FileWriter --> DBTProject\n```\n\n#### Core Responsibilities\n\n| Component | Responsibility |\n|-----------|-----------------|\n| **Metadata Reader** | Load and parse metadata from CSV/Delta tables |\n| **Validator** | Validate metadata schema and cross-references |\n| **Hub Generator** | Create `hub_*.sql` and corresponding `.yml` files |\n| **Link Generator** | Create `lnk_*.sql` and relationship definitions |\n| **Satellite Generator** | Create `sat_*.sql` with ESD/SCD type 2 support |\n| **Macro Generator** | Generate custom dbt macros (hashing, surrogate keys, etc.) |\n| **Test Generator** | Create `.yml` with dbt test definitions |\n| **Config Generator** | Generate `dbt_project.yml` and `sources.yml` |\n| **File Writer** | Write all generated files to Databricks workspace |\n\n#### Process Flow\n\n```mermaid\nsequenceDiagram\n    participant Input as Metadata Input\n    participant Builder as Project Builder\n    participant Python as Python OOP\n    participant Templates as SQL Templates\n    participant Workspace as Databricks Workspace\n\n    Input->>Builder: 1. Provide metadata (CSV/Delta)\n    Builder->>Python: 2. Initialize builder instance\n    Python->>Python: 3. Validate metadata schema\n    Python->>Python: 4. Extract system specifications\n\n    Python->>Templates: 5. Load template files\n    Python->>Python: 6. Generate Hub models\n    Python->>Python: 7. Generate Link models\n    Python->>Python: 8. Generate Satellite models\n\n    Python->>Python: 9. Generate macros\n    Python->>Python: 10. Generate tests\n    Python->>Python: 11. Generate configurations\n\n    Python->>Workspace: 12. Write all files\n    Workspace->>Input: 13. dbt project ready\n```\n#### Macro Examples:\n(AutomateDv) model\n##### Hub:\n```sql\n-- 1. Configure the model for incremental loading\n{{ config(materialized='incremental', schema='data_vault') }}\n\n-- 2. Provide metadata for the hub\n{%- set src_pk = '{HUB_NAME}_HK' -%}\n{%- set src_nk = '{HUB_NAME}_ID' -%}\n{%- set src_ldts = 'LOAD_DATETIME' -%}\n{%- set src_source = 'RECORD_SOURCE' -%}\n{%- set source_model = 'v_stg_orders' -%}\n\n-- 3. Call the hub macro\n{{ automate_dv.hub(src_pk=src_pk,\n                   src_nk=src_nk,\n                   src_ldts=src_ldts,\n                   src_source=src_source,\n                   source_model=source_model) }}\n\n```\nBreakdown of Parameters\n- src_pk: The hash key column (hash of the natural key).\n- src_nk: The natural key(s) column from the source system.\n- src_ldts: The Load Date Timestamp column.\n- src_source: The record source column.\n- source_model: The name of the staging model (minus .sql).\n for mire details see automate dv [docs](https://automate-dv.readthedocs.io/en/latest/tutorial/tut_hubs/#:~:text=%7B%7B%20automate_dv.hub(src_pk=,6%207%208%209%2010)\n\nExample of Python\n```python\n\nfrom typing import List\n\nclass DBTSnippetGenerator:\n    \"\"\"\n    Class to generate DBT SQL snippets using automate_dv.link.\n    \"\"\"\n\n    def __init__(\n        self,\n        materialized: str,\n        source_model: List[str],\n        src_pk: str,\n        src_fk: List[str],\n        src_ldts: str,\n        src_source: str\n    ):\n        self.materialized = materialized\n        self.source_model = source_model\n        self.src_pk = src_pk\n        self.src_fk = src_fk\n        self.src_ldts = src_ldts\n        self.src_source = src_source\n\n    def generate_sql(self) -> str:\n        \"\"\"\n        Generate DBT SQL snippet.\n        Returns:\n            str: Formatted DBT SQL snippet.\n        \"\"\"\n        # Format lists for Jinja\n        source_model_str = \",\\n                        \".join(f'\"{m}\"' for m in self.source_model)\n        src_fk_str = \", \".join(f'\"{fk}\"' for fk in self.src_fk)\n\n        sql_snippet = f\"\"\"{{{{ config(materialized='{self.materialized}') }}}}\n\n{{%- set source_model = [{source_model_str}] -%}}\n\n{{%- set src_pk = \"{self.src_pk}\" -%}}\n{{%- set src_fk = [{src_fk_str}] -%}}\n{{%- set src_ldts = \"{self.src_ldts}\" -%}}\n{{%- set src_source = \"{self.src_source}\" -%}}\n\n{{{{ automate_dv.link(\n    src_pk=src_pk,\n    src_fk=src_fk,\n    src_ldts=src_ldts,\n    src_source=src_source,\n    source_model=source_model\n) }}}}\n\"\"\"\n        return sql_snippet\n\n\n# ===== Example usage =====\ngenerator = DBTSnippetGenerator(\n    materialized=\"incremental\",\n    source_model=[\"v_stg_orders_web\", \"v_stg_orders_crm\", \"v_stg_orders_sap\"],\n    src_pk=\"CUSTOMER_ORDER_HK\",\n    src_fk=[\"CUSTOMER_HK\", \"ORDER_HK\"],\n    src_ldts=\"LOAD_DATETIME\",\n    src_source=\"RECORD_SOURCE\"\n)\n\nprint(generator.generate_sql())\n```\n\n#### Output Directory Structure\n\n```\n{system}_dwh/\n├── dbt/\n│   ├── models/\n│   │   ├── 01_staging/\n│   │   │   ├── stg_*.sql\n│   │   │   └── sources.yml\n│   │   ├── 02_raw_vault/\n│   │   │   ├── hub/\n│   │   │   │   ├── hub_*.sql\n│   │   │   │   └── *.yml\n│   │   │   ├── link/\n│   │   │   │   └── lnk_*.sql\n│   │   │   └── satellite/\n│   │   │       ├── sat_*.sql\n│   │   │       └── eff_sat_*.sql\n│   │   ├── 03_pit/\n│   │   │   └── pit_*.sql\n│   │   └── 04_marts/ (optional)\n│   │       └── dim_*.sql, fact_*.sql\n│   ├── macros/\n│   ├── tests/\n│   ├── dbt_project.yml\n│   └── profiles.yml\n└── audit/\n    └── execution_logs.csv\n```\n\n---\n\n### 4.3 DataVault Project Runner\n\nThe **Project Runner** orchestrates the execution of generated DBT models following Data Vault loading patterns.\n\n#### Execution Flow\n\n```mermaid\ngraph TD\n    Start[\"🚀 Start Execution\"] --> Extract[\"1️⃣ Extract Models<br/>(from metadata)\"]\n    Extract --> Validate[\"2️⃣ Validate<br/>Dependencies\"]\n\n    Validate --> AuditStart[\"3️⃣ Create Audit Log<br/>(IN PROGRESS)\"]\n\n    AuditStart --> HubLoop[\"🔄 Hub Iteration\"]\n    HubLoop --> HubExec[\"Execute: dbt run<br/>-m hub_*\"]\n    HubExec --> HubLog[\"Log Results\"]\n    HubLog --> HubCheck{All?}\n    HubCheck -->|No| HubLoop\n    HubCheck -->|Yes| LinkLoop\n\n    LinkLoop[\"🔄 Link Iteration\"] --> LinkExec[\"Execute: dbt run<br/>-m lnk_*\"]\n    LinkExec --> LinkLog[\"Log Results\"]\n    LinkLog --> LinkCheck{All?}\n    LinkCheck -->|No| LinkLoop\n    LinkCheck -->|Yes| SatLoop\n\n    SatLoop[\"🔄 Satellite Iteration\"] --> SatExec[\"Execute: dbt run<br/>-m sat_*\"]\n    SatExec --> SatLog[\"Log Results\"]\n    SatLog --> SatCheck{All?}\n    SatCheck -->|No| SatLoop\n    SatCheck -->|Yes| PIT\n\n    PIT[\"4️⃣ Execute PIT Layer\"] --> Marts[\"5️⃣ Execute Marts\"]\n    Marts --> Tests[\"6️⃣ Run Data Quality Tests\"]\n    Tests --> Success[\"7️⃣ Update Audit<br/>SUCCESS\"]\n    Success --> End[\"✅ Complete\"]\n\n    HubExec -->|Error| Fail[\"❌ Audit<br/>FAILED\"]\n    LinkExec -->|Error| Fail\n    SatExec -->|Error| Fail\n    Tests -->|Failed| Fail\n    Fail --> End\n```\n\n#### Runner Responsibilities\n\n- **Model Extraction** - Read models from workspace and metadata\n- **Dependency Analysis** - Determine execution order: Hub → Link → Satellite → PIT → Marts\n- **Sequential Execution** - Execute models with error handling\n- **Audit Logging** - Log execution start/progress/completion with timestamps\n    Steps:\n    - audit pipeline start\n    - audit model start with version\n    - adjust finish status : success or fail\n- **Error Handling** - Capture failures and update audit status\n- **Test Execution** - Run dbt tests post-load for quality checks\n- **Performance Monitoring** - Track execution time and row counts\n\n#### Audit Logging Strategy (Recommended)\n\nBelow is example on how to log models\n\n**Scenario 1: Status-Based Tracking with In Progress Status**\n\n```sql\n-- AUDIT TABLE SCHEMA (Create once)\nCREATE TABLE IF NOT EXISTS your_schema.audit_log (\n    execution_id STRING,\n    system_id STRING,\n    model_name STRING,\n    status STRING,           -- 'IN PROGRESS', 'SUCCESS', 'FAILED'\n    start_time TIMESTAMP,\n    end_time TIMESTAMP,\n    row_count BIGINT,\n    error_message STRING,\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()\n);\n\n-- Before execution (Pre-hook)\nINSERT INTO audit_log (execution_id, system_id, model_name, status, start_time)\nVALUES (UUID(), 'SYS_001', 'hub_equipment', 'IN PROGRESS', CURRENT_TIMESTAMP());\n\n-- After successful execution (Post-hook)\nUPDATE audit_log\nSET status = 'SUCCESS',\n    end_time = CURRENT_TIMESTAMP(),\n    row_count = (SELECT COUNT(*) FROM {{ this }})\nWHERE execution_id = '<execution_id>' AND model_name = '{{ this.name }}';\n\n-- On error (ON FAIL hook)\nUPDATE audit_log\nSET status = 'FAILED',\n    end_time = CURRENT_TIMESTAMP(),\n    error_message = '<error_details>'\nWHERE execution_id = '<execution_id>' AND model_name = '{{ this.name }}';\n```\n\n**Scenario 2: Status-Based Tracking with Temporary Views**\n\n```sql\n-- Before execution: Create temporary view with source version\nCREATE OR REPLACE TEMPORARY VIEW sys_01_hub_equipment_audit AS\nSELECT\n    version,\n    UUID() as execution_id,\n    'SYS_001' as system_id,\n    'hub_equipment' as model_name,\n    'IN PROGRESS' as status,\n    CURRENT_TIMESTAMP() as start_time\nFROM (SELECT version FROM (DESCRIBE HISTORY {{ source('src', 'equipment') }} LIMIT 1));\n\n-- After successful execution: Insert from temp view\nINSERT INTO audit_log (execution_id, system_id, model_name, status, start_time, end_time)\nSELECT execution_id, system_id, model_name, 'SUCCESS' as status, start_time, CURRENT_TIMESTAMP()\nFROM sys_01_hub_equipment_audit;\n\n-- On error: Mark as failed\nINSERT INTO audit_log (execution_id, system_id, model_name, status, start_time, end_time, error_message)\nSELECT execution_id, system_id, model_name, 'FAILED' as status, start_time, CURRENT_TIMESTAMP(), '<error_detail>'\nFROM sys_01_hub_equipment_audit;\n```\n\n---\n\n### 4.1.1 Custom DBT Macros for Audit Logging\n\n**Macro 1: Get Delta Version**\n```sql\n{% macro get_delta_version(source_name, table_name) %}\n    {# Extract the latest version from Delta table history #}\n    {% set get_version_query %}\n        SELECT version FROM (DESCRIBE HISTORY {{ source(source_name, table_name) }} LIMIT 1)\n    {% endset %}\n\n    {% set results = run_query(get_version_query) %}\n\n    {% if execute %}\n        {% set current_version = results.columns[0].values()[0] %}\n        {{ return(current_version) }}\n    {% endif %}\n{% endmacro %}\n```\n\n**Macro 2: Log Execution Start**\n```sql\n{% macro log_execution_start(system_id, model_name) %}\n    {# Log model execution start to audit table #}\n    {% set execution_id = run_query_with_timeout(\"SELECT UUID() as id\", fetch_result=True).columns[0].values()[0] %}\n\n    {% if execute %}\n        {% set insert_query %}\n            INSERT INTO {{ var('audit_schema') }}.audit_log\n            (execution_id, system_id, model_name, status, start_time)\n            VALUES (\n                '{{ execution_id }}',\n                '{{ system_id }}',\n                '{{ model_name }}',\n                'IN PROGRESS',\n                CURRENT_TIMESTAMP()\n            )\n        {% endset %}\n\n        {% do run_query(insert_query) %}\n        {{ log(\"Audit log created for \" ~ model_name ~ \" with execution_id: \" ~ execution_id, info=True) }}\n    {% endif %}\n{% endmacro %}\n```\n\n**Macro 3: Log Execution Success**\n```sql\n{% macro log_execution_success(system_id, model_name, row_count) %}\n    {# Log model execution success to audit table #}\n    {% if execute %}\n        {% set update_query %}\n            UPDATE {{ var('audit_schema') }}.audit_log\n            SET status = 'SUCCESS',\n                end_time = CURRENT_TIMESTAMP(),\n                row_count = {{ row_count }}\n            WHERE model_name = '{{ model_name }}'\n              AND system_id = '{{ system_id }}'\n              AND status = 'IN PROGRESS'\n              AND end_time IS NULL\n            ORDER BY start_time DESC\n            LIMIT 1\n        {% endset %}\n\n        {% do run_query(update_query) %}\n        {{ log(\"Audit log updated to SUCCESS for \" ~ model_name, info=True) }}\n    {% endif %}\n{% endmacro %}\n```\n\n**Macro 4: Log Execution Failure**\n```sql\n{% macro log_execution_failure(system_id, model_name, error_message) %}\n    {# Log model execution failure to audit table #}\n    {% if execute %}\n        {% set update_query %}\n            UPDATE {{ var('audit_schema') }}.audit_log\n            SET status = 'FAILED',\n                end_time = CURRENT_TIMESTAMP(),\n                error_message = '{{ error_message }}'\n            WHERE model_name = '{{ model_name }}'\n              AND system_id = '{{ system_id }}'\n              AND status = 'IN PROGRESS'\n              AND end_time IS NULL\n            ORDER BY start_time DESC\n            LIMIT 1\n        {% endset %}\n\n        {% do run_query(update_query) %}\n        {{ log(\"Audit log updated to FAILED for \" ~ model_name ~ \": \" ~ error_message, info=false) }}\n    {% endif %}\n{% endmacro %}\n```\n\n**Usage in dbt_project.yml:**\n```yaml\nversion: '1.0'\n\nconfig-version: 2\n\nvars:\n  audit_schema: 'audit' # Update with the audit schema\n  system_id: 'SYS_001'\n\nmodels:\n  your_project:\n    raw_vault:\n      hub:\n        meta:\n          owner: 'Data Engineering'\n          description: 'Hub entities'\n        +pre-hook: \"{{ log_execution_start(var('system_id'), this.name) }}\"\n        +post-hook: \"{{ log_execution_success(var('system_id'), this.name, execute_result.rows_affected) }}\"\n        +on-fail: \"{{ log_execution_failure(var('system_id'), this.name, sql_now_macro_context.exception) }}\"\n```\n\n---\n\n---\n\n## 5. Recommended Supporting Libraries & Tools\n\n### 5.1 ⭐ Core Data Vault Framework\n\n#### **AutomatedDV** (RECOMMENDED - Active & Maintained)\n- **Status**: Actively maintained, production-ready (Latest v0.11.5 - Feb 2026)\n- **Website**: https://github.com/Datavault-UK/automate-dv\n- **Organization**: Datavault-UK community-led\n- **Purpose**: DBT-native Data Vault 2.0 automation framework\n- **Key Features**:\n  * Automated hub/link/satellite generation from metadata\n  * Built-in MD5/SHA256 hashing macros for business keys\n  * Multi-threaded execution of generated SQL (in case dbt is run outside databricks)\n  * Staging table validation and loading patterns\n  * Excellent ReadTheDocs documentation\n  * Type 0, 1, 2, and 3 SCD support (Effective Satellite, Satellites)\n  * Integration with dbt best practices\n  * Supported on: Snowflake, Databricks, BigQuery, Redshift, DuckDB, Postgres\n  * 582 GitHub stars, active community on Slack\n- **Installation**: Add to `packages.yml`\n```yaml\npackages:\n  - package: Datavault-UK/automate_dv\n    version: 0.11.5  # Use latest stable from dbt Hub\n```\n- **Documentation**: https://automate-dv.readthedocs.io/\n- **Slack Community**: https://join.slack.com/t/dbtvault/shared_invite/enQtODY5MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA\n- **When to Use**: Primary choice for all DV2.0 implementations\n- **Cost**: Free/Open Source (Apache 2.0 License)\n\n#### **dbtvault** (DEPRECATED - No Longer Maintained)\n- **Status**: Repository no longer available (404 - Towards-Data-Science/dbtvault)\n- **Note**: Historical reference only. Original codebase was rebranded and is now maintained as **AutomatedDV**. Do not use for new projects - use AutomatedDV instead\n- **Migration**: The AutomatedDV package includes all capabilities previously in dbtvault with modern enhancements\n\n#### **ScaleFree** (Enterprise Alternative)\n- **Status**: Commercial product\n- **Purpose**: Enterprise Data Vault acceleration and scaling\n- **Key Features**:\n  * Visual metadata modeling UI\n  * Integrated data quality checks\n  * Performance optimization tuning\n  * Multi-platform support (Snowflake, Databricks, etc.)\n  * Advanced hierarchical support\n  * Change data capture (CDC) patterns\n- **Cost**: Enterprise licensing required\n- **When to Use**: Large-scale implementations (1000+ tables), complex hierarchies\n- **Contact**: scalefree.com\n\n---\n\n### 5.2 🔧 Supporting DBT Packages\n check official link for dbt utility packages [link](https://hub.getdbt.com)\n#### **dbt-utils**\n```yaml\npackages:\n  - package: dbt-labs/dbt_utils\n    version: 1.3.3\n```\n- **Key Macros for DV2.0**: `generate_surrogate_key`, `get_query_results_as_dict`, `date_spine`\n- **Use**: Hash key generation, utility operations, cross-database compatibility\n\n#### **audit_helper** (Audit & Lineage)\n```yaml\npackages:\n  - package: dbt-labs/audit_helper\n    version: 0.13.0\n```\n- **Purpose**: Data reconciliation and audit support\n- **Key Features**: Record count comparisons, delta identification\n- **Use**: Validate data loads, reconcile source→target, identify discrepancies\n\n#### **dbt-expectations** (Advanced Testing)\n```yaml\npackages:\n  - package: metaplane/dbt_expectations\n    version: 0.10.10\n```\n- **Key Tests**:\n  * `expect_column_values_to_be_not_null`\n  * `expect_column_values_to_match_regex_pattern`\n  * `expect_table_row_count_to_equal_zero`\n  * `expect_table_columns_to_match_set`\n  * Custom threshold-based tests\n- **Use**: Comprehensive data quality validation beyond basic tests\n\n#### **dbt-meta-testing** (Metadata-Driven Tests)\n- **Purpose**: Auto-generate tests from model metadata\n- **Use**: Scale test coverage without manual YAML\n\n#### **dbt-docs-as-code** (Documentation)\n- **Purpose**: Better documentation version control\n- **Use**: Keep docs alongside code in Git\n\n---\n\n### 5.3 🐍 Python Libraries for Project Builder\n\n#### **Essential Core Libraries**\n\n| Library | Purpose | Version Range |\n|---------|---------|----------------|\n| **Pydantic** | Data validation & settings | 2.0+ |\n| **PyYAML** | YAML parsing/generation | 6.0+ |\n| **Jinja2** | SQL template rendering | 3.1+ |\n| **Pathlib** | File I/O, path operations | Built-in |\n| **Logging** | Execution logging & audits | Built-in |\n| **Dataclasses** | Type-safe data structures | Built-in (3.7+) |\n| **Dbt_Core** | Type-safe data structures | 1.11.0+ |\n| **dbt-databricks** | Type-safe data structures | 1.11.0+ |\n\nExtra:\n| Library | Purpose | Version Range | Possible Use Cases|\n|---------|---------|----------------|----------------|\n| **SQLAlchemy** | SQL metadata operations | 2.0+ |outside Databricks\n| **Pandas** or **Polars** | Metadata CSV/Excel processing | Latest | Web App\n\n#### **Databricks Integration**\n\n```python\n# Add to requirements.txt\ndatabricks-sql-connector==3.1.0+  # Execute SQL\ndatabricks-cli==0.17.0+           # Workspace API\nmlflow==2.8.0+                    # Experiment tracking ! Not in scope for the moment\ndelta-spark==3.0.0+               # Delta Lake support\n```\n\n#### **Optional: Advanced Enhancements**\n\n| Library | Purpose | Benefit |\n|---------|---------|---------|\n| **Great Expectations** | Data profiling & validation | Auto schema inference, quality metrics |\n| **DBT Cloud API** | Programmatic dbt runs | Remote execution, webhooks |\n| **Prefect** | Workflow orchestration | Modern, Databricks-native |\n| **Apache Airflow** | Complex scheduling | DAG-based, multi-source support |\n| **Plotly Dash** | Interactive UI | Metadata editor, monitoring dashboard |\n| **Pydantic-Settings** | Config management | Multi-environment support |\n| **pytest** | Unit testing | Test project builder code |\n| **black** | Code formatting | Consistent Python style |\n\n---\n\n### 5.4 Library Recommendation Matrix\n\n```mermaid\ngraph TD\n    A[\"📦 Data Vault Layer\"]\n    A1[\"✅ AutomatedDV<br/>- ACTIVE & RECOMMENDED<br/>- Free/OSS<br/>- Production-ready<br/>- Excellent docs\"]\n    A2[\"❌ dbtvault<br/>- DISCONTINUED<br/>- Repository unavailable (404)<br/>- Use AutomatedDV instead\"]\n    A3[\"💼 ScaleFree<br/>- Commercial<br/>- Enterprise focus<br/>- High cost\"]\n\n    B[\"🔨 Code Generation\"]\n    B1[\"Jinja2<br/>SQL templates\"]\n    B2[\"Pydantic<br/>Validation\"]\n    B3[\"PyYAML<br/>Config parsing\"]\n\n    C[\"🧪 Testing & Quality\"]\n    C1[\"dbt-expectations<br/>Advanced tests\"]\n    C2[\"Great Expectations<br/>Data profiling\"]\n    C3[\"pytest<br/>Python tests\"]\n\n    D[\"📡 Orchestration\"]\n    D1[\"Databricks Workflows<br/>Native, simple\"]\n    D2[\"Prefect<br/>Modern, Pythonic\"]\n    D3[\"Airflow<br/>Enterprise, complex\"]\n\n    A --> A1\n    A --> A2\n    A --> A3\n\n    B --> B1\n    B --> B2\n    B --> B3\n\n    C --> C1\n    C --> C2\n    C --> C3\n\n    D --> D1\n    D --> D2\n    D --> D3\n```\n\n---\n\n### 5.5 Installation Reference\n- Env and project creation:\nUse uv and MakeFile for env configurations\n - Linting:\n    - ruff\n    - sqlfluff\n\n\n\n---\n\n## 6. Architecture Patterns\n\n### 6.1 Data Vault 2.0 Layers\n\n```\n┌─────────────────────────────────────────────────┐\n│           PRESENTATION LAYER                     │\n│  ⭐ Star Schema / Dimensional Models             │\n│  (Facts, Dimensions, Aggregates)                 │\n└──────────────────┬──────────────────────────────┘\n                   │\n┌──────────────────▼──────────────────────────────┐\n│           INFORMATION LAYER                      │\n│  📈 PIT Tables (Point in Time)                   │\n│  (Joined Hub + Satellite + Link histories)       │\n└──────────────────┬──────────────────────────────┘\n                   │\n┌──────────────────▼──────────────────────────────┐\n│           RAW VAULT LAYER                        │\n│  🏶 Data Vault 2.0 Core                          │\n│  ├── 🏷️ Hubs (Business entities)                │\n│  ├── 🔗 Links (Relationships)                   │\n│  └── 📡 Satellites (Attributes)                 │\n└──────────────────┬──────────────────────────────┘\n                   │\n┌──────────────────▼──────────────────────────────┐\n│           STAGING / PERSISTENCE LAYER             │\n│  🔀 Staging Tables (Bronze / Cleansed)          │\n│  - Data validation                               │\n│  - Column standardization                        │\n│  - Surrogate key preparation                     │\n└──────────────────┬──────────────────────────────┘\n                   │\n┌──────────────────▼──────────────────────────────┐\n│           SOURCE SYSTEMS                         │\n│  🖥️ External Data Sources                        │\n│  (Databases, APIs, Files, Streams)               │\n└─────────────────────────────────────────────────┘\n```\n\n### 6.2 Hub-Link-Satellite Relationships\n\n```mermaid\ngraph LR\n    Hub1[\"🏷️ Hub A<br/>(Hub Key)<br/>Business Key: A_ID\"]\n    Hub2[\"🏷️ Hub B<br/>(Hub Key)<br/>Business Key: B_ID\"]\n\n    Link[\"🔗 Link<br/>(Link Key)<br/>FK: A_Key, B_Key<br/>Load Date\"]\n\n    Sat1[\"📡 Sat A<br/>Attributes of A<br/>Hash Diff, SCD Type\"]\n    Sat2[\"📡 Sat Link<br/>Relationship details<br/>Valid From/To\"]\n\n    Hub1 --> Link\n    Hub2 --> Link\n    Hub1 --> Sat1\n    Link --> Sat2\n```\n\n---\n\n## 7. Implementation Roadmap\n👥 Team assumption\n2 senior engineers → architecture + core engine\n2 mid engineers → generators + tests + integration\n\n### Phase 0 — Architecture & Design & POC (Sprint 1)\nGoal: build **POC** and **architecture**\n\n- [ ] Architecture\n    - High-level architecture diagram\n    - Component interaction diagram\n    - Repository structure\n    - Configuration strategy (env-based)\n- [ ] Metadata Contract\n    - Define Data Vault metadata structure\n    - Naming convention strategy\n    - Hashing strategy (MD5/SHA)\n    - Surrogate key strategy\n    - Incremental loading strategy\n    - Model dependency strategy (Hub → Link → Sat)\n- [ ] Templates\n    - Choose template engine (Jinja2 recommended)\n    - Define template folder structure\n- [ ] **Small PoC**\n    - [ ] Build a thin vertical slice:\n        - Hardcoded metadata (1 Hub + 1 Sat)\n        - Simple Jinja SQL template\n        - Generate dbt model\n        - Write file to Databricks workspace\n        - Run dbt run\n        - Validate table created\n        - Test hashing logic\n🎯 Deliverable\nArchitecture + metadata contract + POC - run one hub model\n\n### Phase 1: Foundation - Core Code Generation\nGoal: build **core platform skeleton**\n\n- [ ] Shared Core\n    - Logger\n    - Secret getter\n    - Storage abstraction\n    - Path resolver\n    - Config loader\n    - Databricks workspace file writer\n- [ ] Metadata Layer\n    - Design metadata schema (Delta Tables)\n    - Metadata loader\n    - Metadata Getter:\n        - Pydantic Models:\n            - DBT Models:\n                - Base\n                - Hub\n                - Link\n                - Satellite\n    - Pydantic models\n    - Metadata validation engine\n- [ ] DBT Builder Core\n    - [ ] Generator Classes:\n        - Generator Classes:\n            - Base generator class\n            - Hub generator (hash key)\n            - Link generator (composite keys)\n            - Satellite generator\n    - Base Project class\n    - Staging Generator\n- [ ] DBT Runner (minimal)\n    - Runner interface\n    - CLI wrapper (dbt run, dbt test)\n- [ ] Dependency Engine\n    - Model dependency resolver\n    <!-- - DAG builder ( ) -->\n    - Load order resolver\n🎯 Milestone:\n👉 Able to generate one simple Hub model from metadata\n\n\n### Phase 2: DBT Builder Framework\n- [ ] Model Generators:\n    - Satellite generator\n        - SCD0\n        - SCD1\n        - SCD2\n        - SCD3\n    - Link:\n        -Same as Link\n- [ ] Macro Framework\n    - Macro generator base\n    - Hash macro\n    - Surrogate key macro\n    - Audit macro\n- [ ] Core Classes\n    - Project class\n    - Mart class\n    - Naming strategy class\n    - Template loader\n\n🎯 Deliverable\nFramework ready for model generation\n\n### Phase 2: Model Generation\nGoal: full **Data Vault generation**\n- [ ] DBT Builder\n        - Factory for model generators\n    - Mart class\n    - Template loader\n    - SQL template library (skeleton)\n    - [ ] Supporting Generators\n        - Source model generator\n        - Staging model generator\n        - PIT (optional but recommended early)\n        - Bridge (optional)\n    - [ ] Macro Generation\n        - hash macro\n        - surrogate key macro\n        - audit macros\n        - load date macro\n    - [ ] Tests Generation\n        - YAML test generator\n        - uniqueness tests\n        - not null tests\n        - relationship tests\n-\n\n\n🎯 Milestone\n👉 Generate full DV structure for one source\n\n### Phase 3: Execution & Orchestration\nGoal: production-ready execution\n\n- [ ] Runner\n    - Project Runner\n    - Environment config (dev/qa/prod)\n    - Selective model run support\n- [ ] Observability\n Audit logging (Delta)\n Run metadata logging\n Model execution time tracking\n Error logging\n- [ ] Orchestration\n Databricks Workflows integration\n Retry mechanism\n Failure recovery\n\n🎯 Milestone\n👉 Fully automated metadata → generate → run → log\n\n### Phase 4: Enhancement & Scale\nGoal: enterprise readiness\n\n- [ ] Data Quality\n Great Expectations integration\n Data profiling\n- [ ] Documentation\n Auto-generate dbt docs\n Metadata documentation generator\n- [ ] Lineage\n Column lineage\n Source to DV lineage\n- [ ] Performance\n Incremental optimization\n Partition strategy\n Caching strategy\n- [ ] UX Improvements\n CLI for generation\n Dry-run mode\n Diff mode (only changed models)\n🎯 Milestone\n👉 Enterprise-ready metadata-driven dbt generator\n\n---\n\n## 8. Technology Stack Summary\n\n```\nLayer                 | Technology & Tools\n----------------------|----------------------------------------\nMetadata Storage      | CSV/Excel → Databricks Delta Tables\nOrchestration         | Databricks Workflows, Airflow, Prefect\nCode Generation       | Python OOP + Jinja2 Templates\nTransform Engine      | DBT 1.6+ + AutomatedDV Package\nExecution Platform    | Databricks (Apache Spark)\nStorage Layer         | Databricks Delta Lake (ACID, Time Travel)\nTesting & Validation  | dbt tests + Great Expectations + pytest\nLogging & Audit       | Delta tables + Databricks Event logs\nDocumentation         | DBT native docs + Auto-generated Markdown\nVersion Control       | Git + DBT artifacts\nCI/CD Pipeline        | GitHub Actions / Azure DevOps Pipelines\nMonitoring            | Databricks Job UI, Custom Dashboards\n```\n\n---\n\n## 9. Best Practices & Recommendations\n\n### ✅ Metadata Management\n- Store metadata in version-controlled CSV files (easier Git diffs)\n- Create Delta table snapshots for historical change tracking\n- Validate all metadata with Pydantic schemas before processing\n- Use consistent naming: system_id, table_id, column_id for traceability\n\n### ✅ Code Generation\n- Generate idempotent SQL (safe to re-run without side effects)\n- Use DBT incremental models for large fact tables\n- Include helpful comments in generated SQL (sourced from metadata descriptions)\n- Generate `.yml` files alongside `.sql` files for documentation\n\n### ✅ Execution & Loading\n- Implement circuit breaker pattern (fail fast, prevent cascade)\n- Use DBT snapshot feature for Type 2 slowly changing dimensions\n- Log ALL model executions with row counts, timing, and status\n- Implement data quality gates (tests before downstream marts)\n- Use post-load reconciliation queries\n\n### ✅ Scaling for Production\n- Partition large Delta tables by load_date for performance\n- Use DBT on-disk cache for faster incremental builds\n- Separate projects by domain/business process\n- Leverage DBT's DAG-based graph execution for parallelization\n- Monitor query performance, optimize hot paths\n\n---\n\n## 10. Troubleshooting & Common Issues\n\n### Issue: Generated SQL fails to compile\n**Solution**:\n- Validate metadata schema with Pydantic before generation\n- Add metadata sanity checks (cross-reference validation)\n- Check Databricks syntax compatibility\n\n### Issue: Audit log shows inconsistent row counts\n**Solution**:\n- Verify source data hasn't changed between Hub and Satellite loads\n- Check for natural key duplicates in source\n- Review dbt models for unexpected filters or transforms\n\n### Issue: Link table creation fails\n**Solution**:\n- Ensure all referenced hubs exist before link execution\n- Verify business key relationships in metadata\n- Check for NULL values in linking columns\n\n---\n\n## 11. Next Steps\n\n1. **Finalize Metadata Schema** - Create comprehensive YAML/CSV specifications\n2. **Choose Orchestration Tool** - Evaluate Databricks Workflows vs. Airflow vs. Prefect based on needs\n3. **Establish Naming Conventions** - Standardize object, field, and parameter names\n4. **Design Audit/Lineage Strategy** - Implement comprehensive tracking\n5. **Build MVP Generator** - Prototype for single system end-to-end\n6. **Select Library Stack** - Finalize AutomatedDV, Great Expectations, testing framework\n7. **Documentation** - Create runbooks, troubleshooting guides, operator manuals\n\n---\n\n## References & Resources\n\n- **Data Vault 2.0 Book**: \"The Data Vault 2.0 Guidebook\" by Dan Linstedt & Michael Olschimke\n- **DBT Documentation**: https://docs.getdbt.com/\n- **AutomatedDV Package**: https://github.com/Datavault-UK/automate-dv\n- **AutomatedDV Documentation**: https://automate-dv.readthedocs.io/\n- **AutomatedDV Community**: https://join.slack.com/t/dbtvault/shared_invite/enQtODY3MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA\n- **Databricks Best Practices**: https://docs.databricks.com/\n- **Data Quality with dbt**: https://docs.getdbt.com/guides/dbt-best-practices\n- **Great Expectations**: https://greatexpectations.io/\n- **Data Vault Institute**: https://www.datavaultinstitute.com/\n\n\n\n\n\n\n\n\n",
+      "format" : "Markdown",
+      "order" : 1,
+      "title" : ""
+    } ]
+  },
+  "id" : 1,
+  "lastModifiedDate" : "2026-04-08T07:58:51Z",
+  "model" : {
+    "deploymentNodes" : [ {
+      "containerInstances" : [ {
+        "containerId" : "6",
+        "deploymentGroups" : [ "Default" ],
+        "environment" : "Production",
+        "id" : "78",
+        "instanceId" : 1,
+        "properties" : {
+          "structurizr.dsl.identifier" : "42bc30d4-7a05-4349-ba7d-3dd62c05c713"
+        },
+        "relationships" : [ {
+          "description" : "Supplies metadata",
+          "destinationId" : "80",
+          "id" : "81",
+          "linkedRelationshipId" : "69",
+          "sourceId" : "78"
+        } ],
+        "tags" : "Container Instance"
+      } ],
+      "environment" : "Production",
+      "id" : "77",
+      "instances" : "1",
+      "name" : "Metadata Store Server",
+      "properties" : {
+        "structurizr.dsl.identifier" : "41f173b1-7cdf-4a50-b6c1-bff5870d9f7e"
+      },
+      "tags" : "Element,Deployment Node"
+    }, {
+      "containerInstances" : [ {
+        "containerId" : "26",
+        "deploymentGroups" : [ "Default" ],
+        "environment" : "Production",
+        "id" : "80",
+        "instanceId" : 1,
+        "properties" : {
+          "structurizr.dsl.identifier" : "595ced09-ac7a-4d9f-8b73-4efb55f5df35"
+        },
+        "relationships" : [ {
+          "description" : "Provides generated DBT project",
+          "destinationId" : "83",
+          "id" : "84",
+          "linkedRelationshipId" : "70",
+          "sourceId" : "80"
+        } ],
+        "tags" : "Container Instance"
+      } ],
+      "environment" : "Production",
+      "id" : "79",
+      "instances" : "1",
+      "name" : "DBT Builder Server",
+      "properties" : {
+        "structurizr.dsl.identifier" : "b6d5b992-6dec-455f-a4cb-d28ede090444"
+      },
+      "tags" : "Element,Deployment Node"
+    }, {
+      "containerInstances" : [ {
+        "containerId" : "51",
+        "deploymentGroups" : [ "Default" ],
+        "environment" : "Production",
+        "id" : "83",
+        "instanceId" : 1,
+        "properties" : {
+          "structurizr.dsl.identifier" : "a964ab8b-33fb-4a0c-97e0-2eede6e4c49b"
+        },
+        "tags" : "Container Instance"
+      } ],
+      "environment" : "Production",
+      "id" : "82",
+      "instances" : "1",
+      "name" : "DBT Execution Server",
+      "properties" : {
+        "structurizr.dsl.identifier" : "5f2aa1db-9ac5-4ddb-adea-ada4203c4e71"
+      },
+      "tags" : "Element,Deployment Node"
+    } ],
+    "people" : [ {
+      "description" : "Defines metadata, reviews models and monitors execution",
+      "id" : "1",
+      "name" : "Data Engineer",
+      "properties" : {
+        "structurizr.dsl.identifier" : "dataEngineer"
+      },
+      "relationships" : [ {
+        "description" : "Provides metadata and source schema",
+        "destinationId" : "6",
+        "id" : "67",
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Provides metadata and source schema",
+        "destinationId" : "5",
+        "id" : "68",
+        "linkedRelationshipId" : "67",
+        "sourceId" : "1"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "EDH Core data systems feeding the warehouse",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "Source Systems",
+      "properties" : {
+        "structurizr.dsl.identifier" : "sourceSystems"
+      },
+      "tags" : "Element,Software System,External System,Database"
+    }, {
+      "description" : "Cloud data platform hosting Delta Lake and DBT execution",
+      "documentation" : { },
+      "id" : "3",
+      "name" : "Databricks Platform",
+      "properties" : {
+        "structurizr.dsl.identifier" : "databricks"
+      },
+      "tags" : "Element,Software System,Internal System,Cloud Platform"
+    }, {
+      "description" : "Centralized data repository for raw and curated data",
+      "documentation" : { },
+      "id" : "4",
+      "name" : "Delta Tables",
+      "properties" : {
+        "structurizr.dsl.identifier" : "edhDatabase"
+      },
+      "tags" : "Element,Software System,Internal System,Database"
+    }, {
+      "containers" : [ {
+        "components" : [ {
+          "description" : "Defines source system metadata and source types",
+          "documentation" : { },
+          "group" : "User Defined Metadata",
+          "id" : "7",
+          "name" : "Systems Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "systemsConfig"
+          },
+          "relationships" : [ {
+            "description" : "Defines source table metadata",
+            "destinationId" : "8",
+            "id" : "16",
+            "sourceId" : "7",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines source tables, pk, description, source details",
+          "documentation" : { },
+          "group" : "User Defined Metadata",
+          "id" : "8",
+          "name" : "Source Table Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "tablesConfig"
+          },
+          "relationships" : [ {
+            "description" : "Defines table schemas and relationships",
+            "destinationId" : "9",
+            "id" : "18",
+            "sourceId" : "8",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines source table schemas and relationships",
+          "documentation" : { },
+          "group" : "User Defined Metadata",
+          "id" : "9",
+          "name" : "Source Table Schema",
+          "properties" : {
+            "structurizr.dsl.identifier" : "tablesSchema"
+          },
+          "relationships" : [ {
+            "description" : "Feeds metadata",
+            "destinationId" : "13",
+            "id" : "19",
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Feeds source schema metadata for vault generation",
+            "destinationId" : "14",
+            "id" : "22",
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines transformation metadata, derived columns, and filters, expressions",
+          "documentation" : { },
+          "group" : "User Defined Metadata",
+          "id" : "10",
+          "name" : "Transformations Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "transformationsConfig"
+          },
+          "relationships" : [ {
+            "description" : "Feeds transformation metadata",
+            "destinationId" : "13",
+            "id" : "20",
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines data quality and dbt test specifications",
+          "documentation" : { },
+          "group" : "User Defined Metadata",
+          "id" : "11",
+          "name" : "Test Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "testsConfig"
+          },
+          "relationships" : [ {
+            "description" : "Feeds test metadata for staging models",
+            "destinationId" : "14",
+            "id" : "23",
+            "sourceId" : "11",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Feeds test definitions",
+            "destinationId" : "15",
+            "id" : "25",
+            "sourceId" : "11",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Optional AI-assisted metadata generation and validation component to help users create and validate metadata through natural language prompts",
+          "documentation" : { },
+          "group" : "AI-Assisted Metadata",
+          "id" : "12",
+          "name" : "AI Helper",
+          "properties" : {
+            "structurizr.dsl.identifier" : "aiHelper"
+          },
+          "relationships" : [ {
+            "description" : "Assists in generating and validating system metadata",
+            "destinationId" : "9",
+            "id" : "17",
+            "sourceId" : "12",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines staging models, materialization, filters, and derived columns",
+          "documentation" : { },
+          "group" : "Derived Metadata",
+          "id" : "13",
+          "name" : "Staging Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "stagingConfig"
+          },
+          "relationships" : [ {
+            "description" : "Feeds raw vault metadata",
+            "destinationId" : "14",
+            "id" : "21",
+            "sourceId" : "13",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines hub, link, and satellite metadata for the Raw Vault",
+          "documentation" : { },
+          "group" : "Derived Metadata",
+          "id" : "14",
+          "name" : "Raw Vault Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "rawVaultConfig"
+          },
+          "relationships" : [ {
+            "description" : "Feeds mart and dimensional model definitions",
+            "destinationId" : "15",
+            "id" : "24",
+            "sourceId" : "14",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Defines dimension and fact table specifications and aggregations",
+          "documentation" : { },
+          "group" : "Derived Metadata",
+          "id" : "15",
+          "name" : "Mart Configuration",
+          "properties" : {
+            "structurizr.dsl.identifier" : "martsConfig"
+          },
+          "tags" : "Element,Component"
+        } ],
+        "description" : "Stores system, table, staging and vault metadata as CSV, Delta tables, or other config sources",
+        "documentation" : { },
+        "id" : "6",
+        "name" : "Metadata Store",
+        "properties" : {
+          "structurizr.dsl.identifier" : "metadataStore"
+        },
+        "relationships" : [ {
+          "description" : "Supplies metadata",
+          "destinationId" : "26",
+          "id" : "69",
+          "sourceId" : "6",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container"
+      }, {
+        "components" : [ {
+          "description" : "Loads and parses metadata from CSV or Delta sources",
+          "documentation" : { },
+          "id" : "27",
+          "name" : "Metadata Reader",
+          "properties" : {
+            "structurizr.dsl.identifier" : "metadataReader"
+          },
+          "relationships" : [ {
+            "description" : "Validates metadata",
+            "destinationId" : "28",
+            "id" : "37",
+            "sourceId" : "27",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Validates metadata schema and cross-references",
+          "documentation" : { },
+          "id" : "28",
+          "name" : "Validator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "validator"
+          },
+          "relationships" : [ {
+            "description" : "Parses validated metadata",
+            "destinationId" : "29",
+            "id" : "38",
+            "sourceId" : "28",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Extracts system and model specifications from metadata",
+          "documentation" : { },
+          "id" : "29",
+          "name" : "Parser",
+          "properties" : {
+            "structurizr.dsl.identifier" : "parser"
+          },
+          "relationships" : [ {
+            "description" : "Generates hub definitions",
+            "destinationId" : "30",
+            "id" : "39",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Generates link definitions",
+            "destinationId" : "31",
+            "id" : "40",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Generates satellite definitions",
+            "destinationId" : "32",
+            "id" : "41",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Generates macros",
+            "destinationId" : "33",
+            "id" : "42",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Generates tests",
+            "destinationId" : "34",
+            "id" : "43",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Generates config files",
+            "destinationId" : "35",
+            "id" : "44",
+            "sourceId" : "29",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Creates hub SQL and metadata files",
+          "documentation" : { },
+          "id" : "30",
+          "name" : "Hub Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "hubGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes hub files",
+            "destinationId" : "36",
+            "id" : "45",
+            "sourceId" : "30",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Creates link SQL and relationship definitions",
+          "documentation" : { },
+          "id" : "31",
+          "name" : "Link Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "linkGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes link files",
+            "destinationId" : "36",
+            "id" : "46",
+            "sourceId" : "31",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Creates satellite SQL and SCD type 2 support",
+          "documentation" : { },
+          "id" : "32",
+          "name" : "Satellite Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "satelliteGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes satellite files",
+            "destinationId" : "36",
+            "id" : "47",
+            "sourceId" : "32",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Generates dbt macros for hashing, keys, and transformations",
+          "documentation" : { },
+          "id" : "33",
+          "name" : "Macro Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "macroGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes macro files",
+            "destinationId" : "36",
+            "id" : "48",
+            "sourceId" : "33",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Generates dbt tests and test configuration files",
+          "documentation" : { },
+          "id" : "34",
+          "name" : "Test Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "testGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes test files",
+            "destinationId" : "36",
+            "id" : "49",
+            "sourceId" : "34",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Generates dbt_project.yml, sources.yml, and config files",
+          "documentation" : { },
+          "id" : "35",
+          "name" : "Config Generator",
+          "properties" : {
+            "structurizr.dsl.identifier" : "configGenerator"
+          },
+          "relationships" : [ {
+            "description" : "Writes config files",
+            "destinationId" : "36",
+            "id" : "50",
+            "sourceId" : "35",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Writes generated dbt files to the Databricks workspace",
+          "documentation" : { },
+          "id" : "36",
+          "name" : "File Writer",
+          "properties" : {
+            "structurizr.dsl.identifier" : "fileWriter"
+          },
+          "tags" : "Element,Component"
+        } ],
+        "description" : "Generates DBT project files, models, macros, and YAML metadata from input metadata",
+        "documentation" : { },
+        "id" : "26",
+        "name" : "DataVault Builder",
+        "properties" : {
+          "structurizr.dsl.identifier" : "projectBuilder"
+        },
+        "relationships" : [ {
+          "description" : "Provides generated DBT project",
+          "destinationId" : "51",
+          "id" : "70",
+          "sourceId" : "26",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container"
+      }, {
+        "components" : [ {
+          "description" : "Time-based or event-based orchestration for DBT runs and metadata refresh",
+          "documentation" : { },
+          "id" : "52",
+          "name" : "Scheduler",
+          "properties" : {
+            "structurizr.dsl.identifier" : "scheduler"
+          },
+          "relationships" : [ {
+            "description" : "Triggers",
+            "destinationId" : "53",
+            "id" : "58",
+            "sourceId" : "52",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Compiles and executes DBT models",
+          "documentation" : { },
+          "id" : "53",
+          "name" : "DBT Engine",
+          "properties" : {
+            "structurizr.dsl.identifier" : "dbtEngine"
+          },
+          "relationships" : [ {
+            "description" : "Loads hub/link/satellite tables",
+            "destinationId" : "54",
+            "id" : "59",
+            "sourceId" : "53",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Writes execution logs",
+            "destinationId" : "57",
+            "id" : "62",
+            "sourceId" : "53",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Represents hub, link, and satellite storage within the execution pipeline",
+          "documentation" : { },
+          "id" : "54",
+          "name" : "Raw Vault / Delta Lake",
+          "properties" : {
+            "structurizr.dsl.identifier" : "rawVault"
+          },
+          "relationships" : [ {
+            "description" : "Feeds point-in-time generation",
+            "destinationId" : "55",
+            "id" : "60",
+            "sourceId" : "54",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Represents point-in-time tables for reporting and dimensional load",
+          "documentation" : { },
+          "id" : "55",
+          "name" : "PIT Layer",
+          "properties" : {
+            "structurizr.dsl.identifier" : "pitLayer"
+          },
+          "relationships" : [ {
+            "description" : "Feeds dimensional models",
+            "destinationId" : "56",
+            "id" : "61",
+            "sourceId" : "55",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Represents dimensional models for analytics",
+          "documentation" : { },
+          "id" : "56",
+          "name" : "Star Schema Layer",
+          "properties" : {
+            "structurizr.dsl.identifier" : "starSchema"
+          },
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Captures execution logs, version history, and lineage metadata",
+          "documentation" : { },
+          "id" : "57",
+          "name" : "Audit & Lineage Store",
+          "properties" : {
+            "structurizr.dsl.identifier" : "auditLog"
+          },
+          "tags" : "Element,Component"
+        } ],
+        "description" : "Runs DBT models, captures audit logs, and persists outputs",
+        "documentation" : { },
+        "id" : "51",
+        "name" : "DataVault Runner",
+        "properties" : {
+          "structurizr.dsl.identifier" : "projectRunner"
+        },
+        "relationships" : [ {
+          "description" : "Generates Artifacts for lineage and documentation",
+          "destinationId" : "63",
+          "id" : "71",
+          "sourceId" : "51",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Writes vault and analytics data to",
+          "destinationId" : "4",
+          "id" : "72",
+          "sourceId" : "51",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Uses source data from",
+          "destinationId" : "2",
+          "id" : "74",
+          "sourceId" : "51",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container"
+      }, {
+        "components" : [ {
+          "description" : "Web application for visualizing data lineage and execution history",
+          "documentation" : { },
+          "id" : "64",
+          "name" : "webApp",
+          "properties" : {
+            "structurizr.dsl.identifier" : "webApp"
+          },
+          "relationships" : [ {
+            "description" : "Uses compiled DBT artifacts for lineage and metadata",
+            "destinationId" : "65",
+            "id" : "66",
+            "sourceId" : "64",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Compilled Artifacts",
+          "documentation" : { },
+          "id" : "65",
+          "name" : "DBT Artifacts",
+          "properties" : {
+            "structurizr.dsl.identifier" : "dbtArtifacts"
+          },
+          "tags" : "Element,Component"
+        } ],
+        "description" : "Runs DBT docs serve, captures lineage and metadata for visualization",
+        "documentation" : { },
+        "id" : "63",
+        "name" : "Entity Relationship",
+        "properties" : {
+          "structurizr.dsl.identifier" : "entityRelationship"
+        },
+        "tags" : "Element,Container"
+      } ],
+      "description" : "Generates and executes DBT-based Data Vault pipelines from metadata",
+      "documentation" : { },
+      "id" : "5",
+      "name" : "Data Warehouse Automation",
+      "properties" : {
+        "structurizr.dsl.identifier" : "dwa"
+      },
+      "relationships" : [ {
+        "description" : "Writes vault and analytics data to",
+        "destinationId" : "4",
+        "id" : "73",
+        "linkedRelationshipId" : "72",
+        "sourceId" : "5"
+      }, {
+        "description" : "Uses source data from",
+        "destinationId" : "2",
+        "id" : "75",
+        "linkedRelationshipId" : "74",
+        "sourceId" : "5"
+      }, {
+        "description" : "Runs on",
+        "destinationId" : "3",
+        "id" : "76",
+        "sourceId" : "5",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "DWA Architecture",
+  "properties" : {
+    "structurizr.inspection.error" : "58",
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.warning" : "0"
+  },
+  "views" : {
+    "componentViews" : [ {
+      "containerId" : "6",
+      "dimensions" : {
+        "height" : 2241,
+        "width" : 4720
+      },
+      "elements" : [ {
+        "id" : "7",
+        "x" : 290,
+        "y" : 775
+      }, {
+        "id" : "8",
+        "x" : 910,
+        "y" : 775
+      }, {
+        "id" : "9",
+        "x" : 1535,
+        "y" : 755
+      }, {
+        "id" : "10",
+        "x" : 1525,
+        "y" : 215
+      }, {
+        "id" : "11",
+        "x" : 1535,
+        "y" : 1275
+      }, {
+        "id" : "12",
+        "x" : 660,
+        "y" : 220
+      }, {
+        "id" : "13",
+        "x" : 2435,
+        "y" : 415
+      }, {
+        "id" : "14",
+        "x" : 2445,
+        "y" : 965
+      }, {
+        "id" : "15",
+        "x" : 2430,
+        "y" : 1575
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "MetadataStoreComponents",
+      "name" : "Component View: Data Warehouse Automation - Metadata Store",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "16"
+      }, {
+        "id" : "17"
+      }, {
+        "id" : "18"
+      }, {
+        "id" : "19"
+      }, {
+        "id" : "20"
+      }, {
+        "id" : "21"
+      }, {
+        "id" : "22",
+        "vertices" : [ {
+          "x" : 2085,
+          "y" : 975
+        } ]
+      }, {
+        "id" : "23",
+        "vertices" : [ {
+          "x" : 2185,
+          "y" : 1245
+        } ]
+      }, {
+        "id" : "24"
+      }, {
+        "id" : "25",
+        "vertices" : [ {
+          "x" : 2235,
+          "y" : 1575
+        }, {
+          "x" : 2235,
+          "y" : 1575
+        }, {
+          "x" : 2240,
+          "y" : 1575
+        } ]
+      } ]
+    }, {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "containerId" : "26",
+      "elements" : [ {
+        "id" : "27",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "28",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "29",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "30",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "31",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "32",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "33",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "34",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "35",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "DataVaultBuilderComponents",
+      "name" : "Component View: Data Warehouse Automation - DataVault Builder",
+      "order" : 4,
+      "relationships" : [ {
+        "id" : "37"
+      }, {
+        "id" : "38"
+      }, {
+        "id" : "39"
+      }, {
+        "id" : "40"
+      }, {
+        "id" : "41"
+      }, {
+        "id" : "42"
+      }, {
+        "id" : "43"
+      }, {
+        "id" : "44"
+      }, {
+        "id" : "45"
+      }, {
+        "id" : "46"
+      }, {
+        "id" : "47"
+      }, {
+        "id" : "48"
+      }, {
+        "id" : "49"
+      }, {
+        "id" : "50"
+      } ]
+    }, {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "containerId" : "51",
+      "elements" : [ {
+        "id" : "53",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "54",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "55",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "56",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "57",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "DataVaultRunnerComponents",
+      "name" : "Component View: Data Warehouse Automation - DataVault Runner",
+      "order" : 5,
+      "relationships" : [ {
+        "id" : "59"
+      }, {
+        "id" : "60"
+      }, {
+        "id" : "61"
+      }, {
+        "id" : "62"
+      } ]
+    } ],
+    "configuration" : {
+      "branding" : { },
+      "lastSavedView" : "DataVaultRunnerComponents",
+      "styles" : {
+        "elements" : [ {
+          "background" : "#a2c4f5",
+          "color" : "#000000",
+          "tag" : "Component"
+        }, {
+          "background" : "#85bbf0",
+          "color" : "#000000",
+          "tag" : "Container"
+        }, {
+          "shape" : "Cylinder",
+          "tag" : "Database"
+        }, {
+          "background" : "#999999",
+          "color" : "#ffffff",
+          "tag" : "Deployment Node"
+        }, {
+          "background" : "#1168bd",
+          "color" : "#ffffff",
+          "shape" : "Person",
+          "tag" : "Person"
+        }, {
+          "background" : "#438dd5",
+          "color" : "#ffffff",
+          "tag" : "Software System"
+        } ]
+      },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "26",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "51",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "63",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "Container",
+      "name" : "Container View: Data Warehouse Automation",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "67"
+      }, {
+        "id" : "69"
+      }, {
+        "id" : "70"
+      }, {
+        "id" : "71"
+      }, {
+        "id" : "74"
+      } ],
+      "softwareSystemId" : "5"
+    } ],
+    "deploymentViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "elements" : [ {
+        "id" : "77",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "78",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "79",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "80",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "82",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "83",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "environment" : "Production",
+      "key" : "Deployment",
+      "name" : "Deployment View: Production",
+      "order" : 7,
+      "relationships" : [ {
+        "id" : "81"
+      }, {
+        "id" : "84"
+      } ]
+    } ],
+    "dynamicViews" : [ {
+      "dimensions" : {
+        "height" : 3508,
+        "width" : 4961
+      },
+      "elementId" : "5",
+      "elements" : [ {
+        "id" : "1",
+        "x" : 720,
+        "y" : 940
+      }, {
+        "id" : "4",
+        "x" : 3805,
+        "y" : 960
+      }, {
+        "id" : "6",
+        "x" : 1485,
+        "y" : 990
+      }, {
+        "id" : "26",
+        "x" : 2167,
+        "y" : 1002
+      }, {
+        "id" : "51",
+        "x" : 2985,
+        "y" : 970
+      } ],
+      "externalBoundariesVisible" : false,
+      "key" : "RunPipeline",
+      "name" : "Dynamic View: Data Warehouse Automation",
+      "order" : 6,
+      "paperSize" : "A3_Landscape",
+      "relationships" : [ {
+        "description" : "1. Configure metadata",
+        "id" : "67",
+        "order" : "1",
+        "response" : false
+      }, {
+        "description" : "2. Trigger metadata-driven generation",
+        "id" : "69",
+        "order" : "2",
+        "response" : false
+      }, {
+        "description" : "4. Provide generated DBT project",
+        "id" : "70",
+        "order" : "3",
+        "response" : false
+      }, {
+        "description" : "6. Persist output to Enterprise Data Hub",
+        "id" : "72",
+        "order" : "4",
+        "response" : false
+      } ]
+    } ],
+    "systemContextViews" : [ {
+      "dimensions" : {
+        "height" : 1675,
+        "width" : 2350
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 270,
+        "y" : 160
+      }, {
+        "id" : "2",
+        "x" : 225,
+        "y" : 925
+      }, {
+        "id" : "3",
+        "x" : 1700,
+        "y" : 185
+      }, {
+        "id" : "4",
+        "x" : 1645,
+        "y" : 930
+      }, {
+        "id" : "5",
+        "x" : 935,
+        "y" : 535
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "SystemContext",
+      "name" : "System Context View: Data Warehouse Automation",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "68"
+      }, {
+        "id" : "73"
+      }, {
+        "id" : "75"
+      }, {
+        "id" : "76",
+        "vertices" : [ {
+          "x" : 1480,
+          "y" : 525
+        } ]
+      } ],
+      "softwareSystemId" : "5"
+    } ]
+  }
+}

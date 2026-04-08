@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: hub_connectivity_node
+  description: Data Vault hub for hub_connectivity_node
+  meta:
+    dv_type: hub
+    source_models:
+    - stg_connectivity_nodes
+    src_pk: HK_CONNECTIVITY_NODE
+    src_nk: mrid
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE

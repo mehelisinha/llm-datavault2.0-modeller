@@ -1,0 +1,431 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datavault V2 Principles - EDH Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .nav {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #007acc;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #007acc;
+            margin-top: 1.5em;
+        }
+        h1 { border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        blockquote {
+            border-left: 4px solid #007acc;
+            padding-left: 15px;
+            margin-left: 0;
+            color: #666;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .toc {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .toc ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .breadcrumb {
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        .breadcrumb a {
+            color: #666;
+        }
+        /* Mermaid diagram styling */
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+    <!-- Mermaid.js for diagram rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'arial',
+            fontSize: 14
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Datavault V2 Principles</h1>
+            
+            <div class="breadcrumb"><a href="index.html">docs</a> / <a href="docs/index.html">docs</a> / <a href="docs/data_vault/index.html">data_vault</a> / <span>datavault_v2_principles</span></div>
+            
+        </div>
+
+        <div class="nav">
+            <a href="index.html">🏠 Home</a>
+            
+        </div>
+
+        <div class="content">
+            <h1 id="data-vault-20-principles-quick-reference">Data Vault 2.0 Principles (Quick Reference)</h1>
+<p>This document describes the core concepts and modeling rules for Data Vault 2.0 using dbt/automateDV.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+<li><a href="#vault-types">Vault Types</a></li>
+<li><a href="#1-hub">1. Hub</a></li>
+<li><a href="#2-link">2. Link</a></li>
+<li><a href="#3-satellite">3. Satellite</a></li>
+<li><a href="#4-vault-load-rules">4. Vault load rules</a></li>
+<li><a href="#5-hash-key-naming">5. Hash key naming</a></li>
+<li><a href="#6-good-vs-bad-satellite-split">6. Good vs bad satellite split</a></li>
+<li><a href="#7-dbt--automatedv-patterns">7. dbt + automateDV patterns</a></li>
+<li><a href="#8-example-source-rows--hublinksatellite">8. Example: source rows → hub/link/satellite</a></li>
+<li><a href="#9-extra-governance-tips">9. extra governance tips</a></li>
+</ul>
+<h2 id="vault-types">Vault Types</h2>
+<p>Data Vault architecture consists of three main layers:</p>
+<ul>
+<li><strong>Raw Vault</strong>: Immutable, historized storage of source data. Contains Hubs, Links, and Satellites. Stores raw business keys and attributes with full audit trail. No transformations or business logic applied.</li>
+<li><strong>Business Vault</strong>: Derived and computed data from Raw Vault. Includes Point-in-Time (PIT) tables, Bridge tables, and business rules. Optimized for performance and analytics.</li>
+<li><strong>Informational Vault</strong>: Presentation layer with dimensional models, aggregates, and reporting views. Designed for end-user consumption and BI tools.</li>
+</ul>
+<h2 id="1-hub">1. Hub</h2>
+<ul>
+<li><strong>Purpose:</strong> Unique business keys repository; enterprise identity of a business concept (e.g., Customer, Product, Equipment).</li>
+<li><strong>Contains:</strong></li>
+<li>
+<p><code>H{BIZ}</code> (surrogate hash key) - hash over the business key (( natural key))<br />
+    A good candidate for hashing is:</p>
+<ul>
+<li>it is meaningful</li>
+<li>stable over time</li>
+<li>shared across systems (or at least stable within a domain)</li>
+</ul>
+</li>
+<li>
+<p>Business key natural hash (e.g., <code>HK_CUSTOMER</code>)</p>
+</li>
+<li><code>RECORD_SOURCE</code>, <code>LOAD_DATE</code>, <code>LOAD_END_DTS</code> (in some implementations), metadata columns (e.g., <code>ROW_INS_TS</code>)</li>
+<li><strong>Does NOT contain:</strong> </li>
+<li>descriptive attributes (that belong to satellites), </li>
+<li>transactional measures, </li>
+<li>direct references to other hubs.</li>
+<li>Surrogate keys (pks from original systems)</li>
+<li>**Key rule:<ul>
+<li>** Business key(s) are normalized at source and should be stable.</li>
+<li>** LOAD_DATE ** represents the first time the model first recorded the data</li>
+<li>** Insert only ** data is always inserted, nut updated, not deleted</li>
+</ul>
+</li>
+<li><strong>Hash key:</strong> Use hash algorithm (e.g., SHA256) over business key to generate fixed-length surrogate key.</li>
+<li><strong>Model name examples:</strong> <code>hub_customer</code>, <code>hub_product</code>, <code>hub_conducting_equipment</code>.</li>
+</ul>
+<h2 id="2-link">2. Link</h2>
+<ul>
+<li><strong>Purpose:</strong> Capture many-to-many or relationship between hubs; holds association keys over time.</li>
+<li><strong>Contains:</strong></li>
+<li>Reference hash keys to associated hubs (<code>HK_CUSTOMER</code>, <code>HK_ORDER</code>, etc.)</li>
+<li>Link hash key (e.g., <code>HK_ORDER_CUSTOMER_LINK</code>), <code>LOAD_DATE</code>, <code>RECORD_SOURCE</code>, metadata. This is made by hashing the hub business key. ! do not concatenate the Bubs Hashes. EX: hash( full_name, '||', product)</li>
+<li><strong>Does NOT contain:</strong> </li>
+<li>descriptive fields or attributes of the entities (satellites hold these). </li>
+<li>Also avoid storing raw business payload directly.</li>
+<li>business keys</li>
+<li>start or end dates ( tis belong to satellite)</li>
+<li><strong>Key rule:</strong> Link should not reference non-hub data; all foreign keys are hub business keys.</li>
+<li><strong>Hash key:</strong> computed hash of all hub keys that participate in relationship (deterministic, stable).</li>
+<li><strong>Model name examples:</strong> <code>lnk_order_customer</code>, <code>lnk_terminal_equipment_node</code></li>
+</ul>
+<h3 id="link-types">Link Types</h3>
+<ul>
+<li>
+<ol>
+<li>Standard Link</li>
+</ol>
+</li>
+<li>
+<ol start="2">
+<li>SAL - Same as Link<br />
+ When SAL is used</li>
+</ol>
+</li>
+<li>MDM matching</li>
+<li>Golden record creation</li>
+<li>Multiple CRM systems</li>
+<li>Mergers &amp; acquisitions</li>
+<li>Key mapping tables</li>
+<li>Fuzzy matching outputs<br />
+ ex we receive customer info from 2 system and have 2 sets of business keys for the same entity. The SAL will contain a mapping between the 2 systems</li>
+<li>
+<ol start="3">
+<li>Exploration Link</li>
+</ol>
+</li>
+</ul>
+<h2 id="3-satellite">3. Satellite</h2>
+<ul>
+<li><strong>Purpose:</strong> Hold descriptive and changing attributes for a hub or link, with historisation.</li>
+<li><strong>Contains:</strong></li>
+<li><code>HK_{PARENT}</code> (reference hub/link key), </li>
+<li><code>HASHDIFF</code> (change detect hash) - used to identify when o change in record has occurred,</li>
+<li>attribute columns, </li>
+<li><code>LOAD_DATE</code>, </li>
+<li><code>RECORD_SOURCE</code>, </li>
+<li>optionally <code>EFFECTIVE_FROM</code>/<code>EFFECTIVE_TO</code>.</li>
+<li>Optional <code>RECORD_HASH</code> and/or <code>RECORD_END_DTS</code> for soft delete semantics.</li>
+<li><strong>Does NOT contain:</strong> business key uniquely identifying entity (except via hub/link key); do not repeat in multiple satellites unless needed by business context.</li>
+<li><strong>Key rule (separation):</strong><br />
+  1. <strong>Context</strong>: split rules: place columns in satellite based on same change rate (slow/fast), same source, same business meaning, data types<br />
+  2. <strong>Avoid wide satellite</strong>: split into multiple satellites when attribute groups have different change frequency, high cardinality, or security/PII boundaries.<br />
+  3. <strong>Add only raw attributes</strong>; computed fields can be in business vault or staging.<br />
+  4. <strong>Has 1 Parent only</strong>: a satellite can have only 1 parent ( 1 link or 1 hub)<br />
+  5. <strong>Has no children</strong><br />
+  6. satellite pk is the parent <strong>HK + load_date</strong><br />
+  7. No FK except for the parent HK<br />
+  8. <strong>Append only</strong> ( no updates or deletes are performed)</li>
+<li><strong>Hash key:</strong> <code>HASHDIFF</code> computed from satellite payload attributes (excluding technical columns).</li>
+<li><strong>Model name examples:</strong> <code>sat_customer_address</code>, <code>sat_product_price</code>, <code>sat_conducting_equipment_details</code>.</li>
+</ul>
+<p>Satellite types:<br />
+- 1. Historical<br />
+- 2. Multi Active<br />
+- 3. Status tracking (CDC)<br />
+- 4. Record Tracking ( last load date, is_active)<br />
+- 5. Effective Satellite (SCD2) - this is the most important</p>
+<h2 id="4-vault-load-rules">4. Vault load rules</h2>
+<ul>
+<li>Use staging layer to generate clear source columns: business keys, hash keys, hashdiff, load metadata.</li>
+<li>For every source record process:</li>
+<li><code>HK</code> declared in hub (business key hash). If new, insert.</li>
+<li>Link target based on existing hub keys -&gt; insert relationship.</li>
+<li>Satellite insert if <code>HASHDIFF</code> changed or new reference key appears.</li>
+<li>Do not put non-historized, derived-only values in raw vault; those belong to business vault / reporting layer.</li>
+</ul>
+<h2 id="5-hash-key">5. Hash key</h2>
+<h3 id="51-naming">5.1 Naming</h3>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Common Column</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Hub key</td>
+<td><code>HK_{ENTITY}</code></td>
+<td>primary business key hash</td>
+</tr>
+<tr>
+<td>Link key</td>
+<td><code>HK_{HUB1}_{HUB2}[_...]</code></td>
+<td>combined key hash</td>
+</tr>
+<tr>
+<td>Satellite hashdiff</td>
+<td><code>HD_{ENTITY}_S</code> (<code>S</code>=sat)</td>
+<td>detect attribute changes</td>
+</tr>
+<tr>
+<td>Load source</td>
+<td><code>RECORD_SOURCE</code></td>
+<td>system of record origin</td>
+</tr>
+<tr>
+<td>Load timestamp</td>
+<td><code>LOAD_DATE</code></td>
+<td>when ingested</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-calculate">5.2 Calculate</h3>
+<p>Use a proper hashing function<br />
+Before doing the HASH:<br />
+- do trim<br />
+- capitalize<br />
+- when concatenation multiple columns:<br />
+  - cast to string<br />
+  - handle null<br />
+  - concatenate with '||' as separator</p>
+<h2 id="6-good-vs-bad-satellite-split">6. Good vs bad satellite split</h2>
+<ul>
+<li>Keep attributes with similar volatility together.</li>
+<li>Split by security/PII if some columns require tighter controls.</li>
+<li>Use one satellite for core stability, others for fast-moving fields (e.g., <code>sat_customer_contact</code>, <code>sat_customer_financial</code>).</li>
+<li>Example:</li>
+<li><code>sat_conducting_equipment_details</code> -&gt; static device specs</li>
+<li><code>sat_conducting_equipment_status</code> -&gt; status, lifecycle flags.</li>
+</ul>
+<h2 id="7-dbt-automatedv-patterns">7. dbt + automateDV patterns</h2>
+<ul>
+<li><code>hub(...)</code> macro: declare <code>src_pk</code>, <code>src_nk</code>, <code>src_ldts</code>, <code>src_source</code>, <code>source_model</code>.</li>
+<li><code>link(...)</code> macro: <code>src_pk</code>, <code>src_fk</code>, <code>src_ldts</code>, <code>src_source</code>, <code>source_model</code>.</li>
+<li><code>sat(...)</code> macro: <code>src_pk</code>, <code>src_hashdiff</code>, <code>src_payload</code>, <code>src_ldts</code>, <code>src_source</code>, <code>source_model</code>.</li>
+</ul>
+<h2 id="8-example-source-rows-hublinksatellite">8. Example: source rows → hub/link/satellite</h2>
+<h3 id="source-bronzestaging-normalized-raw-data">Source (bronze/staging normalized raw data)</h3>
+<table>
+<thead>
+<tr>
+<th>order_nk</th>
+<th>customer_nk</th>
+<th>product_nk</th>
+<th>qty</th>
+<th>price</th>
+<th>status</th>
+<th>updated_at</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ORD-001</td>
+<td>Mikey Mouse</td>
+<td>bag</td>
+<td>2</td>
+<td>100.0</td>
+<td>NEW</td>
+<td>2026-03-24 10:00:00</td>
+</tr>
+<tr>
+<td>ORD-001</td>
+<td>Donal Duck</td>
+<td>wallet</td>
+<td>3</td>
+<td>100.0</td>
+<td>CONFIRMED</td>
+<td>2026-03-24 12:00:00</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Note: <code>*_nk</code> fields are natural business keys, not surrogate hash keys.</p>
+</blockquote>
+<h3 id="hub-key-hash-rule-business-key-hash-always-based-on-natural-key">Hub key hash rule (business key hash - always based on natural key)</h3>
+<ul>
+<li><code>HK_CUSTOMER = hash('Mikey Mouse')</code> from <code>customer_nk</code></li>
+<li><code>HK_PRODUCT = hash('bag')</code> from <code>product_nk</code></li>
+<li><code>HK_ORDER = hash('ORD-001')</code> from <code>order_nk</code></li>
+</ul>
+<h3 id="hub-rows">Hub rows</h3>
+<ul>
+<li><code>hub_customer</code>:</li>
+<li><code>HK_CUSTOMER</code>, <code>customer_nk</code>, <code>RECORD_SOURCE</code>, <code>LOAD_DATE</code></li>
+<li><code>hub_product</code>:</li>
+<li><code>HK_PRODUCT</code>, <code>product_nk</code>, <code>RECORD_SOURCE</code>, <code>LOAD_DATE</code></li>
+<li><code>hub_order</code>:</li>
+<li><code>HK_ORDER</code>, <code>order_nk</code>, <code>RECORD_SOURCE</code>, <code>LOAD_DATE</code></li>
+</ul>
+<h3 id="link-rows-relationship-only-no-descriptive-fields">Link rows (relationship only, no descriptive fields)</h3>
+<ul>
+<li><code>lnk_order_customer</code>:</li>
+<li><code>HK_ORDER_CUSTOMER_LINK = hash('order_nk' || 'customer_nk')</code> or equivalent from component hub keys</li>
+<li>reference <code>HK_ORDER</code>, <code>HK_CUSTOMER</code>, <code>RECORD_SOURCE</code>, <code>LOAD_DATE</code></li>
+<li><code>lnk_order_product</code>:</li>
+<li><code>HK_ORDER_PRODUCT_LINK = hash('order_nk' || 'product_nk')</code></li>
+</ul>
+<h3 id="satellite-rows-changed-attributes-and-history">Satellite rows (changed attributes and history)</h3>
+<ul>
+<li><code>sat_order_status</code> (order lifecycle state):</li>
+<li><code>HK_ORDER</code>, <code>HASHDIFF = hash('status')</code>, <code>status</code>, <code>LOAD_DATE</code>, <code>RECORD_SOURCE</code></li>
+<li>row1: <code>NEW</code>, row2: <code>CONFIRMED</code></li>
+<li><code>sat_order_details</code> (quantity/price):</li>
+<li><code>HK_ORDER</code>, <code>HASHDIFF = hash('qty|price')</code>, <code>qty</code>, <code>price</code>, <code>LOAD_DATE</code>, <code>RECORD_SOURCE</code></li>
+<li>row1: <code>qty=2, price=100.0</code>, row2: <code>qty=3, price=100.0</code></li>
+</ul>
+<h3 id="rule-summary-for-this-example">Rule summary for this example</h3>
+<ul>
+<li>Hubs store only the business natural key (<code>*_nk</code>) and its hashed surrogate <code>HK_*</code>.</li>
+<li>Links only store references to <code>HK_*</code> values (not natural attributes), plus load metadata.</li>
+<li>Satellites store descriptive/change state attributes; they refer by <code>HK_*</code> and use <code>HASHDIFF</code> to determine change rows.</li>
+</ul>
+<h2 id="9-extra-governance-tips">9. extra governance tips</h2>
+<ul>
+<li>Document each model with clear description in <code>.yml</code> metadata.</li>
+<li>Add tests/constraints for uniqueness and no-null on hub business keys.</li>
+<li>Keep raw vault models pure by restricting transformation to logic required for history maintenance.</li>
+</ul>
+        </div>
+
+        <div class="footer">
+            <p>Generated from markdown documentation. Last updated: 2026-03-25</p>
+            <p><a href="https://github.com/microsoft/vscode">EDH Data Pipeline Documentation</a></p>
+        </div>
+    </div>
+</body>
+</html>
+        

@@ -1,0 +1,9 @@
+.dbt
+.databricks
+.envrc
+.vscode
+.venv
+__pycache__
+logs
+uv.lock
+TBD_*

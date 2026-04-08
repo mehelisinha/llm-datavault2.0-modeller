@@ -1,0 +1,17 @@
+version: 2
+models:
+- name: sat_connectivity_node_details
+  description: Data Vault satellite for sat_connectivity_node_details
+  meta:
+    dv_type: satellite
+    source_models:
+    - stg_connectivity_nodes
+    src_pk: HK_CONNECTIVITY_NODE
+    src_hashdiff: HD_CONNECTIVITY_NODE_S
+    src_payload:
+    - name
+    - node_type
+    - nominal_voltage
+    - is_connected
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE
