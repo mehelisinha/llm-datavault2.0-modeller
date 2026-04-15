@@ -7,7 +7,7 @@
     )
 }
 
-{% set source_models = ['stg_conducting_equipment', 'stg_terminals'] %}
+{% set source_models = ['stg_conducting_equipment'] %}
 
 {% set src_pk       = 'HK_CONDUCTING_EQUIPMENT' %}
 {% set src_nk       = 'mrid' %}

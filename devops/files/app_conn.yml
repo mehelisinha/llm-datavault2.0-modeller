@@ -1,0 +1,4 @@
+app_conn:
+    client_secret: "SP-INTEGRATION-SECRET"
+    tenant_id: "REDACTED_TENANT"
+    client_id: "SP-INTEGRATION-APP-ID"

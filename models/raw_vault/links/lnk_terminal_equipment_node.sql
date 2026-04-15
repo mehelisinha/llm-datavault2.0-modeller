@@ -3,14 +3,14 @@
         materialized='incremental',
     incremental_strategy='merge',
     tags=['raw_vault', 'link'],
-    unique_key='HK_TERMINAL_EQUIPMENT_NODE_L'
+    unique_key='HK_TERMINAL_EQUIPMENT_NODE'
     )
 }
 
 {% set source_models = ['stg_terminals'] %}
 
-{% set src_pk       = 'HK_TERMINAL_EQUIPMENT_NODE_L' %}
-{% set src_fk       = ['HK_CONDUCTING_EQUIPMENT', 'HK_CONNECTIVITY_NODE'] %}
+{% set src_pk       = 'HK_TERMINAL_EQUIPMENT_NODE' %}
+{% set src_fk       = ['HK_TERMINAL', 'HK_CONDUCTING_EQUIPMENT', 'HK_CONNECTIVITY_NODE'] %}
 {% set src_ldts     = 'LOAD_DATE' %}
 {% set src_source   = 'RECORD_SOURCE' %}
 

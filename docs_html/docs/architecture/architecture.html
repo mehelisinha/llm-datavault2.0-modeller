@@ -173,7 +173,7 @@
 <li><a href="#runner-responsibilities">Runner Responsibilities</a></li>
 <li><a href="#audit-logging-strategy-recommended">Audit Logging Strategy</a></li>
 </ul>
-<h3 id="5-recommended-supporting-libraries-tools">5. Recommended Supporting Libraries &amp; Tools</h3>
+<h3 id="recommended-supporting-libraries-tools">Recommended Supporting Libraries &amp; Tools</h3>
 <ul>
 <li><a href="#51-core-data-vault-framework">Core Data Vault Framework</a></li>
 <li><a href="#52-supporting-dbt-packages">Supporting DBT Packages</a></li>
@@ -189,9 +189,7 @@
 <h3 id="implementation-roadmap"><a href="#7-implementation-roadmap">Implementation Roadmap</a></h3>
 <h3 id="technology-stack-summary"><a href="#8-technology-stack-summary">Technology Stack Summary</a></h3>
 <h3 id="best-practices-recommendations"><a href="#9-best-practices--recommendations">Best Practices &amp; Recommendations</a></h3>
-<h3 id="troubleshooting-common-issues"><a href="#10-troubleshooting--common-issues">Troubleshooting &amp; Common Issues</a></h3>
-<h3 id="next-steps"><a href="#11-next-steps">Next Steps</a></h3>
-<h3 id="references-resources"><a href="#references--resources">References &amp; Resources</a></h3>
+<h3 id="references-resources"><a href="#10-references--resources">References &amp; Resources</a></h3>
 <hr />
 <h2 id="1-purpose-objectives">1. Purpose &amp; Objectives</h2>
 <h3 id="purpose">Purpose</h3>
@@ -887,7 +885,7 @@ graph TD
 
 <hr />
 <hr />
-<h2 id="5-recommended-supporting-libraries-tools_1">5. Recommended Supporting Libraries &amp; Tools</h2>
+<h2 id="5-recommended-supporting-libraries-tools">5. Recommended Supporting Libraries &amp; Tools</h2>
 <h3 id="51-core-data-vault-framework">5.1 ⭐ Core Data Vault Framework</h3>
 <h4 id="automateddv-recommended-active-maintained"><strong>AutomatedDV</strong> (RECOMMENDED - Active &amp; Maintained)</h4>
 <ul>
@@ -1246,14 +1244,14 @@ graph LR
 <li>Write file to Databricks workspace</li>
 <li>Run dbt run</li>
 <li>Validate table created</li>
-<li>Test hashing logic<br />
-🎯 Deliverable<br />
-Architecture + metadata contract + POC - run one hub model</li>
+<li>Test hashing logic</li>
 </ul>
 </li>
 </ul>
 </li>
 </ul>
+<p>🎯 Deliverable<br />
+Architecture + metadata contract + POC - run one hub model</p>
 <h3 id="phase-1-foundation-core-code-generation">Phase 1: Foundation - Core Code Generation</h3>
 <p>Goal: build <strong>core platform skeleton</strong></p>
 <ul>
@@ -1284,7 +1282,7 @@ Architecture + metadata contract + POC - run one hub model</li>
 </ul>
 </li>
 <li>[ ] DBT Builder Core<ul>
-<li>[ ] Generator Classes:<ul>
+<li>[ ] Generator Classes: (* use {ref} syntax to comply wit dbt dags)<ul>
 <li>Base generator class</li>
 <li>Hub generator (hash key)</li>
 <li>Link generator (composite keys)</li>
@@ -1300,9 +1298,9 @@ Architecture + metadata contract + POC - run one hub model</li>
 <li>CLI wrapper (dbt run, dbt test)</li>
 </ul>
 </li>
-<li>[ ] Dependency Engine<ul>
-<li>Model dependency resolver</li>
-<li>Load order resolver</li>
+<li>[ ] Dependency Engine:<ul>
+<li>Generation order:Hubs-&gt;Links-&gt;Satellites</li>
+<li>Metadata Dependency Validator</li>
 </ul>
 </li>
 <li>[] UI for lineage [skeleton]</li>
@@ -1314,6 +1312,7 @@ Architecture + metadata contract + POC - run one hub model</li>
 <p>🎯 Milestone:<br />
 👉 Able to generate one simple Hub model from metadata</p>
 <h3 id="phase-2-dbt-builder-framework">Phase 2: DBT Builder Framework</h3>
+<p>Goal: full <strong>Data Vault Framework</strong></p>
 <ul>
 <li>[ ] Model Generators:<ul>
 <li>Satellite generator<ul>
@@ -1341,23 +1340,29 @@ Architecture + metadata contract + POC - run one hub model</li>
 <p>🎯 Deliverable<br />
 Framework ready for model generation</p>
 <h3 id="phase-2-model-generation">Phase 2: Model Generation</h3>
-<p>Goal: full <strong>Data Vault generation</strong><br />
-- [ ] DBT Builder<br />
-        - Factory for model generators<br />
-    - Template loader<br />
-    - SQL template library (skeleton)<br />
-    - [ ] Supporting Generators<br />
-        - Source model generator<br />
-        - Staging model generator<br />
-        - PIT<br />
-        - Bridge (optional)<br />
-        - Mart<br />
-    - Macro Generation<br />
-    - Tests Generation</p>
+<p>Goal: full <strong>Data Vault generation</strong></p>
+<ul>
+<li>[ ] DBT Builder<br />
+        - Factory for model generators<ul>
+<li>Template loader</li>
+<li>SQL template library (skeleton)</li>
+<li>[ ] Supporting Generators<ul>
+<li>Source model generator</li>
+<li>Staging model generator</li>
+<li>PIT</li>
+<li>Bridge (optional)</li>
+<li>Mart</li>
+</ul>
+</li>
+<li>Macro Generation</li>
+<li>Tests Generation</li>
+</ul>
+</li>
+</ul>
 <p>🎯 Milestone<br />
 👉 Generate full DV structure for one source</p>
 <h3 id="phase-3-execution-orchestration">Phase 3: Execution &amp; Orchestration</h3>
-<p>Goal: production-ready execution</p>
+<p>Goal: <strong>production-ready</strong> execution</p>
 <ul>
 <li>[ ] Runner<ul>
 <li>Project Runner</li>
@@ -1382,7 +1387,7 @@ Framework ready for model generation</p>
 <p>🎯 Milestone<br />
 👉 Fully automated metadata → generate → run → log</p>
 <h3 id="phase-4-enhancement-scale">Phase 4: Enhancement &amp; Scale</h3>
-<p>Goal: enterprise readiness</p>
+<p>Goal: <strong>enterprise readiness</strong></p>
 <ul>
 <li>[ ] Data Quality</li>
 <li>[ ] Documentation<ul>
@@ -1412,27 +1417,29 @@ Framework ready for model generation</p>
 </ul>
 <hr />
 <h2 id="8-technology-stack-summary">8. Technology Stack Summary</h2>
-<div class="codehilite"><pre><span></span><code>Layer                 | Technology &amp; Tools
-----------------------|----------------------------------------
-Metadata Storage      | CSV/Excel → Databricks Delta Tables
-Orchestration         | Databricks Workflows, Airflow, Prefect
-Code Generation       | Python OOP + Jinja2 Templates
-Transform Engine      | DBT 1.6+ + AutomatedDV Package
-Execution Platform    | Databricks (Apache Spark)
-Storage Layer         | Databricks Delta Lake (ACID, Time Travel)
-Testing &amp; Validation  | dbt tests + Great Expectations + pytest
-Logging &amp; Audit       | Delta tables + Databricks Event logs
-Documentation         | DBT native docs + Auto-generated Markdown
-Version Control       | Git + DBT artifacts
-CI/CD Pipeline        | GitHub Actions / Azure DevOps Pipelines
-Monitoring            | Databricks Job UI, Custom Dashboards
+<div class="codehilite"><pre><span></span><code><span class="nv">Layer</span><span class="w">                 </span><span class="o">|</span><span class="w"> </span><span class="nv">Technology</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nv">Tools</span>
+<span class="o">----------------------|----------------------------------------</span>
+<span class="nv">Metadata</span><span class="w"> </span><span class="nv">Storage</span><span class="w">      </span><span class="o">|</span><span class="w"> </span><span class="nv">CSV</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="nv">Delta</span><span class="w"> </span><span class="nv">Tables</span>
+<span class="nv">Orchestration</span><span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="nv">Workflows</span>,<span class="w"> </span><span class="nv">In</span><span class="w"> </span><span class="nv">future</span><span class="w"> </span><span class="nv">maybe</span><span class="w"> </span><span class="nv">Airflow</span>
+<span class="nv">Code</span><span class="w"> </span><span class="nv">Generation</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="nv">Python</span><span class="w"> </span><span class="nv">OOP</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">Jinja2</span><span class="w"> </span><span class="nv">Templates</span>
+<span class="nv">Transform</span><span class="w"> </span><span class="nv">Engine</span><span class="w">      </span><span class="o">|</span><span class="w"> </span><span class="nv">DBT</span><span class="w"> </span><span class="mi">1</span>.<span class="mi">11</span><span class="o">+</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">AutomatedDV</span><span class="w"> </span><span class="nv">Package</span>
+<span class="nv">Execution</span><span class="w"> </span><span class="nv">Platform</span><span class="w">    </span><span class="o">|</span><span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="ss">(</span><span class="nv">Apache</span><span class="w"> </span><span class="nv">Spark</span><span class="ss">)</span>
+<span class="nv">Storage</span><span class="w"> </span><span class="nv">Layer</span><span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="nv">Delta</span><span class="w"> </span><span class="nv">Lake</span><span class="w"> </span><span class="ss">(</span><span class="nv">ACID</span>,<span class="w"> </span><span class="nv">Time</span><span class="w"> </span><span class="nv">Travel</span><span class="ss">)</span>
+<span class="nv">Testing</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nv">Validation</span><span class="w">  </span><span class="o">|</span><span class="w"> </span><span class="nv">dbt</span><span class="w"> </span><span class="nv">tests</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">Great</span><span class="w"> </span><span class="nv">Expectations</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">pytest</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">unit</span><span class="w"> </span><span class="nv">test</span>
+<span class="nv">Logging</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nv">Audit</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="nv">Delta</span><span class="w"> </span><span class="nv">tables</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="nv">Event</span><span class="w"> </span><span class="nv">logs</span>
+<span class="nv">Documentation</span><span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="nv">DBT</span><span class="w"> </span><span class="nv">native</span><span class="w"> </span><span class="nv">docs</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">Auto</span><span class="o">-</span><span class="nv">generated</span><span class="w"> </span><span class="nv">Markdown</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">Strucurizr</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">C4</span>
+<span class="nv">Version</span><span class="w"> </span><span class="nv">Control</span><span class="w">       </span><span class="o">|</span><span class="w"> </span><span class="nv">Git</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nv">DBT</span><span class="w"> </span><span class="nv">artifacts</span>
+<span class="nv">CI</span><span class="o">/</span><span class="nv">CD</span><span class="w"> </span><span class="nv">Pipeline</span><span class="w">        </span><span class="o">|</span><span class="w"> </span><span class="nv">GitLab</span>
+<span class="nv">Monitoring</span><span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="nv">Databricks</span><span class="w"> </span><span class="nv">Job</span><span class="w"> </span><span class="nv">UI</span>,<span class="w"> </span><span class="nv">Custom</span><span class="w"> </span><span class="nv">Dashboards</span>
+<span class="nv">Local</span><span class="w"> </span><span class="nv">Env</span>.<span class="w">            </span><span class="o">|</span><span class="w"> </span><span class="nv">UV</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">MakeFile</span>
+<span class="nv">Linting</span><span class="w">               </span><span class="o">|</span><span class="w"> </span><span class="nv">Ruff</span>
 </code></pre></div>
 
 <hr />
 <h2 id="9-best-practices-recommendations">9. Best Practices &amp; Recommendations</h2>
 <h3 id="metadata-management">✅ Metadata Management</h3>
 <ul>
-<li>Store metadata in version-controlled CSV files (easier Git diffs)</li>
+<li>Store metadata in version-controlled CSV files</li>
 <li>Create Delta table snapshots for historical change tracking</li>
 <li>Validate all metadata with Pydantic schemas before processing</li>
 <li>Use consistent naming: system_id, table_id, column_id for traceability</li>
@@ -1451,53 +1458,26 @@ Monitoring            | Databricks Job UI, Custom Dashboards
 <li>Log ALL model executions with row counts, timing, and status</li>
 <li>Implement data quality gates (tests before downstream marts)</li>
 <li>Use post-load reconciliation queries</li>
+<li>Use pre/ post-load for cdc version logging</li>
 </ul>
 <h3 id="scaling-for-production">✅ Scaling for Production</h3>
 <ul>
-<li>Partition large Delta tables by load_date for performance</li>
+<li>Partition large Delta tables by load_date/ year/ moth of load_date for performance</li>
 <li>Use DBT on-disk cache for faster incremental builds</li>
 <li>Separate projects by domain/business process</li>
 <li>Leverage DBT's DAG-based graph execution for parallelization</li>
 <li>Monitor query performance, optimize hot paths</li>
 </ul>
 <hr />
-<h2 id="10-troubleshooting-common-issues">10. Troubleshooting &amp; Common Issues</h2>
-<h3 id="issue-generated-sql-fails-to-compile">Issue: Generated SQL fails to compile</h3>
-<p><strong>Solution</strong>:<br />
-- Validate metadata schema with Pydantic before generation<br />
-- Add metadata sanity checks (cross-reference validation)<br />
-- Check Databricks syntax compatibility</p>
-<h3 id="issue-audit-log-shows-inconsistent-row-counts">Issue: Audit log shows inconsistent row counts</h3>
-<p><strong>Solution</strong>:<br />
-- Verify source data hasn't changed between Hub and Satellite loads<br />
-- Check for natural key duplicates in source<br />
-- Review dbt models for unexpected filters or transforms</p>
-<h3 id="issue-link-table-creation-fails">Issue: Link table creation fails</h3>
-<p><strong>Solution</strong>:<br />
-- Ensure all referenced hubs exist before link execution<br />
-- Verify business key relationships in metadata<br />
-- Check for NULL values in linking columns</p>
-<hr />
-<h2 id="11-next-steps">11. Next Steps</h2>
-<ol>
-<li><strong>Finalize Metadata Schema</strong> - Create comprehensive YAML/CSV specifications</li>
-<li><strong>Choose Orchestration Tool</strong> - Evaluate Databricks Workflows vs. Airflow vs. Prefect based on needs</li>
-<li><strong>Establish Naming Conventions</strong> - Standardize object, field, and parameter names</li>
-<li><strong>Design Audit/Lineage Strategy</strong> - Implement comprehensive tracking</li>
-<li><strong>Build MVP Generator</strong> - Prototype for single system end-to-end</li>
-<li><strong>Select Library Stack</strong> - Finalize AutomatedDV, Great Expectations, testing framework</li>
-<li><strong>Documentation</strong> - Create runbooks, troubleshooting guides, operator manuals</li>
-</ol>
-<hr />
-<h2 id="references-resources_1">References &amp; Resources</h2>
+<h2 id="10-references-resources">10. References &amp; Resources</h2>
 <ul>
 <li><strong>Data Vault 2.0 Book</strong>: "The Data Vault 2.0 Guidebook" by Dan Linstedt &amp; Michael Olschimke</li>
 <li><strong>DBT Documentation</strong>: https://docs.getdbt.com/</li>
 <li><strong>AutomatedDV Package</strong>: https://github.com/Datavault-UK/automate-dv</li>
 <li><strong>AutomatedDV Documentation</strong>: https://automate-dv.readthedocs.io/</li>
-<li><strong>AutomatedDV Community</strong>: https://join.slack.com/t/dbtvault/shared_invite/enQtODY3MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA</li>
+<li><strong>AutomatedDV Community</strong>: https://forum.data-community.org/c/tools/automate-dv/11</li>
 <li><strong>Databricks Best Practices</strong>: https://docs.databricks.com/</li>
-<li><strong>Data Quality with dbt</strong>: https://docs.getdbt.com/guides/dbt-best-practices</li>
+<li><strong>Data Quality with dbt</strong>: https://hub.getdbt.com/metaplane/dbt_expectations/latest/</li>
 <li><strong>Great Expectations</strong>: https://greatexpectations.io/</li>
 <li><strong>Data Vault Institute</strong>: https://www.datavaultinstitute.com/</li>
 </ul>

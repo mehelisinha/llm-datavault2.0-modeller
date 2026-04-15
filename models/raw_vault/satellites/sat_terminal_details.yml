@@ -1,0 +1,18 @@
+version: 2
+models:
+- name: sat_terminal_details
+  description: Data Vault satellite for sat_terminal_details
+  meta:
+    dv_type: satellite
+    source_models:
+    - stg_terminals
+    src_pk: HK_TERMINAL
+    src_hashdiff: HASHDIFF_TERMINAL_DETAILS
+    src_payload:
+    - name
+    - sequence_number
+    - phases
+    - connected
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE
+    src_eff: EFFECTIVE_FROM

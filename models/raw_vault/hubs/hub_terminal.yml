@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: hub_terminal
+  description: Data Vault hub for hub_terminal
+  meta:
+    dv_type: hub
+    source_models:
+    - stg_terminals
+    src_pk: HK_TERMINAL
+    src_nk: mrid
+    src_ldts: LOAD_DATE
+    src_source: RECORD_SOURCE

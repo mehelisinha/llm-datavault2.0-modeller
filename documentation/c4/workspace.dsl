@@ -1,6 +1,7 @@
 // Workspace definition for the DWA architecture model
 workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project" {
-    !docs architecture.md
+    // !docs docs/architecture.md
+
 
     // Model section defines actors, systems, containers, and components
     model {
@@ -139,14 +140,17 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
 
     // View definitions for the DWA architecture
     views {
+        properties {
+            "structurizr.sort" "key"
+        }
         // System context view shows the overall DWA system and its users/external systems
-        systemContext dwa "SystemContext" {
+        systemContext dwa "01-SystemContext" {
             include *
             // autoLayout lr
         }
 
         // Container view shows the DWA containers and the main actors/external systems they interact with
-        container dwa "Container" {
+        container dwa "02-Container" {
             include dataEngineer
             // include user
             include sourceSystems
@@ -158,7 +162,7 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
         }
 
         // Component view for the Metadata Store, showing detailed metadata configuration elements
-        component metadataStore "MetadataStoreComponents" {
+        component metadataStore "03-MetadataStoreComponents" {
             include systemsConfig
             include tablesConfig
             include tablesSchema
@@ -172,7 +176,7 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
         }
 
         // Component view for the DataVault Builder, showing internal generation components
-        component projectBuilder "DataVaultBuilderComponents" {
+        component projectBuilder "04-DataVaultBuilderComponents" {
             include metadataReader
             include validator
             include parser
@@ -187,7 +191,7 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
         }
 
         // Component view for the DataVault Runner, showing execution and storage components
-        component projectRunner "DataVaultRunnerComponents" {
+        component projectRunner "05-DataVaultRunnerComponents" {
             include dbtEngine
             include rawVault
             include pitLayer
@@ -197,7 +201,7 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
         }
 
         // Dynamic view shows the runtime flow of a DWA execution pipeline
-        dynamic dwa "RunPipeline" {
+        dynamic dwa "06-RunPipeline" {
             dataEngineer -> metadataStore "1. Configure metadata"
             metadataStore -> projectBuilder "2. Trigger metadata-driven generation"
             // scheduler -> projectRunner "3. Trigger run"
@@ -208,7 +212,7 @@ workspace "DWA Architecture" "C4 model for the Data Warehouse Automation project
         }
 
         // Deployment view is commented out; it can be enabled once runtime nodes are finalized
-        deployment * production "Deployment" {
+        deployment * production "07-Deployment" {
             include *
             autoLayout lr
         }

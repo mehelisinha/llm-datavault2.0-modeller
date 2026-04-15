@@ -1,91 +1,109 @@
-#!/usr/bin/env python3
-"""
-Script to generate Data Vault models using the DV generator classes.
-"""
 
-import os
-import sys
+from __future__ import annotations
 
-# Add the src directory to the path so we can import dv
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from pathlib import Path
 
-from dv.config_generator import DVConfigGenerator
-from dv.generator import DVGenerator
-from dv.hub import Hub
-from dv.link import Link
-from dv.satellite import Satellite
+from dv_components.configs.config_generator import DVConfigGenerator
+from poc.metadata.reader import MetadataReader
+from shared.infra.file_manager.concrete.file_handler import DVGenerator
+from shared.logger.default_logger import default_logger
+
+# ---------------------------------------------------------------------------
+# Metadata model generator (OOP version)
+# ---------------------------------------------------------------------------
 
 
-def main():
-    """Main function to generate sample Data Vault models."""
+class MetadataModelGenerator:
+    def __init__(
+        self,
+        config_path: Path ,
+        output_path: Path ,
+        dry_run: bool = False,
+        overwrite: bool = True,
+    ):
+        self.config_path = Path(config_path)
+        self.output_path = Path(output_path)
+        self.dry_run = dry_run
+        self.overwrite = overwrite
 
-    # Initialize generator
-    generator = DVGenerator(base_path="models")
+    def run(self) -> None:
+        default_logger.info(f"Loading metadata from: {self.config_path}")
 
-    # Define hubs
-    hubs = [
-        Hub(
-            name="hub_conducting_equipment",
-            source_models=["stg_conducting_equipment", "stg_terminals"],
-            src_pk="HK_CONDUCTING_EQUIPMENT",
-            src_nk="mrid",
-        ),
-        Hub(
-            name="hub_connectivity_node",
-            source_models=["stg_connectivity_nodes"],
-            src_pk="HK_CONNECTIVITY_NODE",
-            src_nk="mrid",
-        ),
-    ]
+        reader = MetadataReader(str(self.config_path))
 
-    # Define satellites
-    satellites = [
-        Satellite(
-            name="sat_conducting_equipment_details",
-            source_models=["stg_conducting_equipment"],
-            src_pk="HK_CONDUCTING_EQUIPMENT",
-            src_hashdiff="HD_CONDUCTING_EQUIPMENT_S",
-            src_payload=[
-                "name",
-                "equipment_type",
-                "base_voltage_kv",
-                "in_service",
-                "asset_status",
-                "manufacturer",
-                "model",
-                "serial_number",
-            ],
-        ),
-        Satellite(
-            name="sat_connectivity_node_details",
-            source_models=["stg_connectivity_nodes"],
-            src_pk="HK_CONNECTIVITY_NODE",
-            src_hashdiff="HD_CONNECTIVITY_NODE_S",
-            src_payload=["name", "node_type", "nominal_voltage", "is_connected"],
-        ),
-    ]
-
-    # Define links
-    links = [
-        Link(
-            name="lnk_terminal_equipment_node",
-            source_models=["stg_terminals"],
-            src_pk="HK_TERMINAL_EQUIPMENT_NODE_L",
-            src_fk=["HK_CONDUCTING_EQUIPMENT", "HK_CONNECTIVITY_NODE"],
+        system = reader.system
+        default_logger.info(
+            f"System: {system['system_name']} ({system['system_id']})"
         )
-    ]
 
-    # Generate all components
-    all_components = hubs + satellites + links
-    generator.generate_components(all_components, overwrite=True)
+        hubs = reader.get_hubs()
+        links = reader.get_links()
+        satellites = reader.get_satellites()
+        all_components = hubs + links + satellites
 
-    # Generate YAML model configuration pattern metadata for each component
-    config_generator = DVConfigGenerator(base_models_path="models")
-    yaml_paths = config_generator.generate_all_yaml(all_components)
-    print(f"Generated YAML metadata: {yaml_paths}")
+        default_logger.info(
+            f"Found: {len(hubs)} hub(s), {len(links)} link(s), {len(satellites)} satellite(s)"
+        )
 
-    print("Data Vault models generated successfully!")
+        if self.dry_run:
+            self._dry_run(all_components)
+            return
+
+        self._generate_sql(all_components)
+        self._generate_yaml(all_components)
+
+        default_logger.info(
+            f"Generated {len(all_components)} components successfully"
+        )
+
+    def _dry_run(self, components) -> None:
+        default_logger.info("DRY RUN — generated SQL")
+
+        for component in components:
+            file_path = component.get_file_path(str(self.output_path))
+            default_logger.info(f"{file_path}")
+            default_logger.info(component.generate_sql())
+
+    def _generate_sql(self, components) -> None:
+
+        default_logger.info(f"Generating SQL models to {self.output_path}")
+
+        generator = DVGenerator(base_path=str(self.output_path))
+        generator.generate_components(
+            components,
+            overwrite=self.overwrite,
+        )
+
+    def _generate_yaml(self, components) -> None:
+
+        default_logger.info("Generating YAML metadata files")
+
+        config_generator = DVConfigGenerator(
+            project_path=str(self.output_path)
+        )
+
+        yaml_paths = config_generator.generate_all_yaml(components)
+
+        for path in yaml_paths:
+            default_logger.info(str(path))
 
 
-if __name__ == "__main__":
-    main()
+# ---------------------------------------------------------------------------
+# Example usage
+# ---------------------------------------------------------------------------
+
+
+def example_usage():
+    """Examples of using the generator in Databricks or Python."""
+
+    # full generation
+    MetadataModelGenerator().run()
+
+    # dry run
+    # MetadataModelGenerator(dry_run=True).run()
+
+    # custom output
+    # MetadataModelGenerator(output_path="/dbfs/tmp/models").run()
+
+    # custom config
+    # MetadataModelGenerator(config_path="/Workspace/config.yaml").run()

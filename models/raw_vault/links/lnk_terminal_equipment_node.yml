@@ -6,8 +6,9 @@ models:
     dv_type: link
     source_models:
     - stg_terminals
-    src_pk: HK_TERMINAL_EQUIPMENT_NODE_L
+    src_pk: HK_TERMINAL_EQUIPMENT_NODE
     src_fk:
+    - HK_TERMINAL
     - HK_CONDUCTING_EQUIPMENT
     - HK_CONNECTIVITY_NODE
     src_ldts: LOAD_DATE

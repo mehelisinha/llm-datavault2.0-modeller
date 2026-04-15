@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 
 
-def get_root_folder(path_str: str):
+def get_root_folder(path_str: str, parent_name:str = "src") -> Path | None:
     current_path = Path(path_str)
     for parent in current_path.parents:
-        if parent.name == "src":
+        if parent.name == parent_name:
             return parent.parent  # Get the parent of "src"
     return None  # Return None if "src" is not found
 
@@ -25,7 +25,7 @@ current_path: str = (
 )
 
 # extract root
-root_path = get_root_folder(current_path)
+root_path = get_root_folder(current_path, "src")
 
 # append path
 # append_path(f'/Workspace{root_path}')

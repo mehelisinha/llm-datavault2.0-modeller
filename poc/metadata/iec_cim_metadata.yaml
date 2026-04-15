@@ -1,0 +1,115 @@
+# =============================================================================
+# IEC61968 CIM Source System — DWA Metadata Configuration
+# =============================================================================
+# This file is the single source of truth for generating all dbt Data Vault 2.0
+# models for the IEC61968 CIM source system (grid asset management domain).
+#
+# Schema:
+#   system:      source system metadata (catalog, schema, record_source)
+#   hubs:        hub entities with business key and hash key
+#   satellites:  descriptive attribute groups per hub, with hashdiff and payload
+#   links:       many-to-many relationships between hubs
+#   eff_sats:    effectivity satellites tracking relationship lifecycle (CDC)
+# =============================================================================
+
+system:
+  system_id: IEC_CIM_001
+  system_name: IEC61968 CIM
+  source_type: delta
+  catalog: edh_unreg_silver_dev_st
+  schema: bronze
+  load_frequency: daily
+  record_source: IEC61968_CIM_v2.0
+
+# ── Hubs ──────────────────────────────────────────────────────────────────────
+hubs:
+  - name: hub_conducting_equipment
+    source_table: conducting_equipment          # bronze table name
+    staging_model: stg_conducting_equipment
+    business_key: mrid
+    hash_key: HK_CONDUCTING_EQUIPMENT
+
+  - name: hub_connectivity_node
+    source_table: connectivity_nodes
+    staging_model: stg_connectivity_nodes
+    business_key: mrid
+    hash_key: HK_CONNECTIVITY_NODE
+
+  - name: hub_terminal
+    source_table: terminals
+    staging_model: stg_terminals
+    business_key: mrid
+    hash_key: HK_TERMINAL
+
+# ── Satellites ────────────────────────────────────────────────────────────────
+# Each satellite belongs to one hub (parent_hub) and tracks a specific attribute
+# group.  Payload lists the raw descriptive columns to include.
+satellites:
+  - name: sat_conducting_equipment_details
+    parent_hub: hub_conducting_equipment
+    source_model: stg_conducting_equipment
+    hash_key: HK_CONDUCTING_EQUIPMENT
+    hashdiff: HASHDIFF_CE_DETAILS
+    effective_from: EFFECTIVE_FROM
+    payload:
+      - name
+      - equipment_type
+      - base_voltage_kv
+      - manufacturer
+      - model
+      - serial_number
+
+  - name: sat_conducting_equipment_operational
+    parent_hub: hub_conducting_equipment
+    source_model: stg_conducting_equipment
+    hash_key: HK_CONDUCTING_EQUIPMENT
+    hashdiff: HASHDIFF_CE_OPERATIONAL
+    effective_from: EFFECTIVE_FROM
+    payload:
+      - in_service
+      - asset_status
+
+  - name: sat_connectivity_node_details
+    parent_hub: hub_connectivity_node
+    source_model: stg_connectivity_nodes
+    hash_key: HK_CONNECTIVITY_NODE
+    hashdiff: HASHDIFF_CONNECTIVITY_NODE_DETAILS
+    effective_from: EFFECTIVE_FROM
+    payload:
+      - name
+      - description
+
+  - name: sat_terminal_details
+    parent_hub: hub_terminal
+    source_model: stg_terminals
+    hash_key: HK_TERMINAL
+    hashdiff: HASHDIFF_TERMINAL_DETAILS
+    effective_from: EFFECTIVE_FROM
+    payload:
+      - name
+      - sequence_number
+      - phases
+      - connected
+
+# ── Links ─────────────────────────────────────────────────────────────────────
+# Links capture many-to-many relationships between hubs.
+# fk_columns: ordered list of hub hash keys participating in the relationship.
+links:
+  - name: lnk_terminal_equipment_node
+    source_model: stg_terminals
+    hash_key: HK_TERMINAL_EQUIPMENT_NODE
+    fk_columns:
+      - HK_TERMINAL
+      - HK_CONDUCTING_EQUIPMENT
+      - HK_CONNECTIVITY_NODE
+
+# ── Effectivity Satellites ────────────────────────────────────────────────────
+# Effectivity satellites track the active/inactive lifecycle of link relationships
+# using CDC flags (I/U/D).
+eff_sats:
+  - name: eff_sat_terminal_equipment_node
+    parent_link: lnk_terminal_equipment_node
+    source_model: stg_terminals
+    hash_key: HK_TERMINAL_EQUIPMENT_NODE
+    driving_fk: HK_TERMINAL_EQUIPMENT_NODE
+    effective_from: EFFECTIVE_FROM

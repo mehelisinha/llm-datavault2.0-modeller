@@ -6,7 +6,6 @@ models:
     dv_type: hub
     source_models:
     - stg_conducting_equipment
-    - stg_terminals
     src_pk: HK_CONDUCTING_EQUIPMENT
     src_nk: mrid
     src_ldts: LOAD_DATE

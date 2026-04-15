@@ -7,14 +7,14 @@ Entities: Terminal, ConnectivityNode, ConductingEquipment
 from datetime import datetime, timedelta
 
 import pyspark.sql.functions as F
-from faker import Faker
 
+# from faker import Faker
 from src.utils.spark import spark
 
-fake = Faker()
+# fake = Faker()
 
-# ── Seed for reproducibility ──────────────────────────────────────────────────
-Faker.seed(42)
+# # ── Seed for reproducibility ──────────────────────────────────────────────────
+# Faker.seed(42)
 BASE_DATE = datetime(2024, 1, 15, 8, 0, 0)
 
 

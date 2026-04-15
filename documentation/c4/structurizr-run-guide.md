@@ -3,7 +3,7 @@
 This guide explains how to render the DWA C4 diagrams using Structurizr DSL.
 
 ## Files
-- `documentation/c4/dwa-architecture.c4.dsl` — Structurizr DSL definition for the DWA architecture.
+- `documentation/c4/workspace.dsl` — Structurizr DSL definition for the DWA architecture.
 - `documentation/c4/structurizr-run-guide.md` — this guide.
 
 ## Prerequisites

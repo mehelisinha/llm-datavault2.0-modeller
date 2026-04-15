@@ -3,48 +3,38 @@
 
 ## Table of Contents
 
-### Purpose & Objectives
-- [Purpose](#purpose)
-- [Key Constraints & Patterns](#key-constraints--patterns)
-
-### High-Level Architecture
-- [System Overview Diagram](#21-system-overview-diagram)
-- [Data Flow Pipeline](#22-data-flow-pipeline)
-
-### Project Folder Structure
+- [Purpose & Objectives](#1-purpose--objectives)
+    - [Key Constraints & Patterns](#key-constraints--patterns)
+- [High-Level Architecture](#2-high-level-architecture)
+    - [System Overview Diagram](#21-system-overview-diagram)
+    - [Data Flow Pipeline](#22-data-flow-pipeline)
 - [Project Folder Structure](#3-project-folder-structure)
-
-### Core Components
-- [Metadata Configuration](#41-metadata-configuration)
-  - [Metadata Structure Diagram](#metadata-structure-diagram)
-  - [Key Metadata Components](#key-metadata-components)
-- [DataVault Project Builder](#42-datavault-project-builder)
-  - [Builder Architecture](#builder-architecture)
-  - [Core Responsibilities](#core-responsibilities)
-  - [Process Flow](#process-flow)
-  - [Macro Examples](#macro-examples)
-- [DataVault Project Runner](#43-datavault-project-runner)
-  - [Execution Flow](#execution-flow)
-  - [Runner Responsibilities](#runner-responsibilities)
-  - [Audit Logging Strategy](#audit-logging-strategy-recommended)
-
-### Recommended Supporting Libraries & Tools
-- [Core Data Vault Framework](#51-core-data-vault-framework)
-- [Supporting DBT Packages](#52-supporting-dbt-packages)
-- [Python Libraries for Project Builder](#53-python-libraries-for-project-builder)
-- [Library Recommendation Matrix](#54-library-recommendation-matrix)
-- [Installation Reference](#55-installation-reference)
-
-### Architecture Patterns
-- [Data Vault 2.0 Layers](#61-data-vault-20-layers)
-- [Hub-Link-Satellite Relationships](#62-hub-link-satellite-relationships)
-
-### [Implementation Roadmap](#7-implementation-roadmap)
-### [Technology Stack Summary](#8-technology-stack-summary)
-### [Best Practices & Recommendations](#9-best-practices--recommendations)
-### [Troubleshooting & Common Issues](#10-troubleshooting--common-issues)
-### [Next Steps](#11-next-steps)
-### [References & Resources](#references--resources)
+- [Core Components](#4-core-components)
+    - [Metadata Configuration](#41-metadata-configuration)
+    - [Metadata Structure Diagram](#metadata-structure-diagram)
+    - [Key Metadata Components](#key-metadata-components)
+    - [DataVault Project Builder](#42-datavault-project-builder)
+    - [Builder Architecture](#builder-architecture)
+    - [Core Responsibilities](#core-responsibilities)
+    - [Process Flow](#process-flow)
+    - [Macro Examples](#macro-examples)
+    - [DataVault Project Runner](#43-datavault-project-runner)
+    - [Execution Flow](#execution-flow)
+    - [Runner Responsibilities](#runner-responsibilities)
+    - [Audit Logging Strategy](#audit-logging-strategy-recommended)
+- [Recommended Supporting Libraries & Tools](#5-recommended-supporting-libraries--tools)
+    - [Core Data Vault Framework](#51-core-data-vault-framework)
+    - [Supporting DBT Packages](#52-supporting-dbt-packages)
+    - [Python Libraries for Project Builder](#53-python-libraries-for-project-builder)
+    - [Library Recommendation Matrix](#54-library-recommendation-matrix)
+    - [Installation Reference](#55-installation-reference)
+- [Architecture Patterns](#6-architecture-patterns)
+    - [Data Vault 2.0 Layers](#61-data-vault-20-layers)
+    - [Hub-Link-Satellite Relationships](#62-hub-link-satellite-relationships)
+- [Implementation Roadmap](#7-implementation-roadmap)
+- [Technology Stack Summary](#8-technology-stack-summary)
+- [Best Practices & Recommendations](#9-best-practices--recommendations)
+- [References & Resources](#10-references--resources)
 
 ---
 
@@ -1154,7 +1144,7 @@ Goal: **enterprise readiness**
 ```
 Layer                 | Technology & Tools
 ----------------------|----------------------------------------
-Metadata Storage      | CSV/Excel → Databricks Delta Tables
+Metadata Storage      | CSV → Databricks Delta Tables
 Orchestration         | Databricks Workflows, In future maybe Airflow
 Code Generation       | Python OOP + Jinja2 Templates
 Transform Engine      | DBT 1.11+ + AutomatedDV Package
@@ -1166,6 +1156,8 @@ Documentation         | DBT native docs + Auto-generated Markdown + Strucurizr f
 Version Control       | Git + DBT artifacts
 CI/CD Pipeline        | GitLab
 Monitoring            | Databricks Job UI, Custom Dashboards
+Local Env.            | UV and MakeFile
+Linting               | Ruff
 ```
 
 ---
@@ -1201,49 +1193,15 @@ Monitoring            | Databricks Job UI, Custom Dashboards
 
 ---
 
-## 10. Troubleshooting & Common Issues
-
-### Issue: Generated SQL fails to compile
-**Solution**:
-- Validate metadata schema with Pydantic before generation
-- Add metadata sanity checks (cross-reference validation)
-- Check Databricks syntax compatibility
-
-### Issue: Audit log shows inconsistent row counts
-**Solution**:
-- Verify source data hasn't changed between Hub and Satellite loads
-- Check for natural key duplicates in source
-- Review dbt models for unexpected filters or transforms
-
-### Issue: Link table creation fails
-**Solution**:
-- Ensure all referenced hubs exist before link execution
-- Verify business key relationships in metadata
-- Check for NULL values in linking columns
-
----
-
-## 11. Next Steps
-
-1. **Finalize Metadata Schema** - Create comprehensive YAML/CSV specifications
-2. **Choose Orchestration Tool** - Evaluate Databricks Workflows vs. Airflow vs. Prefect based on needs
-3. **Establish Naming Conventions** - Standardize object, field, and parameter names
-4. **Design Audit/Lineage Strategy** - Implement comprehensive tracking
-5. **Build MVP Generator** - Prototype for single system end-to-end
-6. **Select Library Stack** - Finalize AutomatedDV, Great Expectations, testing framework
-7. **Documentation** - Create runbooks, troubleshooting guides, operator manuals
-
----
-
-## References & Resources
+## 10. References & Resources
 
 - **Data Vault 2.0 Book**: "The Data Vault 2.0 Guidebook" by Dan Linstedt & Michael Olschimke
 - **DBT Documentation**: https://docs.getdbt.com/
 - **AutomatedDV Package**: https://github.com/Datavault-UK/automate-dv
 - **AutomatedDV Documentation**: https://automate-dv.readthedocs.io/
-- **AutomatedDV Community**: https://join.slack.com/t/dbtvault/shared_invite/enQtODY3MTY3OTIyMzg2LWJlZDMyNzM4YzAzYjgzYTY0MTMzNTNjN2EyZDRjOTljYjY0NDYyYzEwMTlhODMzNGY3MmU2ODNhYWUxYmM2NjA
+- **AutomatedDV Community**: https://forum.data-community.org/c/tools/automate-dv/11
 - **Databricks Best Practices**: https://docs.databricks.com/
-- **Data Quality with dbt**: https://docs.getdbt.com/guides/dbt-best-practices
+- **Data Quality with dbt**: https://hub.getdbt.com/metaplane/dbt_expectations/latest/
 - **Great Expectations**: https://greatexpectations.io/
 - **Data Vault Institute**: https://www.datavaultinstitute.com/
 

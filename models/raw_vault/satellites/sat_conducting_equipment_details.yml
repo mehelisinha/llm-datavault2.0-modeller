@@ -7,15 +7,14 @@ models:
     source_models:
     - stg_conducting_equipment
     src_pk: HK_CONDUCTING_EQUIPMENT
-    src_hashdiff: HD_CONDUCTING_EQUIPMENT_S
+    src_hashdiff: HASHDIFF_CE_DETAILS
     src_payload:
     - name
     - equipment_type
     - base_voltage_kv
-    - in_service
-    - asset_status
     - manufacturer
     - model
     - serial_number
     src_ldts: LOAD_DATE
     src_source: RECORD_SOURCE
+    src_eff: EFFECTIVE_FROM

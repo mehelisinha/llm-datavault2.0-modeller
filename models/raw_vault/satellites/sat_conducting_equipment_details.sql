@@ -10,10 +10,11 @@
 {% set source_models = ['stg_conducting_equipment'] %}
 
 {% set src_pk       = 'HK_CONDUCTING_EQUIPMENT' %}
-{% set src_hashdiff = 'HD_CONDUCTING_EQUIPMENT_S' %}
-{% set src_payload  = ['name', 'equipment_type', 'base_voltage_kv', 'in_service', 'asset_status', 'manufacturer', 'model', 'serial_number'] %}
+{% set src_hashdiff = 'HASHDIFF_CE_DETAILS' %}
+{% set src_payload  = ['name', 'equipment_type', 'base_voltage_kv', 'manufacturer', 'model', 'serial_number'] %}
 {% set src_ldts     = 'LOAD_DATE' %}
 {% set src_source   = 'RECORD_SOURCE' %}
+{% set src_eff      = 'EFFECTIVE_FROM' %}
 
 {{ automate_dv.sat(
     src_pk      = src_pk,
@@ -21,5 +22,6 @@
     src_payload = src_payload,
     src_ldts    = src_ldts,
     src_source  = src_source,
+    src_eff     = src_eff,
     source_model= source_models
 ) }}
