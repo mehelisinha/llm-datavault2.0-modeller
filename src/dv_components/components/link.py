@@ -3,7 +3,6 @@ Link component for Data Vault v2.
 """
 
 from logging import Logger
-from typing import List
 
 from src.dv_components.components.base import DVBaseRawVaultComponent
 from src.dv_components.components.model import DVComponentModel, LinkModel
@@ -12,53 +11,53 @@ from src.dv_components.components.model import DVComponentModel, LinkModel
 class Link(DVBaseRawVaultComponent):
     """Data Vault Link component."""
 
-    def __init__(
-        self,
-        model: DVComponentModel,
-        source_models: List[str],
-        logger:Logger
-    ):
-        super().__init__(model=model, source_models=source_models, logger=logger)
+    def __init__(self, model: DVComponentModel, logger: Logger):
+        super().__init__(model=model, logger=logger)
 
         if not isinstance(model.meta, LinkModel):
             raise ValueError(f"Expected LinkModel, got {type(model.meta)}")
         self.link_model: LinkModel = model.meta
 
-    def generate(self) -> str:
-        """Generate the SQL code for the link using AutomateDV."""
-        config_str = self._build_config(config_update={"unique_key": self.link_model.src_pk})
-
-        sql =  self._render(
-            config_str=config_str,
-            source_models=self.source_models,
+    def _get_render_kwargs(self) -> dict:
+        return dict(
+            config_options=self._build_config({"unique_key": self.link_model.src_pk}),
+            source_model=self._formatter.format_list(self.link_model.source_models),
             src_pk=self.link_model.src_pk,
-            src_fk=self.link_model.src_fk,
+            src_fk=self._formatter.format_list(self.link_model.src_fk),
             src_ldts=self.link_model.src_ldts,
             src_source=self.link_model.src_source,
         )
-        self.logger.debug(f"Generated SQL for hub '{self.model.name}':\n{sql}")
-        return sql
 
     @property
-    def _template_body(self)-> str:
-        return """{{{{
-    config(
-        {config_str}
-    )
-}}}}
-
-{{% - set source_model = {source_models} -%}}
-
-{{% - set src_pk       = '{src_pk}' -%}}
-{{% - set src_fk       = {src_fk} -%}}
-{{% - set src_ldts     = '{src_ldts}' -%}}
-{{% - set src_source   = '{src_source}' -%}}
-
-{{{{ automate_dv.link(
+    def _template_body(self) -> str:
+        return """
+<% set rendered = render_config(config_options) %>
+<<rendered>>
+{%- set source_model = <<source_model>> -%}
+{%- set src_pk       = '<<src_pk>>' -%}
+{%- set src_fk       = <<src_fk>> -%}
+{%- set src_ldts     = '<<src_ldts>>' -%}
+{%- set src_source   = '<<src_source>>' -%}
+{{ automate_dv.link(
     src_pk      = src_pk,
     src_fk      = src_fk,
     src_ldts    = src_ldts,
     src_source  = src_source,
-    source_model= source_models
-) }}}}"""
+    source_model= source_model
+) }}"""
 
+
+if __name__ == "__main__":
+    from shared.logger.default_logger import default_logger
+
+    link_model = LinkModel(
+        source_model=["stg_terminals"],
+        src_pk="HK_TERMINAL_EQUIPMENT_NODE",
+        src_fk=["HK_TERMINAL", "HK_CONDUCTING_EQUIPMENT", "HK_CONNECTIVITY_NODE"],
+        src_ldts="LOAD_DATE",
+        src_source="RECORD_SOURCE",
+    )
+
+    model = DVComponentModel(name="TERMINAL_EQUIPMENT_NODE", meta=link_model)
+    link = Link(model=model, logger=default_logger)
+    sql = link.generate()

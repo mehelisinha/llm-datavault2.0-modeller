@@ -5,27 +5,29 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validat
 
 class DvBaseModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
-    source_models: list[str]
-    src_pk: str
-    src_ldts: str
+    source_model: list[str]
     src_source: str = "RECORD_SOURCE"
     schema_name: str = Field(default="raw_vault", alias="schema")
 
 
-class HubModel(DvBaseModel):
+class RawVaultBaseModel(DvBaseModel):
+    src_pk: str
+    src_ldts: str
+
+
+class HubModel(RawVaultBaseModel):
     dv_type: Literal["hub"] = "hub"
     layer: Literal["raw_vault"] = "raw_vault"
     src_nk: str
 
 
-class LinkModel(DvBaseModel):
+class LinkModel(RawVaultBaseModel):
     dv_type: Literal["link"] = "link"
     layer: Literal["raw_vault"] = "raw_vault"
     src_fk: list[str]
 
 
-class SatelliteModel(DvBaseModel):
+class SatelliteModel(RawVaultBaseModel):
     dv_type: Literal["satellite"] = "satellite"
     layer: Literal["raw_vault"] = "raw_vault"
     src_hashdiff: str
@@ -33,27 +35,193 @@ class SatelliteModel(DvBaseModel):
     src_eff: str | None = None
 
 
+# -----------STAGING-----------------------------
+
+
+class HashedColumns(BaseModel):
+    column_name: str
+    is_hashdiff: bool
+    columns: list[str]
+
+    @computed_field
+    @property
+    def dv_model(self) -> dict[str, dict[str, list[str] | bool]]:
+        return {
+            self.column_name: {"is_hashdiff": self.is_hashdiff, "columns": self.columns}
+        }
+
+
+class DerivedColumn(BaseModel):
+    column_name: str
+    expr: str | None = None
+    source_column: str | list[str] | None = None
+    escape: bool = False
+
+    @model_validator(mode="after")
+    def validate_expr_or_source(self):
+        if self.expr and self.source_column:
+            raise ValueError("Provide either 'expr' or 'source_column', not both")
+        if not self.expr and not self.source_column:
+            raise ValueError("Either 'expr' or 'source_column' must be provided")
+        return self
+
+    @computed_field
+    @property
+    def dv_model(self) -> dict[str, Any]:
+        if self.expr:
+            return {self.column_name: self.expr}
+
+        return {
+            self.column_name: {
+                "source_column": self.source_column,
+                "escape": self.escape,
+            }
+        }
+
+
+class DerivedColumnInternal(DerivedColumn):
+    order: int
+
+
+class RankedColumns(BaseModel):
+    column_name: str
+    partition_by: str
+    order_by: str
+    dense_rank: bool = False
+
+    @computed_field
+    @property
+    def dv_model(self) -> dict[str, dict[str, str | bool]]:
+        return {
+            self.column_name: {
+                "partition_by": self.partition_by,
+                "order_by": self.order_by,
+                "dense_rank": self.dense_rank,
+            }
+        }
+
+
+class NullColumns(BaseModel):
+    column_name: str
+    is_required: bool = True
+
+
+class StagingModel(DvBaseModel):
+    dv_type: Literal["staging"] = "staging"
+    layer: Literal["staging"] = "staging"
+    include_source_columns: bool = True
+    source_model: list[str]
+    derived_columns: list[DerivedColumnInternal] = Field(default_factory=list)
+    hashed_columns: list[HashedColumns] = Field(default_factory=list)
+    null_columns: list[NullColumns] = Field(default_factory=list)
+    ranked_columns: list[RankedColumns] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def _null_columns_dv(self) -> dict[str, list[str]] | None:
+        if self.null_columns:
+            return {
+                "required": [c.column_name for c in self.null_columns if c.is_required],
+                "optional": [
+                    c.column_name for c in self.null_columns if not c.is_required
+                ],
+            }
+        return None
+
+    def _get_dv_dict(self, field_name: str) -> dict[str, Any] | None:
+        value = getattr(self, field_name, None)
+
+        if not value or not isinstance(value, list):
+            return None
+
+        first = value[0]
+
+        if isinstance(first, BaseModel) and hasattr(first, "dv_model"):
+            result: dict[str, Any] = {}
+            for val in value:
+                result.update(val.dv_model)
+            return result
+
+        return None
+
+    def get_dv_from_field(self, field_name: str) -> dict[str, Any] | None:
+        if field_name == "null_columns":
+            return self._null_columns_dv
+        if field_name in ["derived_columns", "hashed_columns", "ranked_columns"]:
+            return self._get_dv_dict(field_name)
+        return getattr(self, field_name, None)
+
+    # def get_dv_list(self, field_name: str) -> list[dict[str, Any]] | None:
+    #     value = getattr(self, field_name, None)
+
+    #     if not value:
+    #         return None
+
+    #     # ensure it's a list
+    #     if not isinstance(value, list):
+    #         return None
+
+    #     # check if elements are pydantic models
+    #     if len(value) == 0:
+    #         return None
+
+    #     first = value[0]
+
+    #     # Pydantic v2
+    #     if hasattr(first, "model_dump"):
+    #         return [v.model_dump() for v in value]
+
+    #     # fallback for plain dicts
+    #     if isinstance(first, dict):
+    #         return value
+
+    #     return None
+
+    # @computed_field
+    # @property
+    # def derived_columns_dv(self) -> dict[str, Any] | None:
+    #     return (
+    #         {k: v for c in self.derived_columns for k, v in c.dv_dict.items()}
+    #         if self.derived_columns
+    #         else None
+    #     )
+
+    # @computed_field
+    # @property
+    # def ranked_columns_dv(self) -> dict[str, Any] | None:
+    #     return (
+    #         {k: v for c in self.ranked_columns for k, v in c.dv_dict.items()}
+    #         if self.derived_columns
+    #         else None
+    #     )
+
+
 class DVProjectModel(BaseModel):
     dv_type: Literal["dv_project"] = "dv_project"
-    system: dict[str, str]
-    name: str
+    # layer: Literal[None] = None
+    system: str
     profile: str
     model_paths: list[str]
-    analysis_paths: List[str]| None = None
-    test_paths: List[str]|None = None
-    seed_paths: List[str]|None = None
-    macro_paths: List[str]|None = None
-    snapshot_paths: List[str]|None = None
+    analysis_paths: List[str] | None = None
+    test_paths: List[str] | None = None
+    seed_paths: List[str] | None = None
+    macro_paths: List[str] | None = None
+    snapshot_paths: List[str] | None = None
     target_path: str = "target"
-    clean_targets: List[str]|None = None
+    clean_targets: List[str] | None = None
     vars: dict[str, Any] = Field(default_factory=dict)
-    stg_schema:str
-    raw_vault_schema:str
-    business_vault_schema:str|None
+    stg_schema: str
+    raw_vault_schema: str
+    business_vault_schema: str | None
+
+    # @computed_field
+    # @property
+    # def profile(self):
+    #     return self.system
 
 
 DvModels = Annotated[
-    Union[HubModel, LinkModel, SatelliteModel, DVProjectModel],
+    Union[HubModel, LinkModel, SatelliteModel, DVProjectModel, StagingModel],
     Field(discriminator="dv_type"),
 ]
 
@@ -75,11 +243,9 @@ class DVComponentModel(BaseModel):
 
     @computed_field
     @property
-    def base_models_path(self) -> str| None:
+    def base_models_path(self) -> str | None:
         if self.dv_type == "dv_project":
             return None
-        if hasattr(self.meta, "layer"):
+        if hasattr(self.meta, "layer") and self.meta.layer is not None:
             return f"models/{self.meta.layer}/{self.dv_type}s"
         return "models"
-
-

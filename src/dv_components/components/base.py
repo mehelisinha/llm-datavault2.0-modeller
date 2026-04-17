@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from shared.logger.default_logger import default_logger
 from src.dv_components.components.model import DVComponentModel
-from src.dv_components.components.template_renderer import TemplateRenderer
+from src.dv_components.helpers.template_renderer import TemplateRenderer
 
 # ---------------------------------------------------------------------------
 # Configuration utilities
@@ -81,6 +81,18 @@ class _DbtFormatter:
 
     @staticmethod
     def format_list(items: list[str]) -> str:
+        """
+        Format a Python list of strings into a dbt-compatible Jinja2 list literal.
+
+        Example:
+            ['stg_terminals']               -> "['stg_terminals']"
+            ['stg_terminals', 'stg_orders'] -> "['stg_terminals', 'stg_orders']"
+        """
+        quoted = ", ".join(f"'{item}'" for item in items)
+        return f"[{quoted}]"
+
+    @staticmethod
+    def format_list_as_dict(items: list[str]) -> str:
         """
         Format a Python list of strings into a dbt-compatible Jinja2 list literal.
 

@@ -1,20 +1,13 @@
-
-
-
 from logging import Logger
 from typing import Optional
 
-from src.dv_components.factory.registry import BaseComponent
+from dv_components.factory.not_used.registry import BaseComponent
 
 
 class DVComponentFactory:
-
     @classmethod
     def create(
-        cls,
-        model,
-        source_models=None,
-        logger: Optional[Logger] = None
+        cls, model, source_models=None, logger: Optional[Logger] = None
     ) -> BaseComponent:
         """
         Create a component instance based on model.dv_type.
@@ -31,10 +24,7 @@ class DVComponentFactory:
                 logger.error(f"No component registered for type: {dv_type}")
             raise ValueError(f"No component registered for type: {dv_type}")
 
-        return component_cls(
-            model=model,
-            source_models=source_models or []
-        )
+        return component_cls(model=model, source_models=source_models or [])
 
 
 # usage:
