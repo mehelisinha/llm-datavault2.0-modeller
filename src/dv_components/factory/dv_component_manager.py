@@ -1,10 +1,10 @@
 import os
 from logging import Logger
 
-from src.dv_components.factory.dv_model_factory import DVComponentFactory
 from shared.infra.file_manager.file_manager import FileManager
 from shared.logger.default_logger import default_logger
-from src.dv_components.components.model import DVComponentModel
+from src.dv_components.factory.dv_model_factory import DVComponentFactory
+from src.dv_components.models.model import DVComponentModel
 
 
 class DVComponentManager:

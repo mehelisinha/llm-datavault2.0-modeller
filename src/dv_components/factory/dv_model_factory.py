@@ -2,27 +2,29 @@ from logging import Logger
 from typing import Type
 
 from shared.logger.default_logger import default_logger
-from src.dv_components.components.base import DVComponentBaseGenerator
-from src.dv_components.components.hub import Hub
-from src.dv_components.components.link import Link
-from src.dv_components.components.model import DVComponentModel
-from src.dv_components.components.satellite import SatelliteFactory
-from src.dv_components.components.staging import Staging
+from src.dv_components.models.base import DVComponentBaseGenerator
+from src.dv_components.models.hub import Hub
+from src.dv_components.models.link import Link
+from src.dv_components.models.macro import Macro
+from src.dv_components.models.model import DVComponentModel
+from src.dv_components.models.satellite import SatelliteFactory
+from src.dv_components.models.staging import Staging
 
 
 class DVComponentFactory:
-    _handlers: dict[str, type[DVComponentBaseGenerator]] = {
+    _handlers: dict[str, type[DVComponentBaseGenerator | SatelliteFactory]] = {
         "hub": Hub,
         "link": Link,
         "satellite": SatelliteFactory,
         "eff_sat": SatelliteFactory,
         "staging": Staging,
+        "macro": Macro,
     }
 
     @classmethod
     def get(
         cls, model: DVComponentModel, logger: Logger = default_logger
-    ) -> Type[DVComponentBaseGenerator]:
+    ) -> Type[DVComponentBaseGenerator | SatelliteFactory]:
         handler = cls._handlers.get(model.dv_type)
         if not handler:
             logger.error(f"No handler found for component type: {model.dv_type}")

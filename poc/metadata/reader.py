@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Union
 
 import yaml
 
-from dv_components.components.hub import Hub
-from dv_components.components.link import Link
-from dv_components.components.satellite import Satellite
+from dv_components.models.hub import Hub
+from dv_components.models.link import Link
+from dv_components.models.satellite import Satellite
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -61,7 +61,9 @@ class MetadataReader:
         required = {"system", "hubs", "satellites", "links"}
         missing = required - set(data.keys())
         if missing:
-            raise ValueError(f"Metadata config is missing required top-level keys: {missing}")
+            raise ValueError(
+                f"Metadata config is missing required top-level keys: {missing}"
+            )
 
     # ------------------------------------------------------------------
     # System info
@@ -79,7 +81,9 @@ class MetadataReader:
         """Return one Hub object per hub definition in the YAML."""
         hubs: List[Hub] = []
         for entry in self._config.get("hubs", []):
-            self._require_keys(entry, {"name", "staging_model", "business_key", "hash_key"}, "hub")
+            self._require_keys(
+                entry, {"name", "staging_model", "business_key", "hash_key"}, "hub"
+            )
             hub = Hub(
                 name=entry["name"],
                 source_models=[entry["staging_model"]],
@@ -148,9 +152,7 @@ class MetadataReader:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _require_keys(
-        entry: Dict[str, Any], required: set, kind: str
-    ) -> None:
+    def _require_keys(entry: Dict[str, Any], required: set, kind: str) -> None:
         missing = required - set(entry.keys())
         if missing:
             name = entry.get("name", "<unnamed>")

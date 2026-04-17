@@ -10,10 +10,10 @@ from typing import Any, Dict, List
 
 import yaml
 
-from src.dv_components.components.model import (
+from src.dv_components.models.model import (
+    DbtPackage,
     DVComponentModel,
     DVPackagesModel,
-    DbtPackage,
     DVProjectModel,
     EffSatModel,
     HubModel,
@@ -179,7 +179,15 @@ class Metadata:
         for entry in self._config.get("eff_sats", []):
             self._require_keys(
                 entry,
-                {"name", "source_model", "hash_key", "driving_fk", "secondary_fk", "effective_from", "end_date"},
+                {
+                    "name",
+                    "source_model",
+                    "hash_key",
+                    "driving_fk",
+                    "secondary_fk",
+                    "effective_from",
+                    "end_date",
+                },
                 "eff_sat",
             )
             sfk = entry["secondary_fk"]
@@ -207,7 +215,9 @@ class Metadata:
             self._require_keys(entry, {"name", "source_table"}, "staging")
             derived_columns = [
                 {"column_name": col, "expr": expr, "order": i}
-                for i, (col, expr) in enumerate(entry.get("derived_columns", {}).items())
+                for i, (col, expr) in enumerate(
+                    entry.get("derived_columns", {}).items()
+                )
             ]
             hashed_columns = []
             for col, value in entry.get("hashed_columns", {}).items():

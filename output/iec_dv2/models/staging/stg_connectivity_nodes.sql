@@ -13,7 +13,7 @@
     )
 }}
 
-{%- set source_model   = {'bronze': 'brz_connectivity_nodes'} -%}
+{%- set source_model   = {'bronze': 'connectivity_nodes'} -%}
 {%- set include_source_columns = True -%}
 {%- set derived_columns       = {'RECORD_SOURCE': 'record_source', 'LOAD_DATE': 'load_dts', 'EFFECTIVE_FROM': 'load_dts', 'CDC_FLAG': 'cdc_flag'} -%}
 {%- set null_columns       = None -%}

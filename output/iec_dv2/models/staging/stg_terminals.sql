@@ -13,7 +13,7 @@
     )
 }}
 
-{%- set source_model   = {'bronze': 'brz_terminals'} -%}
+{%- set source_model   = {'bronze': 'terminals'} -%}
 {%- set include_source_columns = True -%}
 {%- set derived_columns       = {'RECORD_SOURCE': 'record_source', 'LOAD_DATE': 'load_dts', 'EFFECTIVE_FROM': 'load_dts', 'CDC_FLAG': 'cdc_flag'} -%}
 {%- set null_columns       = None -%}

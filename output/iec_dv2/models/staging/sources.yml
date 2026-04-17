@@ -1,9 +1,8 @@
-version: 2
 sources:
 - name: bronze
+  database: edh_unreg_silver_dev_st
   schema: bronze
   tables:
-  - name: brz_conducting_equipment
-  - name: brz_connectivity_nodes
-  - name: brz_terminals
-  database: edh_unreg_silver_dev_st
+  - name: conducting_equipment
+  - name: connectivity_nodes
+  - name: terminals

@@ -1,9 +1,10 @@
 from logging import Logger
+from pathlib import Path
 
 import yaml
 
-from src.dv_components.components.model import DVComponentModel, DVProjectModel
 from src.dv_components.helpers.yml_helper import YmlHelper
+from src.dv_components.models.model import DVComponentModel, DVProjectModel
 
 
 class DBTProject:
@@ -12,6 +13,15 @@ class DBTProject:
     _INCREMENTAL_CONFIG = {
         "+materialized": "incremental",
         "+incremental-strategy": "merge",
+    }
+    # Fields that are internal to DWA and must not appear in dbt_project.yml
+    _INTERNAL_FIELDS = {
+        "dv_type",
+        "system",
+        "catalog",
+        "stg_schema",
+        "raw_vault_schema",
+        "business_vault_schema",
     }
 
     def __init__(self, model: DVComponentModel, logger: Logger):
@@ -33,8 +43,12 @@ class DBTProject:
         self.logger.debug(f"Generated dbt_project.yml:\n{yaml_str}")
         return yaml_str
 
-    # Fields that are internal to DWA and must not appear in dbt_project.yml
-    _INTERNAL_FIELDS = {"dv_type", "system", "catalog", "stg_schema", "raw_vault_schema", "business_vault_schema"}
+    def write(self, project_path: str, yaml_content: str):
+        out_path = Path(project_path) / "dbt_project.yml"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(yaml_content, encoding="utf-8")
+        self.logger.debug(f"  YML  → {out_path}")
+        return out_path
 
     # ------------------------------------------------------------------
     # Project dict assembly

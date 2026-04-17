@@ -22,9 +22,9 @@ import yaml
 # Make sure src/ is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from dv_components.components.hub import Hub
-from dv_components.components.link import Link
-from dv_components.components.satellite import Satellite
+from dv_components.models.hub import Hub
+from dv_components.models.link import Link
+from dv_components.models.satellite import Satellite
 from poc.metadata.reader import MetadataReader
 
 # ---------------------------------------------------------------------------
@@ -88,7 +88,9 @@ def reader(config_file: Path) -> MetadataReader:
 # IEC CIM integration fixture (uses the real project config)
 # ---------------------------------------------------------------------------
 
-IEC_CONFIG_PATH = Path(__file__).parent.parent / "src" / "metadata" / "iec_cim_metadata.yaml"
+IEC_CONFIG_PATH = (
+    Path(__file__).parent.parent / "src" / "metadata" / "iec_cim_metadata.yaml"
+)
 
 
 @pytest.fixture
@@ -243,7 +245,11 @@ def test_iec_links_count(iec_reader: MetadataReader) -> None:
 
 def test_iec_hub_names(iec_reader: MetadataReader) -> None:
     names = {h.name for h in iec_reader.get_hubs()}
-    assert names == {"hub_conducting_equipment", "hub_connectivity_node", "hub_terminal"}
+    assert names == {
+        "hub_conducting_equipment",
+        "hub_connectivity_node",
+        "hub_terminal",
+    }
 
 
 def test_iec_link_fks(iec_reader: MetadataReader) -> None:

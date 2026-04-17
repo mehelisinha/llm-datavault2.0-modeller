@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from src.dv_components.components.model import DVPackagesModel
 from shared.logger.default_logger import default_logger
+from src.dv_components.models.model import DVPackagesModel
 
 
 class DVPackagesGenerator:

@@ -16,7 +16,14 @@ from shared.logger.default_logger import default_logger
 from src.dv_components.configs.config_generator import DVConfigGenerator
 from src.dv_components.configs.packages_yml import DVPackagesGenerator
 from src.dv_components.configs.project_yml import DBTProject
+from src.dv_components.configs.sources_yml import DBTSources
 from src.dv_components.factory.dv_component_manager import DVComponentManager
+from src.dv_components.models.model import (
+    DVComponentModel,
+    DVSourceModel,
+    MacroModel,
+    TableConfig,
+)
 from src.runners.metadata import Metadata
 
 
@@ -82,16 +89,18 @@ class DBTBuilder:
                 model=model,
                 project_path=self._output_path,
                 logger=self._logger,
-            ).generate()
+            ).write()
             self._logger.debug(f"  YML  → {yml_path}")
 
     def _write_project_yml(self) -> None:
         project_model = self._metadata.get_project_model()
-        yaml_content = DBTProject(model=project_model, logger=self._logger).generate()
-        out_path = Path(self._output_path) / "dbt_project.yml"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(yaml_content, encoding="utf-8")
-        self._logger.debug(f"  YML  → {out_path}")
+        dbt_proj = DBTProject(model=project_model, logger=self._logger)
+        yaml_content = dbt_proj.generate()
+
+        output_path = dbt_proj.write(
+            project_path=self._output_path, yaml_content=yaml_content
+        )
+        self._logger.debug(f"  PRJ  → {output_path}")
 
     def _write_packages_yml(self) -> None:
         packages_model = self._metadata.get_packages_model()
@@ -102,55 +111,36 @@ class DBTBuilder:
         ).generate()
         self._logger.debug(f"  PKG  → {pkg_path}")
 
-    # Override dbt's default schema naming (which prepends target.schema).
-    # With this macro, +schema in dbt_project.yml is used exactly as-is.
-    _GENERATE_SCHEMA_NAME_MACRO = """\
-{% macro generate_schema_name(custom_schema_name, node) -%}
-    {%- if custom_schema_name is none -%}
-        {{ target.schema }}
-    {%- else -%}
-        {{ custom_schema_name | trim }}
-    {%- endif -%}
-{%- endmacro %}
-"""
-
     def _write_macros(self) -> None:
-        macros_dir = Path(self._output_path) / "macros"
-        macros_dir.mkdir(parents=True, exist_ok=True)
-        macro_path = macros_dir / "generate_schema_name.sql"
-        macro_path.write_text(self._GENERATE_SCHEMA_NAME_MACRO, encoding="utf-8")
-        self._logger.debug(f"  MAC  → {macro_path}")
+        macro_model = MacroModel()
+        model = DVComponentModel(name="generate_schema_name", meta=macro_model)
+        sql_path = DVComponentManager.write_sql_file(
+            model=model,
+            project_path=self._output_path,
+            logger=self._logger,
+        )
+        self._logger.debug(f"  MCR  → {sql_path}")
 
     def _write_sources_yml(self) -> None:
         """Generate models/staging/sources.yml from system metadata + staging entries."""
-        import yaml
-
         system = self._metadata.system
-        catalog = system.get("catalog")
-        schema = system.get("schema")
-        if not schema:
-            self._logger.debug("  No system.schema — skipping sources.yml")
-            return
+        model = DVSourceModel(
+            name=system.get("schema"),
+            database=system.get("catalog"),
+            schema=system.get("schema"),
+            tables=[
+                TableConfig(name=entry["source_table"])
+                for entry in self._metadata._config.get("staging", [])
+                if "source_table" in entry
+            ],
+        )
 
-        tables = [
-            {"name": entry["source_table"]}
-            for entry in self._metadata._config.get("staging", [])
-            if "source_table" in entry
-        ]
-        if not tables:
-            return
-
-        source_entry: dict = {"name": schema, "schema": schema, "tables": tables}
-        if catalog:
-            source_entry["database"] = catalog
-
-        sources_dict = {"version": 2, "sources": [source_entry]}
-        out_dir = Path(self._output_path) / "models" / "staging"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / "sources.yml"
-        out_path.write_text(
-            yaml.dump(sources_dict, sort_keys=False, default_flow_style=False),
-            encoding="utf-8",
+        model = DVComponentModel(name="iec_dv2", meta=model)
+        dbt_sources = DBTSources(model=model, logger=default_logger)
+        yaml_content = dbt_sources.generate()
+        out_path = dbt_sources.write(
+            project_path=self._output_path,
+            yaml_content=yaml_content,
         )
         self._logger.debug(f"  SRC  → {out_path}")
 
