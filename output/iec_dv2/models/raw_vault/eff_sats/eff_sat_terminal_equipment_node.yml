@@ -1,0 +1,15 @@
+version: 2
+models:
+- name: eff_sat_terminal_equipment_node
+  description: Data Vault eff_sat for eff_sat_terminal_equipment_node
+  columns:
+  - name: HK_TERMINAL_EQUIPMENT_NODE
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null
+  - name: HK_TERMINAL
+    tests:
+    - not_null

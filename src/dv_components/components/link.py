@@ -21,7 +21,7 @@ class Link(DVBaseRawVaultComponent):
     def _get_render_kwargs(self) -> dict:
         return dict(
             config_options=self._build_config({"unique_key": self.link_model.src_pk}),
-            source_model=self._formatter.format_list(self.link_model.source_models),
+            source_model=self._formatter.format_list(self.link_model.source_model),
             src_pk=self.link_model.src_pk,
             src_fk=self._formatter.format_list(self.link_model.src_fk),
             src_ldts=self.link_model.src_ldts,

@@ -1,0 +1,14 @@
+
+    
+    
+
+select
+    HK_TERMINAL as unique_field,
+    count(*) as n_records
+
+from `edh_unreg_silver_dev_st`.`raw_raw_vault`.`sat_terminal_details`
+where HK_TERMINAL is not null
+group by HK_TERMINAL
+having count(*) > 1
+
+

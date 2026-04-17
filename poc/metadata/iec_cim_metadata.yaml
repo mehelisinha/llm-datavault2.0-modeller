@@ -6,6 +6,7 @@
 #
 # Schema:
 #   system:      source system metadata (catalog, schema, record_source)
+#   packages:    dbt package dependencies (generates packages.yml)
 #   hubs:        hub entities with business key and hash key
 #   satellites:  descriptive attribute groups per hub, with hashdiff and payload
 #   links:       many-to-many relationships between hubs
@@ -14,12 +15,21 @@
 
 system:
   system_id: IEC_CIM_001
-  system_name: IEC61968 CIM
+  system_name: IEC61968_CIM
   source_type: delta
   catalog: edh_unreg_silver_dev_st
   schema: bronze
   load_frequency: daily
   record_source: IEC61968_CIM_v2.0
+
+# ── dbt Packages ──────────────────────────────────────────────────────────────
+packages:
+  - package: dbt-labs/dbt_utils
+    version: 1.3.3
+  - package: metaplane/dbt_expectations
+    version: 0.10.10
+  - package: Datavault-UK/automate_dv
+    version: 0.10.2
 
 # ── Hubs ──────────────────────────────────────────────────────────────────────
 hubs:
@@ -110,6 +120,93 @@ eff_sats:
   - name: eff_sat_terminal_equipment_node
     parent_link: lnk_terminal_equipment_node
     source_model: stg_terminals
-    hash_key: HK_TERMINAL_EQUIPMENT_NODE
-    driving_fk: HK_TERMINAL_EQUIPMENT_NODE
-    effective_from: EFFECTIVE_FROM
+    hash_key: HK_TERMINAL_EQUIPMENT_NODE    # src_pk  — the link hash key
+    driving_fk: HK_TERMINAL                 # src_dfk — the driving hub FK (terminal entity)
+    secondary_fk:                           # src_sfk — remaining hub FKs in the link
+      - HK_CONDUCTING_EQUIPMENT
+      - HK_CONNECTIVITY_NODE
+    effective_from: EFFECTIVE_FROM          # src_eff / src_start_date
+    end_date: LOAD_DATE                     # src_end_date — closed by CDC deletion records
+
+# ── Staging Models ────────────────────────────────────────────────────────────
+# Staging models load and hash raw bronze data, producing the vault keys and
+# hashdiffs consumed by all raw-vault models.
+staging:
+  - name: stg_conducting_equipment
+    source_table: conducting_equipment
+    derived_columns:
+      RECORD_SOURCE: "record_source"
+      LOAD_DATE:     "load_dts"
+      EFFECTIVE_FROM: "load_dts"
+      CDC_FLAG:      "cdc_flag"
+    hashed_columns:
+      HK_CONDUCTING_EQUIPMENT:
+        - mrid
+      HASHDIFF_CE_OPERATIONAL:
+        is_hashdiff: true
+        columns:
+          - in_service
+          - asset_status
+      HASHDIFF_CE_DETAILS:
+        is_hashdiff: true
+        columns:
+          - name
+          - equipment_type
+          - base_voltage_kv
+          - manufacturer
+          - model
+          - serial_number
+    ranked_columns:
+      DBTVAULT_RANK:
+        partition_by: mrid
+        order_by: load_dts
+
+  - name: stg_connectivity_nodes
+    source_table: connectivity_nodes
+    derived_columns:
+      RECORD_SOURCE: "record_source"
+      LOAD_DATE:     "load_dts"
+      EFFECTIVE_FROM: "load_dts"
+      CDC_FLAG:      "cdc_flag"
+    hashed_columns:
+      HK_CONNECTIVITY_NODE:
+        - mrid
+      HASHDIFF_CONNECTIVITY_NODE_DETAILS:
+        is_hashdiff: true
+        columns:
+          - name
+          - description
+    ranked_columns:
+      DBTVAULT_RANK:
+        partition_by: mrid
+        order_by: load_dts
+
+  - name: stg_terminals
+    source_table: terminals
+    derived_columns:
+      RECORD_SOURCE: "record_source"
+      LOAD_DATE:     "load_dts"
+      EFFECTIVE_FROM: "load_dts"
+      CDC_FLAG:      "cdc_flag"
+    hashed_columns:
+      HK_TERMINAL:
+        - mrid
+      HK_CONDUCTING_EQUIPMENT:
+        - conducting_equipment_mrid
+      HK_CONNECTIVITY_NODE:
+        - connectivity_node_mrid
+      HK_TERMINAL_EQUIPMENT_NODE:
+        - mrid
+        - conducting_equipment_mrid
+        - connectivity_node_mrid
+      HASHDIFF_TERMINAL_DETAILS:
+        is_hashdiff: true
+        columns:
+          - name
+          - sequence_number
+          - phases
+          - connected
+    ranked_columns:
+      DBTVAULT_RANK:
+        partition_by: mrid
+        order_by: load_dts

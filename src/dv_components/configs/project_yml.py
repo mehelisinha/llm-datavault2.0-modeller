@@ -33,23 +33,32 @@ class DBTProject:
         self.logger.debug(f"Generated dbt_project.yml:\n{yaml_str}")
         return yaml_str
 
+    # Fields that are internal to DWA and must not appear in dbt_project.yml
+    _INTERNAL_FIELDS = {"dv_type", "system", "catalog", "stg_schema", "raw_vault_schema", "business_vault_schema"}
+
     # ------------------------------------------------------------------
     # Project dict assembly
     # ------------------------------------------------------------------
 
     def _build_project_dict(self) -> dict:
-        return {
+        params = self._get_filtered_params()
+        # vars keys are user-defined (e.g. load_date) — must NOT be kebab-cased
+        vars_val = params.pop("vars", None)
+
+        project: dict = {
             "name": self.model.name,
-            **YmlHelper.to_kebab_case(self._get_filtered_params()),
-            "models": self._get_config(),
+            **YmlHelper.to_kebab_case(params),
         }
+        if vars_val:
+            project["vars"] = vars_val
+        project["models"] = self._get_config()
+        return project
 
     def _get_filtered_params(self) -> dict:
-        excluded = {"dv_type", "system"}
         return {
             k: v
             for k, v in self.model.meta.model_dump().items()
-            if k not in excluded and v is not None
+            if k not in self._INTERNAL_FIELDS and v is not None
         }
 
     # ------------------------------------------------------------------
@@ -67,27 +76,38 @@ class DBTProject:
         return {self.model.name: config}
 
     def _staging_config(self) -> dict:
-        return {
+        config: dict = {
             "+schema": self.proj_model.stg_schema,
             "+materialized": "view",
             "+tags": ["staging"],
         }
+        if self.proj_model.catalog:
+            config["+catalog"] = self.proj_model.catalog
+        return config
 
     def _raw_vault_config(self) -> dict:
-        return {
+        sat_config = self._INCREMENTAL_CONFIG.copy()
+        config: dict = {
             "+schema": self.proj_model.raw_vault_schema,
             "+tags": ["raw_vault"],
             "hubs": self._INCREMENTAL_CONFIG.copy(),
             "links": self._INCREMENTAL_CONFIG.copy(),
-            "satellites": self._INCREMENTAL_CONFIG.copy(),
+            "satellites": sat_config,
+            "eff_sats": sat_config.copy(),
         }
+        if self.proj_model.catalog:
+            config["+catalog"] = self.proj_model.catalog
+        return config
 
     def _business_vault_config(self) -> dict:
-        return {
+        config: dict = {
             "+schema": self.proj_model.business_vault_schema,
             "+materialized": "table",
             "+tags": ["business_vault"],
         }
+        if self.proj_model.catalog:
+            config["+catalog"] = self.proj_model.catalog
+        return config
 
 
 if __name__ == "__main__":

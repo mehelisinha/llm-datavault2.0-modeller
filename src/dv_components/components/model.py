@@ -27,12 +27,22 @@ class LinkModel(RawVaultBaseModel):
     src_fk: list[str]
 
 
-class SatelliteModel(RawVaultBaseModel):
-    dv_type: Literal["satellite"] = "satellite"
+class SatelliteBaseModel(RawVaultBaseModel):
     layer: Literal["raw_vault"] = "raw_vault"
+    src_eff: str | None = None
+
+
+class SatelliteModel(SatelliteBaseModel):
+    dv_type: Literal["satellite"] = "satellite"
     src_hashdiff: str
     src_payload: list[str]
-    src_eff: str | None = None
+
+
+class EffSatModel(SatelliteBaseModel):
+    dv_type: Literal["eff_sat"] = "eff_sat"
+    src_dfk: str
+    src_sfk: str | list[str]  # required by automate_dv — single FK or list for higher-order links
+    src_end_date: str          # required by automate_dv — column marking end of effectivity
 
 
 # -----------STAGING-----------------------------
@@ -111,6 +121,7 @@ class StagingModel(DvBaseModel):
     layer: Literal["staging"] = "staging"
     include_source_columns: bool = True
     source_model: list[str]
+    source_name: str | None = None  # dbt source name (e.g. "bronze"); when set, uses {{ source() }} ref
     derived_columns: list[DerivedColumnInternal] = Field(default_factory=list)
     hashed_columns: list[HashedColumns] = Field(default_factory=list)
     null_columns: list[NullColumns] = Field(default_factory=list)
@@ -198,7 +209,6 @@ class StagingModel(DvBaseModel):
 
 class DVProjectModel(BaseModel):
     dv_type: Literal["dv_project"] = "dv_project"
-    # layer: Literal[None] = None
     system: str
     profile: str
     model_paths: list[str]
@@ -210,18 +220,29 @@ class DVProjectModel(BaseModel):
     target_path: str = "target"
     clean_targets: List[str] | None = None
     vars: dict[str, Any] = Field(default_factory=dict)
+    catalog: str | None = None
     stg_schema: str
     raw_vault_schema: str
     business_vault_schema: str | None
 
-    # @computed_field
-    # @property
-    # def profile(self):
-    #     return self.system
+
+class DbtPackage(BaseModel):
+    package: str
+    version: str
+
+
+class DVPackagesModel(BaseModel):
+    packages: list[DbtPackage] = Field(
+        default_factory=lambda: [
+            DbtPackage(package="dbt-labs/dbt_utils", version="1.3.3"),
+            DbtPackage(package="metaplane/dbt_expectations", version="0.10.10"),
+            DbtPackage(package="Datavault-UK/automate_dv", version="0.10.2"),
+        ]
+    )
 
 
 DvModels = Annotated[
-    Union[HubModel, LinkModel, SatelliteModel, DVProjectModel, StagingModel],
+    Union[HubModel, LinkModel, SatelliteModel, EffSatModel, DVProjectModel, StagingModel],
     Field(discriminator="dv_type"),
 ]
 
@@ -246,6 +267,8 @@ class DVComponentModel(BaseModel):
     def base_models_path(self) -> str | None:
         if self.dv_type == "dv_project":
             return None
+        if self.dv_type == "staging":
+            return "models/staging"
         if hasattr(self.meta, "layer") and self.meta.layer is not None:
             return f"models/{self.meta.layer}/{self.dv_type}s"
         return "models"

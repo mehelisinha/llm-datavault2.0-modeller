@@ -1,0 +1,20 @@
+version: 2
+models:
+- name: stg_terminals
+  description: Data Vault staging for stg_terminals
+  columns:
+  - name: HK_TERMINAL
+    tests:
+    - not_null
+  - name: HK_CONDUCTING_EQUIPMENT
+    tests:
+    - not_null
+  - name: HK_CONNECTIVITY_NODE
+    tests:
+    - not_null
+  - name: HK_TERMINAL_EQUIPMENT_NODE
+    tests:
+    - not_null
+  - name: HASHDIFF_TERMINAL_DETAILS
+    tests:
+    - not_null

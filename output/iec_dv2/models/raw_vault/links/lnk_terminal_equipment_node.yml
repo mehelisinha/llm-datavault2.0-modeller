@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: lnk_terminal_equipment_node
+  description: Data Vault link for lnk_terminal_equipment_node
+  columns:
+  - name: HK_TERMINAL_EQUIPMENT_NODE
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null

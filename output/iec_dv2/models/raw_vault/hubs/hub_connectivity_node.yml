@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: hub_connectivity_node
+  description: Data Vault hub for hub_connectivity_node
+  columns:
+  - name: HK_CONNECTIVITY_NODE
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null

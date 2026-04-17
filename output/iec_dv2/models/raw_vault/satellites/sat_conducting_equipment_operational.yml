@@ -1,0 +1,15 @@
+version: 2
+models:
+- name: sat_conducting_equipment_operational
+  description: Data Vault satellite for sat_conducting_equipment_operational
+  columns:
+  - name: HK_CONDUCTING_EQUIPMENT
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null
+  - name: HASHDIFF_CE_OPERATIONAL
+    tests:
+    - not_null

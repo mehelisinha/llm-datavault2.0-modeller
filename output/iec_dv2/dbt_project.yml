@@ -1,0 +1,52 @@
+name: iec61968_cim
+profile: iec61968_cim_databricks
+model-paths:
+- models
+analysis-paths:
+- analyses
+test-paths:
+- tests
+seed-paths:
+- data/seeds
+macro-paths:
+- macros
+snapshot-paths:
+- snapshots
+target-path: target
+clean-targets:
+- target
+- dbt_packages
+vars:
+  load_date: '{{ run_started_at.strftime(''%Y-%m-%d'') }}'
+  record_source: IEC61968_CIM_v2.0
+models:
+  iec61968_cim:
+    staging:
+      +schema: staging
+      +materialized: view
+      +tags:
+      - staging
+      +catalog: edh_unreg_silver_dev_st
+    raw_vault:
+      +schema: raw_vault
+      +tags:
+      - raw_vault
+      hubs:
+        +materialized: incremental
+        +incremental-strategy: merge
+      links:
+        +materialized: incremental
+        +incremental-strategy: merge
+      satellites:
+        +materialized: incremental
+        +incremental-strategy: merge
+      eff_sats:
+        +materialized: incremental
+        +incremental-strategy: merge
+      +catalog: edh_unreg_silver_dev_st
+    business_vault:
+      +schema: business_vault
+      +materialized: table
+      +tags:
+      - business_vault
+      +catalog: edh_unreg_silver_dev_st

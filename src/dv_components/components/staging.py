@@ -4,11 +4,11 @@ Hub component for Data Vault v2.
 
 from logging import Logger
 
-from src.dv_components.components.base import DVBaseRawVaultComponent
+from src.dv_components.components.base import DVBaseStagingComponent
 from src.dv_components.components.model import DVComponentModel, StagingModel
 
 
-class Staging(DVBaseRawVaultComponent):
+class Staging(DVBaseStagingComponent):
     """Data Vault Hub component."""
 
     def __init__(self, model: DVComponentModel, logger: Logger):
@@ -19,9 +19,17 @@ class Staging(DVBaseRawVaultComponent):
         self.stg_model: StagingModel = model.meta
 
     def _get_render_kwargs(self) -> dict:
+        # When source_name is set, render as a dbt source dict: {'bronze': 'table'}
+        # automate_dv.stage() resolves this to {{ source('bronze', 'table') }}
+        if self.stg_model.source_name:
+            source_ref = {self.stg_model.source_name: self.stg_model.source_model[0]}
+            source_model_rendered = repr(source_ref)
+        else:
+            source_model_rendered = self._formatter.format_list(self.stg_model.source_model)
+
         return dict(
             config_options=self._build_config(),
-            source_model=self._formatter.format_list(self.stg_model.source_model),
+            source_model=source_model_rendered,
             include_source_columns=self.stg_model.include_source_columns,
             hashed_columns=self.stg_model.get_dv_from_field("hashed_columns"),
             derived_columns=self.stg_model.get_dv_from_field("derived_columns"),
@@ -46,7 +54,7 @@ class Staging(DVBaseRawVaultComponent):
                      derived_columns=derived_columns,
                      null_columns=null_columns,
                      hashed_columns=hashed_columns,
-                     ranked_columns=none) }}
+                     ranked_columns=ranked_columns) }}
 """
 
 
