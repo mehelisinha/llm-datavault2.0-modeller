@@ -17,12 +17,12 @@
     )
 }}
 
-{%- set source_model = ['stg_terminals'] -%}
+{%- set source_model = 'stg_terminals' -%}
 {%- set src_pk       = 'HK_TERMINAL' -%}
 {%- set src_hashdiff = 'HASHDIFF_TERMINAL_DETAILS' -%}
 {%- set src_payload  = ['name', 'sequence_number', 'phases', 'connected'] -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
-{%- set src_source   = 'IEC61968_CIM_v2.0' -%}
+{%- set src_source   = 'RECORD_SOURCE' -%}
 {%- set src_eff      = 'EFFECTIVE_FROM' -%}
 {{ automate_dv.sat(
     src_pk      = src_pk,

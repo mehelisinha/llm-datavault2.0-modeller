@@ -58,7 +58,8 @@ class Metadata:
 
     @property
     def _record_source(self) -> str:
-        return self.system.get("record_source", self.system_name)
+        return "RECORD_SOURCE"
+        # return self.system.get("record_source", self.system_name)
 
     @property
     def packages(self) -> list[dict]:
@@ -186,6 +187,7 @@ class Metadata:
                     "driving_fk",
                     "secondary_fk",
                     "effective_from",
+                    "start_date",
                     "end_date",
                 },
                 "eff_sat",
@@ -198,6 +200,7 @@ class Metadata:
                 src_sfk=sfk if isinstance(sfk, list) else [sfk],
                 src_eff=entry["effective_from"],
                 src_end_date=entry["end_date"],
+                src_start_date=entry["start_date"],
                 src_ldts=_DEFAULT_LDTS,
                 src_source=self._record_source,
             )

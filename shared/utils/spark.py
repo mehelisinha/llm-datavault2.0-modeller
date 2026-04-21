@@ -22,6 +22,21 @@ def get_spark() -> Optional[SparkSession]:
     else:
         return None
 
+    # @staticmethod
+    # def _get_spark_session() -> Any | None:
+    #     try:
+    #         from pyspark.sql import SparkSession
+    #     except Exception:
+    #         return None
+
+    #     spark = SparkSession.getActiveSession()
+    #     if spark is None:
+    #         try:
+    #             spark = SparkSession.builder.getOrCreate()
+    #         except Exception:
+    #             return None
+    #     return spark
+
 
 def get_dbutils(spark):  # type: ignore
     try:

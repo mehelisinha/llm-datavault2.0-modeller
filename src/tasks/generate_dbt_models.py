@@ -6,18 +6,22 @@
 # ── Configuration ─────────────────────────────────────────────────────────────
 # Adjust these values per system / environment.
 
-SYSTEM_NAME   = "IEC61968_CIM"
+SYSTEM_NAME = "IEC61968_CIM"
 METADATA_YAML = "poc/metadata/iec_cim_metadata.yaml"  # relative to dwa root
-GITLAB_URL    = "https://git.example.com/repos/edh-group/dwa.git"
-COMMIT_MSG    = f"Auto-generated dbt models for {SYSTEM_NAME}"
+GITLAB_URL = "https://git.example.com/repos/edh-group/dwa.git"
+COMMIT_MSG = f"Auto-generated dbt models for {SYSTEM_NAME}"
 
 # COMMAND ----------
+import os
 from pathlib import Path
 
+from pyspark import dbutils
+
+from shared.auth.token_mgr import TokenManager
 from shared.logger.default_logger import default_logger
 from shared.utils.proj_dir_mgr import ProjectDirBulder
 from src.runners.dbt_builder import DBTBuilder
-from src.runners.dbt_runner import DbtRunner
+from src.runners.dbt_runner import DbtDbRunner
 
 # `root_path` is injected into this notebook's scope by the %run ./add_paths cell above.
 # add_paths.py walks up from the current notebook path until it finds the "src" directory,
@@ -28,9 +32,9 @@ from src.runners.dbt_runner import DbtRunner
 # Example: if this notebook lives at /Users/me/DWA/dwa/src/tasks/generate_dbt_models
 #          then root_path = Path('/Users/me/DWA/dwa')
 #          and  dwa_root  = Path('/Workspace/Users/me/DWA/dwa')   (Databricks FUSE path)
-dwa_root      = Path(f"/Workspace/{root_path}")
+dwa_root = Path(f"/Workspace/{root_path}")
 metadata_path = dwa_root / METADATA_YAML
-output_path   = dwa_root.parent / "dbt" / SYSTEM_NAME
+output_path = dwa_root.parent / "dbt" / SYSTEM_NAME
 
 print(f"System     : {SYSTEM_NAME}")
 print(f"Metadata   : {metadata_path}")
@@ -49,6 +53,10 @@ proj_dir._target_path = str(output_path)
 proj_dir.create_and_clone_git()
 
 # COMMAND ----------
+# ── Set Env Token ───────────────────────────────────────────────────────
+token_mgr = TokenManager(default_logger)
+os.environ["DBT_DATABRICKS_TOKEN"] = token_mgr.api_token
+# COMMAND ----------
 # ── Generate dbt models ───────────────────────────────────────────────────────
 builder = DBTBuilder(
     metadata_path=metadata_path,
@@ -58,13 +66,17 @@ builder.build()
 
 # COMMAND ----------
 # ── Push to GitLab ────────────────────────────────────────────────────────────
-proj_dir.push_to_gitlab(commit_message=COMMIT_MSG)
+# proj_dir.push_to_gitlab(commit_message=COMMIT_MSG)
 
 # COMMAND ----------
 # ── Run dbt pipeline ─────────────────────────────────────────────────────────
-dbt = DbtRunner(project_path=output_path)
-dbt.run_all_layers()
+dbt = DbtDbRunner(project_path=output_path, profiles_dir=output_path)
+dbt.run_all_layers(caller="subprocess")
 
+# COMMAND ----------
+dbutils.notebook.exit(
+    "DBT model generation complete. Check the output directory and GitLab repository for results."
+)
 # COMMAND ----------
 # ── Verify generated files ────────────────────────────────────────────────────
 import os
@@ -74,4 +86,3 @@ for dirpath, _, filenames in os.walk(output_path):
     for fname in sorted(filenames):
         full = Path(dirpath) / fname
         print(f"  {full.relative_to(output_path)}")
-

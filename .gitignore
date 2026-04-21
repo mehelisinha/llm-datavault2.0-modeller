@@ -7,5 +7,5 @@ __pycache__
 logs
 uv.lock
 TBD_*
-output
-profiles.yml
+output/
+**/profiles.yml

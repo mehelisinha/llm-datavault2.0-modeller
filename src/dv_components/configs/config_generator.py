@@ -5,17 +5,15 @@ Generates dbt schema YAML files (version: 2 / models: [...]) for hub/link/satell
 from Data Vault components, compatible with dbt's model documentation format.
 """
 
-import os
 from logging import Logger
 from pathlib import Path
 
-import yaml
-
 from shared.logger.default_logger import default_logger
+from src.dv_components.configs.base_yml_generator import BaseYmlGenerator
 from src.dv_components.models.model import DVComponentModel
 
 
-class DVConfigGenerator:
+class DVConfigGenerator(BaseYmlGenerator):
     """Generate dbt-compatible schema YAML for a Data Vault component."""
 
     def __init__(
@@ -24,29 +22,21 @@ class DVConfigGenerator:
         project_path: str,
         logger: Logger = default_logger,
     ):
+        super().__init__(logger=logger, project_path=project_path)
         self.model = model
-        self.project_path = project_path
-        self.logger = logger
 
-    def write(self) -> str:
+    def _relative_output_path(self) -> Path:
+        base_path = self.model.base_models_path
+        if not base_path:
+            return Path(f"{self.model.name}.yml")
+        return Path(base_path) / f"{self.model.name}.yml"
+
+    def write(self, project_path: str | Path | None = None) -> str:
         """Write a dbt schema YAML file and return the file path."""
-        path = self.model.base_models_path
-        output_dir = (
-            os.path.join(self.project_path, path) if path else self.project_path
-        )
-        out_path = Path(output_dir) / f"{self.model.name}.yml"
-
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            yaml.dump(
-                self._build_schema_dict(), sort_keys=False, default_flow_style=False
-            ),
-            encoding="utf-8",
-        )
-        return str(out_path)
+        return str(super().write(project_path=project_path))
 
     # @tag:to_do: move this to its own class inside config dir: Schema
-    def _build_schema_dict(self) -> dict:
+    def _build_yaml_dict(self) -> dict:
         """Build a dbt-compatible schema dict (version: 2, models: [...])."""
         return {
             "version": 2,

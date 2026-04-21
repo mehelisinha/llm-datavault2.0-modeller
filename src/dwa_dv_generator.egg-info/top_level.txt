@@ -1,6 +1,6 @@
 __init__
-dv
-models
+dv_components
+runners
 scripts
 tasks
 utils

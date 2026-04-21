@@ -1,13 +1,12 @@
 from logging import Logger
 from pathlib import Path
 
-import yaml
-
+from src.dv_components.configs.base_yml_generator import BaseYmlGenerator
 from src.dv_components.helpers.yml_helper import YmlHelper
 from src.dv_components.models.model import DVComponentModel, DVProjectModel
 
 
-class DBTProject:
+class DBTProject(BaseYmlGenerator):
     """Generates dbt_project.yml configuration from a DVProjectModel."""
 
     _INCREMENTAL_CONFIG = {
@@ -25,8 +24,8 @@ class DBTProject:
     }
 
     def __init__(self, model: DVComponentModel, logger: Logger):
+        super().__init__(logger=logger)
         self.model = model
-        self.logger = logger
         if not isinstance(model.meta, DVProjectModel):
             raise ValueError(f"Expected DVProjectModel, got {type(model.meta)}")
         self.proj_model: DVProjectModel = model.meta
@@ -37,24 +36,23 @@ class DBTProject:
 
     def generate(self) -> str:
         """Return the dbt_project.yml content as a YAML string."""
-        yaml_str = yaml.dump(
-            self._build_project_dict(), sort_keys=False, default_flow_style=False
-        )
-        self.logger.debug(f"Generated dbt_project.yml:\n{yaml_str}")
-        return yaml_str
+        return super().generate()
 
-    def write(self, project_path: str, yaml_content: str):
-        out_path = Path(project_path) / "dbt_project.yml"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(yaml_content, encoding="utf-8")
-        self.logger.debug(f"  YML  → {out_path}")
-        return out_path
+    def write(
+        self,
+        project_path: str,
+        yaml_content: str | None = None,
+    ):
+        if yaml_content is not None:
+            out_path = Path(project_path) / self._relative_output_path()
+            return self._write_content(out_path, yaml_content)
+        return super().write(project_path=project_path)
 
     # ------------------------------------------------------------------
     # Project dict assembly
     # ------------------------------------------------------------------
 
-    def _build_project_dict(self) -> dict:
+    def _build_yaml_dict(self) -> dict:
         params = self._get_filtered_params()
         # vars keys are user-defined (e.g. load_date) — must NOT be kebab-cased
         vars_val = params.pop("vars", None)
@@ -67,6 +65,9 @@ class DBTProject:
             project["vars"] = vars_val
         project["models"] = self._get_config()
         return project
+
+    def _relative_output_path(self) -> Path:
+        return Path("dbt_project.yml")
 
     def _get_filtered_params(self) -> dict:
         return {

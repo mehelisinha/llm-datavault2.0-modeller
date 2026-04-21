@@ -30,9 +30,11 @@ dependencies = [
     # ── utilities ──────────────────────────────
     "pandas>=2.2,<4",
 
-    # -- docs ----------------
+    # -- docs ──────────────────────────────
     "mistune",
-    "markdown"
+    "markdown",
+    # ── Databricks ──────────────────────────────
+    "databricks-connect~=15.4.3",
 ]
 
 [project.scripts]
@@ -49,6 +51,7 @@ dev = [
 
 ]
 
+# ── Foramt and Linting ─────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py39"
@@ -60,6 +63,3 @@ indent-style = "space"
 select = ["E", "F", "I", "B"]
 ignore = ["E501"]
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"

@@ -50,7 +50,7 @@ class Satellite(SatelliteBase):
                     ]
                 }
             ),
-            source_model=self._formatter.format_list(self.satellite_model.source_model),
+            source_model=self.satellite_model.source_model[0],
             src_pk=self.satellite_model.src_pk,
             src_hashdiff=self.satellite_model.src_hashdiff,
             src_payload=self._formatter.format_list(self.satellite_model.src_payload),
@@ -64,7 +64,7 @@ class Satellite(SatelliteBase):
         return """
 <% set rendered = render_config(config_options) %>
 <<rendered>>
-{%- set source_model = <<source_model>> -%}
+{%- set source_model = '<<source_model>>' -%}
 {%- set src_pk       = '<<src_pk>>' -%}
 {%- set src_hashdiff = '<<src_hashdiff>>' -%}
 {%- set src_payload  = <<src_payload>> -%}
@@ -102,11 +102,12 @@ class EffSat(SatelliteBase):
             config_options=self._build_config(
                 {"unique_key": [self.eff_sat_model.src_pk, self.eff_sat_model.src_ldts]}
             ),
-            source_model=self._formatter.format_list(self.eff_sat_model.source_model),
+            source_model=self.eff_sat_model.source_model[0],
             src_pk=self.eff_sat_model.src_pk,
             src_dfk=self.eff_sat_model.src_dfk,
             src_sfk=src_sfk_rendered,
             src_eff=self.eff_sat_model.src_eff,
+            src_start_date=self.eff_sat_model.src_start_date, #when a relationship starts in the source system
             src_end_date=self.eff_sat_model.src_end_date,
             src_ldts=self.eff_sat_model.src_ldts,
             src_source=self.eff_sat_model.src_source,
@@ -117,12 +118,15 @@ class EffSat(SatelliteBase):
         return """
 <% set rendered = render_config(config_options) %>
 <<rendered>>
-{%- set source_model = <<source_model>> -%}
+{%- set source_model = '<<source_model>>' -%}
 {%- set src_pk       = '<<src_pk>>' -%}
 {%- set src_dfk      = '<<src_dfk>>' -%}
 {%- set src_sfk      = <<src_sfk>> -%}
-{%- set src_eff      = '<<src_eff>>' -%}
+
+{%- set src_start_date = '<<src_start_date>>' -%}
 {%- set src_end_date = '<<src_end_date>>' -%}
+
+{%- set src_eff      = '<<src_eff>>' -%}
 {%- set src_ldts     = '<<src_ldts>>' -%}
 {%- set src_source   = '<<src_source>>' -%}
 {{ automate_dv.eff_sat(

@@ -18,7 +18,7 @@ clean-targets:
 - dbt_packages
 vars:
   load_date: '{{ run_started_at.strftime(''%Y-%m-%d'') }}'
-  record_source: IEC61968_CIM_v2.0
+  record_source: RECORD_SOURCE
 models:
   iec61968_cim:
     staging:

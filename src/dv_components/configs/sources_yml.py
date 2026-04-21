@@ -1,17 +1,16 @@
 from logging import Logger
 from pathlib import Path
 
-import yaml
-
+from src.dv_components.configs.base_yml_generator import BaseYmlGenerator
 from src.dv_components.models.model import DVComponentModel, DVSourceModel, TableConfig
 
 
-class DBTSources:
+class DBTSources(BaseYmlGenerator):
     """Generates sources.yml configuration from a DVSourcesModel."""
 
     def __init__(self, model: DVComponentModel, logger: Logger):
+        super().__init__(logger=logger)
         self.model = model
-        self.logger = logger
         if not isinstance(model.meta, DVSourceModel):
             raise ValueError(f"Expected DVProjectModel, got {type(model.meta)}")
         self.sources_model: DVSourceModel = model.meta
@@ -21,25 +20,24 @@ class DBTSources:
     # ------------------------------------------------------------------
 
     def generate(self) -> str:
-        """Return the dbt_project.yml content as a YAML string."""
-        yaml_str = yaml.dump(
-            self._build_project_dict(), sort_keys=False, default_flow_style=False
-        )
-        self.logger.debug(f"Generated sources.yml:\n{yaml_str}")
-        return yaml_str
+        """Return the sources.yml content as a YAML string."""
+        return super().generate()
 
-    def write(self, project_path: str, yaml_content: str):
-        out_path = Path(project_path) / "models" / "staging" / "sources.yml"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(yaml_content, encoding="utf-8")
-        self.logger.debug(f"  YML  → {out_path}")
-        return out_path
+    def write(
+        self,
+        project_path: str,
+        yaml_content: str | None = None,
+    ):
+        if yaml_content is not None:
+            out_path = Path(project_path) / self._relative_output_path()
+            return self._write_content(out_path, yaml_content)
+        return super().write(project_path=project_path)
 
     # ------------------------------------------------------------------
     # Project dict assembly
     # ------------------------------------------------------------------
 
-    def _build_project_dict(self) -> dict:
+    def _build_yaml_dict(self) -> dict:
 
         data = self.model.meta.model_dump(
             by_alias=True,
@@ -48,6 +46,9 @@ class DBTSources:
         sources_data = {}
         sources_data["sources"] = [data]
         return sources_data
+
+    def _relative_output_path(self) -> Path:
+        return Path("models") / "staging" / "sources.yml"
 
 
 if __name__ == "__main__":

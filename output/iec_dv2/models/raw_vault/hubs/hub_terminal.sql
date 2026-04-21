@@ -21,7 +21,7 @@
 {%- set src_pk       = 'HK_TERMINAL' -%}
 {%- set src_nk       = 'mrid' -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
-{%- set src_source   = 'IEC61968_CIM_v2.0' -%}
+{%- set src_source   = 'RECORD_SOURCE' -%}
 {{ automate_dv.hub(
     src_pk      = src_pk,
     src_nk      = src_nk,

@@ -21,7 +21,7 @@
 {%- set src_pk       = 'HK_TERMINAL_EQUIPMENT_NODE' -%}
 {%- set src_fk       = ['HK_TERMINAL', 'HK_CONDUCTING_EQUIPMENT', 'HK_CONNECTIVITY_NODE'] -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
-{%- set src_source   = 'IEC61968_CIM_v2.0' -%}
+{%- set src_source   = 'RECORD_SOURCE' -%}
 {{ automate_dv.link(
     src_pk      = src_pk,
     src_fk      = src_fk,

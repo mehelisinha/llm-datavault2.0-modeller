@@ -17,12 +17,12 @@
     )
 }}
 
-{%- set source_model = ['stg_conducting_equipment'] -%}
+{%- set source_model = 'stg_conducting_equipment' -%}
 {%- set src_pk       = 'HK_CONDUCTING_EQUIPMENT' -%}
 {%- set src_hashdiff = 'HASHDIFF_CE_DETAILS' -%}
 {%- set src_payload  = ['name', 'equipment_type', 'base_voltage_kv', 'manufacturer', 'model', 'serial_number'] -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
-{%- set src_source   = 'IEC61968_CIM_v2.0' -%}
+{%- set src_source   = 'RECORD_SOURCE' -%}
 {%- set src_eff      = 'EFFECTIVE_FROM' -%}
 {{ automate_dv.sat(
     src_pk      = src_pk,

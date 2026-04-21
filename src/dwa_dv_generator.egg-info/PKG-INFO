@@ -14,6 +14,7 @@ Requires-Dist: pydantic<3,>=2.7
 Requires-Dist: pandas<4,>=2.2
 Requires-Dist: mistune
 Requires-Dist: markdown
+Requires-Dist: databricks-connect~=15.4.3
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"

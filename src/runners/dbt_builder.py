@@ -13,10 +13,7 @@ from logging import Logger
 from pathlib import Path
 
 from shared.logger.default_logger import default_logger
-from src.dv_components.configs.config_generator import DVConfigGenerator
-from src.dv_components.configs.packages_yml import DVPackagesGenerator
-from src.dv_components.configs.project_yml import DBTProject
-from src.dv_components.configs.sources_yml import DBTSources
+from src.dv_components.configs.generator_factory import YmlGeneratorFactory
 from src.dv_components.factory.dv_component_manager import DVComponentManager
 from src.dv_components.models.model import (
     DVComponentModel,
@@ -65,10 +62,11 @@ class DBTBuilder:
             f"Building dbt project for '{self._metadata.system_name}' "
             f"→ {self._output_path}"
         )
+        # SchemaValidator(metadata=self._metadata, logger=self._logger).validate()
+        self._write_macros()
         self._write_component_files()
         self._write_project_yml()
         self._write_packages_yml()
-        self._write_macros()
         self._write_sources_yml()
         self._logger.info("Build complete.")
 
@@ -85,30 +83,30 @@ class DBTBuilder:
             )
             self._logger.debug(f"  SQL  → {sql_path}")
 
-            yml_path = DVConfigGenerator(
+            yml_path = YmlGeneratorFactory.create(
                 model=model,
-                project_path=self._output_path,
                 logger=self._logger,
+                project_path=self._output_path,
             ).write()
             self._logger.debug(f"  YML  → {yml_path}")
 
     def _write_project_yml(self) -> None:
         project_model = self._metadata.get_project_model()
-        dbt_proj = DBTProject(model=project_model, logger=self._logger)
-        yaml_content = dbt_proj.generate()
-
-        output_path = dbt_proj.write(
-            project_path=self._output_path, yaml_content=yaml_content
+        output_path = YmlGeneratorFactory.create(
+            model=project_model,
+            logger=self._logger,
+        ).write(
+            project_path=self._output_path,
         )
         self._logger.debug(f"  PRJ  → {output_path}")
 
     def _write_packages_yml(self) -> None:
         packages_model = self._metadata.get_packages_model()
-        pkg_path = DVPackagesGenerator(
+        pkg_path = YmlGeneratorFactory.create(
             model=packages_model,
-            project_path=self._output_path,
             logger=self._logger,
-        ).generate()
+            project_path=self._output_path,
+        ).write()
         self._logger.debug(f"  PKG  → {pkg_path}")
 
     def _write_macros(self) -> None:
@@ -136,11 +134,11 @@ class DBTBuilder:
         )
 
         model = DVComponentModel(name="iec_dv2", meta=model)
-        dbt_sources = DBTSources(model=model, logger=default_logger)
-        yaml_content = dbt_sources.generate()
-        out_path = dbt_sources.write(
+        out_path = YmlGeneratorFactory.create(
+            model=model,
+            logger=default_logger,
+        ).write(
             project_path=self._output_path,
-            yaml_content=yaml_content,
         )
         self._logger.debug(f"  SRC  → {out_path}")
 

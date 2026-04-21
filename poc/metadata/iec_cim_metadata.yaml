@@ -126,6 +126,7 @@ eff_sats:
       - HK_CONDUCTING_EQUIPMENT
       - HK_CONNECTIVITY_NODE
     effective_from: EFFECTIVE_FROM          # src_eff / src_start_date
+    start_date: EFFECTIVE_FROM
     end_date: LOAD_DATE                     # src_end_date — closed by CDC deletion records
 
 # ── Staging Models ────────────────────────────────────────────────────────────

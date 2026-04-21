@@ -17,12 +17,12 @@
     )
 }}
 
-{%- set source_model = ['stg_connectivity_nodes'] -%}
+{%- set source_model = 'stg_connectivity_nodes' -%}
 {%- set src_pk       = 'HK_CONNECTIVITY_NODE' -%}
 {%- set src_hashdiff = 'HASHDIFF_CONNECTIVITY_NODE_DETAILS' -%}
 {%- set src_payload  = ['name', 'description'] -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
-{%- set src_source   = 'IEC61968_CIM_v2.0' -%}
+{%- set src_source   = 'RECORD_SOURCE' -%}
 {%- set src_eff      = 'EFFECTIVE_FROM' -%}
 {{ automate_dv.sat(
     src_pk      = src_pk,
