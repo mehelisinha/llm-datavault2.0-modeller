@@ -13,6 +13,12 @@ class DBTModelNames(StrEnum):
     SOURCES = "sources"
     PACKAGES = "packages"
     PROFILES = "profiles"
+    # ── Business Vault ─────────────────────────────────────────────────────────
+    PIT = "pit"
+    BRIDGE = "bridge"
+    DIM = "dim"
+    FACT = "fact"
+    BV_SAT = "bv_sat"
 
 
 class DbtPaths(StrEnum):
@@ -24,7 +30,13 @@ class DbtPaths(StrEnum):
     LINKS = f"models/{DBTModelNames.RAW_VAULT}/links"
     SATELLITES = f"models/{DBTModelNames.RAW_VAULT}/satellites"
     EFF_SATS = f"models/{DBTModelNames.RAW_VAULT}/eff_sats"
-    BUSINESS_VAULTS = f"models/{DBTModelNames.BUSINESS_VAULT}"
+    BUSINESS_VAULT = f"models/{DBTModelNames.BUSINESS_VAULT}"
+    # ── Business Vault sub-paths ────────────────────────────────────────────────
+    PIT_TABLES = f"models/{DBTModelNames.BUSINESS_VAULT}/pit"
+    BRIDGE_TABLES = f"models/{DBTModelNames.BUSINESS_VAULT}/bridge"
+    DIM_TABLES = f"models/{DBTModelNames.BUSINESS_VAULT}/dim"
+    FACT_TABLES = f"models/{DBTModelNames.BUSINESS_VAULT}/fact"
+    BV_SATELLITES = f"models/{DBTModelNames.BUSINESS_VAULT}/bv_sats"
     SNAPSHOTS = "snapshots"
     SEEDS = "seeds"
     TESTS = "tests"

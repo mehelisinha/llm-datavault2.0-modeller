@@ -11,4 +11,6 @@ output/
 **/profiles.yml
 **/*.log
 .structurizr/
+.structurizr
 .DS_Store
+PRIVAT/
