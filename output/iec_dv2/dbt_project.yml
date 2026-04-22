@@ -17,35 +17,35 @@ clean-targets:
 - target
 - dbt_packages
 vars:
-  load_date: '{{ run_started_at.strftime(''%Y-%m-%d'') }}'
-  record_source: RECORD_SOURCE
+  load_date: "{{ run_started_at.strftime('%Y-%m-%d') }}"
+  record_source: IEC61968_CIM_v2.0
 models:
   iec61968_cim:
     staging:
-      +schema: staging
+      +schema: iec61968_cim_staging
       +materialized: view
       +tags:
       - staging
       +catalog: edh_unreg_silver_dev_st
     raw_vault:
-      +schema: raw_vault
+      +schema: iec61968_cim_raw_vault
       +tags:
       - raw_vault
       hubs:
         +materialized: incremental
-        +incremental-strategy: merge
+        +incremental_strategy: merge
       links:
         +materialized: incremental
-        +incremental-strategy: merge
+        +incremental_strategy: merge
       satellites:
         +materialized: incremental
-        +incremental-strategy: merge
+        +incremental_strategy: merge
       eff_sats:
         +materialized: incremental
-        +incremental-strategy: merge
+        +incremental_strategy: merge
       +catalog: edh_unreg_silver_dev_st
     business_vault:
-      +schema: business_vault
+      +schema: iec61968_cim_business_vault
       +materialized: table
       +tags:
       - business_vault

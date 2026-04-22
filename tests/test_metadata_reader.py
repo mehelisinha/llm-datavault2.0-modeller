@@ -22,9 +22,9 @@ import yaml
 # Make sure src/ is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from dv_components.models.hub import Hub
-from dv_components.models.link import Link
-from dv_components.models.satellite import Satellite
+from dv_components.components.sql.raw_vault.hub import HubComponent
+from dv_components.components.sql.raw_vault.link import LinkComponent
+from dv_components.components.sql.raw_vault.satellite import SatComponent
 from poc.metadata.reader import MetadataReader
 
 # ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_missing_top_level_key_raises(tmp_path: Path) -> None:
 def test_get_hubs_returns_hub_objects(reader: MetadataReader) -> None:
     hubs = reader.get_hubs()
     assert len(hubs) == 1
-    assert isinstance(hubs[0], Hub)
+    assert isinstance(hubs[0], HubComponent)
 
 
 def test_hub_fields(reader: MetadataReader) -> None:
@@ -159,7 +159,7 @@ def test_hub_missing_required_key_raises(tmp_path: Path) -> None:
 def test_get_satellites_returns_satellite_objects(reader: MetadataReader) -> None:
     sats = reader.get_satellites()
     assert len(sats) == 1
-    assert isinstance(sats[0], Satellite)
+    assert isinstance(sats[0], SatComponent)
 
 
 def test_satellite_fields(reader: MetadataReader) -> None:
@@ -198,7 +198,7 @@ def test_satellite_with_effective_from(tmp_path: Path) -> None:
 def test_get_links_returns_link_objects(reader: MetadataReader) -> None:
     links = reader.get_links()
     assert len(links) == 1
-    assert isinstance(links[0], Link)
+    assert isinstance(links[0], LinkComponent)
 
 
 def test_link_fields(reader: MetadataReader) -> None:

@@ -8,7 +8,7 @@
 
         materialized="view",
 
-        tags=["staging"]
+        tags=["staging", "stagingcomponent"]
 
     )
 }}

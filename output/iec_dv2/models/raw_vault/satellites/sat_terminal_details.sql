@@ -10,7 +10,7 @@
 
         incremental_strategy="merge",
 
-        tags=["raw_vault", "satellite"],
+        tags=["raw_vault", "satcomponent"],
 
         unique_key=["HK_TERMINAL", "LOAD_DATE"]
 

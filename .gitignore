@@ -9,3 +9,5 @@ uv.lock
 TBD_*
 output/
 **/profiles.yml
+**/*.log
+.structurizr/

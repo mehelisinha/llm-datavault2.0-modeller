@@ -1,9 +1,9 @@
-
 from __future__ import annotations
 
 from pathlib import Path
 
-from dv_components.configs.config_generator import DVConfigGenerator
+from src.dv_components.TBD_configs.config_generator import DVConfigGenerator
+
 from poc.metadata.reader import MetadataReader
 from shared.infra.file_manager.concrete.file_handler import DVGenerator
 from shared.logger.default_logger import default_logger
@@ -16,8 +16,8 @@ from shared.logger.default_logger import default_logger
 class MetadataModelGenerator:
     def __init__(
         self,
-        config_path: Path ,
-        output_path: Path ,
+        config_path: Path,
+        output_path: Path,
         dry_run: bool = False,
         overwrite: bool = True,
     ):
@@ -32,9 +32,7 @@ class MetadataModelGenerator:
         reader = MetadataReader(str(self.config_path))
 
         system = reader.system
-        default_logger.info(
-            f"System: {system['system_name']} ({system['system_id']})"
-        )
+        default_logger.info(f"System: {system['system_name']} ({system['system_id']})")
 
         hubs = reader.get_hubs()
         links = reader.get_links()
@@ -52,9 +50,7 @@ class MetadataModelGenerator:
         self._generate_sql(all_components)
         self._generate_yaml(all_components)
 
-        default_logger.info(
-            f"Generated {len(all_components)} components successfully"
-        )
+        default_logger.info(f"Generated {len(all_components)} components successfully")
 
     def _dry_run(self, components) -> None:
         default_logger.info("DRY RUN — generated SQL")
@@ -78,9 +74,7 @@ class MetadataModelGenerator:
 
         default_logger.info("Generating YAML metadata files")
 
-        config_generator = DVConfigGenerator(
-            project_path=str(self.output_path)
-        )
+        config_generator = DVConfigGenerator(project_path=str(self.output_path))
 
         yaml_paths = config_generator.generate_all_yaml(components)
 

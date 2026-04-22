@@ -10,7 +10,7 @@
 
         incremental_strategy="merge",
 
-        tags=["raw_vault", "link"],
+        tags=["raw_vault", "linkcomponent"],
 
         unique_key="HK_TERMINAL_EQUIPMENT_NODE"
 

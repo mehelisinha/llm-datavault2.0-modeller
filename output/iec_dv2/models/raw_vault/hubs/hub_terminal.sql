@@ -10,7 +10,7 @@
 
         incremental_strategy="merge",
 
-        tags=["raw_vault", "hub"],
+        tags=["raw_vault", "hubcomponent"],
 
         unique_key="HK_TERMINAL"
 

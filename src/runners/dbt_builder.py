@@ -9,18 +9,13 @@ Given a metadata YAML path and an output directory, DBTBuilder:
 
 from __future__ import annotations
 
+import shutil
 from logging import Logger
 from pathlib import Path
 
 from shared.logger.default_logger import default_logger
-from src.dv_components.configs.generator_factory import YmlGeneratorFactory
-from src.dv_components.factory.dv_component_manager import DVComponentManager
-from src.dv_components.models.model import (
-    DVComponentModel,
-    DVSourceModel,
-    MacroModel,
-    TableConfig,
-)
+from src.dv_components.manager.dv_component_manager import DVComponentManager
+from src.dv_components.pydantic_model.discriminator import DvModels
 from src.runners.metadata import Metadata
 
 
@@ -62,95 +57,53 @@ class DBTBuilder:
             f"Building dbt project for '{self._metadata.system_name}' "
             f"→ {self._output_path}"
         )
-        # SchemaValidator(metadata=self._metadata, logger=self._logger).validate()
-        self._write_macros()
-        self._write_component_files()
-        self._write_project_yml()
-        self._write_packages_yml()
-        self._write_sources_yml()
+        self.cleanup_output_location()
+        for key, model_component_list in self._get_component_models().items():
+            for component_model in model_component_list:
+                self._write_component_files(component_model, key=key)
+
         self._logger.info("Build complete.")
+
+    def cleanup_output_location(self) -> Path:
+        """Remove and recreate the build output directory."""
+        output_dir = Path(self._output_path)
+
+        # Safety guard to avoid accidental deletion of filesystem roots.
+        if output_dir.resolve() == output_dir.anchor:
+            raise ValueError(f"Refusing to clean unsafe output path: {output_dir}")
+
+        if output_dir.exists():
+            self._logger.info(f"Cleaning output directory: {output_dir}")
+            shutil.rmtree(output_dir)
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
 
     # ------------------------------------------------------------------
     # Internal steps
     # ------------------------------------------------------------------
+    def _get_component_models(self) -> dict[str, list[DvModels]]:
+        return self._metadata.get_all_component_models()
 
-    def _write_component_files(self) -> None:
-        for model in self._metadata.get_all_component_models():
-            sql_path = DVComponentManager.write_sql_file(
-                model=model,
-                project_path=self._output_path,
-                logger=self._logger,
-            )
-            self._logger.debug(f"  SQL  → {sql_path}")
-
-            yml_path = YmlGeneratorFactory.create(
-                model=model,
-                logger=self._logger,
-                project_path=self._output_path,
-            ).write()
-            self._logger.debug(f"  YML  → {yml_path}")
-
-    def _write_project_yml(self) -> None:
-        project_model = self._metadata.get_project_model()
-        output_path = YmlGeneratorFactory.create(
-            model=project_model,
-            logger=self._logger,
-        ).write(
-            project_path=self._output_path,
+    def _write_component_files(
+        self, component_model: DvModels, key: str = "dv"
+    ) -> None:
+        component = DVComponentManager(
+            model=component_model, project_path=self._output_path, logger=self._logger
         )
-        self._logger.debug(f"  PRJ  → {output_path}")
-
-    def _write_packages_yml(self) -> None:
-        packages_model = self._metadata.get_packages_model()
-        pkg_path = YmlGeneratorFactory.create(
-            model=packages_model,
-            logger=self._logger,
-            project_path=self._output_path,
-        ).write()
-        self._logger.debug(f"  PKG  → {pkg_path}")
-
-    def _write_macros(self) -> None:
-        macro_model = MacroModel()
-        model = DVComponentModel(name="generate_schema_name", meta=macro_model)
-        sql_path = DVComponentManager.write_sql_file(
-            model=model,
-            project_path=self._output_path,
-            logger=self._logger,
-        )
-        self._logger.debug(f"  MCR  → {sql_path}")
-
-    def _write_sources_yml(self) -> None:
-        """Generate models/staging/sources.yml from system metadata + staging entries."""
-        system = self._metadata.system
-        model = DVSourceModel(
-            name=system.get("schema"),
-            database=system.get("catalog"),
-            schema=system.get("schema"),
-            tables=[
-                TableConfig(name=entry["source_table"])
-                for entry in self._metadata._config.get("staging", [])
-                if "source_table" in entry
-            ],
-        )
-
-        model = DVComponentModel(name="iec_dv2", meta=model)
-        out_path = YmlGeneratorFactory.create(
-            model=model,
-            logger=default_logger,
-        ).write(
-            project_path=self._output_path,
-        )
-        self._logger.debug(f"  SRC  → {out_path}")
+        paths = component.write_files()
+        self._logger.debug(f"  {key}  → {paths}")
 
 
 if __name__ == "__main__":
     from pathlib import Path
 
+    yaml_path = Path(__file__).parents[2] / "poc" / "metadata" / "iec_cim_metadata.yaml"
+
     builder = DBTBuilder(
-        metadata_path=Path(__file__).parents[2]
-        / "poc"
-        / "metadata"
-        / "iec_cim_metadata.yaml",
+        metadata_path=yaml_path,
         output_path=Path(__file__).parents[2] / "output" / "iec_dv2",
     )
+    # models = builder._get_component_models()
+    # print(f"meta_models: ({models.__class__.__name__}):")
     builder.build()
