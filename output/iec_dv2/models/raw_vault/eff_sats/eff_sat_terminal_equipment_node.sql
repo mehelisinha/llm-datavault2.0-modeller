@@ -22,8 +22,7 @@
 {%- set src_dfk      = 'HK_TERMINAL' -%}
 {%- set src_sfk      = ['HK_CONDUCTING_EQUIPMENT', 'HK_CONNECTIVITY_NODE'] -%}
 
-{%- set src_start_date = 'EFFECTIVE_FROM' -%}
-{%- set src_end_date = 'LOAD_DATE' -%}
+{%- set src_start_date = 'START_DATE' -%}
 
 {%- set src_eff      = 'EFFECTIVE_FROM' -%}
 {%- set src_ldts     = 'LOAD_DATE' -%}
@@ -32,8 +31,7 @@
     src_pk         = src_pk,
     src_dfk        = src_dfk,
     src_sfk        = src_sfk,
-    src_start_date = src_eff,
-    src_end_date   = src_end_date,
+    src_start_date = src_start_date,
     src_eff        = src_eff,
     src_ldts       = src_ldts,
     src_source     = src_source,

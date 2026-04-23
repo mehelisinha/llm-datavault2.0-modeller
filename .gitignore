@@ -14,3 +14,4 @@ output/
 .structurizr
 .DS_Store
 PRIVAT/
+.egg-info

@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Union
 
 import yaml
 
-from dv_components.components.sql.raw_vault.hub import HubComponent
-from dv_components.components.sql.raw_vault.link import LinkComponent
-from dv_components.components.sql.raw_vault.satellite import SatComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.hub import HubComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.link import LinkComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.satellite import SatComponent
 
 # ---------------------------------------------------------------------------
 # Public types

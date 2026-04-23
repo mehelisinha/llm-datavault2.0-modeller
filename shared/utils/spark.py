@@ -1,7 +1,7 @@
 import sys
 from typing import Optional, cast
 
-from shared.logger.default_logger import default_logger
+from shared.src.logger.default_logger import default_logger
 
 SparkSessionType = None
 
@@ -43,7 +43,7 @@ def get_dbutils(spark):  # type: ignore
         from pyspark.dbutils import DBUtils
 
         return DBUtils(spark)  # type: ignore
-    except:
+    except Exception:
         default_logger.error("Dbutils not available")
 
 

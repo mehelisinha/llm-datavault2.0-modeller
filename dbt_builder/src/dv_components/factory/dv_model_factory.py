@@ -1,0 +1,48 @@
+from logging import Logger
+from typing import Any
+
+from dbt_builder.src.dv_components.components.project_level.packages_yml import PackagesComponent
+from dbt_builder.src.dv_components.components.project_level.project_yml import ProjectComponent
+from dbt_builder.src.dv_components.components.project_level.sources_yml import SourceCoponent
+from dbt_builder.src.dv_components.components.sql.macros.macro_factory import MacroComponentFactory
+from dbt_builder.src.dv_components.components.sql.raw_vault.hub import HubComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.link import LinkComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.satellite import (
+    EffSatComponent,
+    SatComponent,
+)
+from dbt_builder.src.dv_components.components.sql.staging.staging import StagingComponent
+from shared.src.logger.default_logger import default_logger
+from dbt_builder.src.dv_components.components.base import DVMBaseComponentGenerator
+from dbt_builder.src.dv_components.pydantic_model.discriminator import DvModels
+
+
+class DVComponentFactory:
+    _handlers: dict[str, Any] = {
+        # --- SQL Models ---#
+        "hub": HubComponent,
+        "link": LinkComponent,
+        "satellite": SatComponent,
+        "eff_sat": EffSatComponent,
+        "staging": StagingComponent,
+        "macro": MacroComponentFactory,
+        # --- Proj Models ---#
+        "project": ProjectComponent,
+        "packages": PackagesComponent,
+        "sources": SourceCoponent,
+    }
+
+    @classmethod
+    def _get(cls, model: DvModels, logger: Logger = default_logger) -> Any:
+        handler = cls._handlers.get(model.dv_type)
+        if not handler:
+            logger.error(f"No handler found for component type: {model.dv_type}")
+            raise ValueError(f"No handler for component type: {model.dv_type}")
+        return handler
+
+    @classmethod
+    def create(
+        cls, model: DvModels, logger: Logger = default_logger
+    ) -> DVMBaseComponentGenerator:
+        component_cls = cls._get(model, logger)
+        return component_cls(model=model, logger=logger)

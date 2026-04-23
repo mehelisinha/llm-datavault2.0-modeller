@@ -136,8 +136,8 @@ eff_sats:
       - HK_CONDUCTING_EQUIPMENT
       - HK_CONNECTIVITY_NODE
     effective_from: EFFECTIVE_FROM          # src_eff / src_start_date
-    start_date: EFFECTIVE_FROM
-    end_date: LOAD_DATE                     # src_end_date — closed by CDC deletion records
+    start_date: START_DATE
+    # end_date: END_DATE                     # src_end_date — closed by CDC deletion records
 
 # ── Staging Models ────────────────────────────────────────────────────────────
 # Staging models load and hash raw bronze data, producing the vault keys and
@@ -198,7 +198,9 @@ staging:
       RECORD_SOURCE: "record_source"
       LOAD_DATE:     "load_dts"
       EFFECTIVE_FROM: "load_dts"
-      CDC_FLAG:      "cdc_flag"
+      START_DATE: "load_dts"
+      END_DATE: "CASE WHEN OPERATION_TYPE = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31' AS DATE) END"
+      IS_DELETED:   "CASE WHEN OPERATION_TYPE = 'D' THEN TRUE ELSE FALSE END"
     hashed_columns:
       HK_TERMINAL:
         - mrid
