@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: hub_terminal
+  description: Data Vault hub for hub_terminal
+  columns:
+  - name: HK_TERMINAL
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null

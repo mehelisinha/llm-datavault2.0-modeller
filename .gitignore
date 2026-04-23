@@ -7,3 +7,11 @@ __pycache__
 logs
 uv.lock
 TBD_*
+output/
+**/profiles.yml
+**/*.log
+.structurizr/
+.structurizr
+.DS_Store
+PRIVAT/
+.egg-info

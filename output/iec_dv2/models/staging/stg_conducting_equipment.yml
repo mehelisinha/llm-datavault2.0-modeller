@@ -1,0 +1,14 @@
+version: 2
+models:
+- name: stg_conducting_equipment
+  description: Data Vault staging for stg_conducting_equipment
+  columns:
+  - name: HK_CONDUCTING_EQUIPMENT
+    tests:
+    - not_null
+  - name: HASHDIFF_CE_OPERATIONAL
+    tests:
+    - not_null
+  - name: HASHDIFF_CE_DETAILS
+    tests:
+    - not_null

@@ -10,15 +10,15 @@ from typing import Any, Dict, List, Union
 
 import yaml
 
-from dv_components.components.hub import Hub
-from dv_components.components.link import Link
-from dv_components.components.satellite import Satellite
+from dbt_builder.src.dv_components.components.sql.raw_vault.hub import HubComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.link import LinkComponent
+from dbt_builder.src.dv_components.components.sql.raw_vault.satellite import SatComponent
 
 # ---------------------------------------------------------------------------
 # Public types
 # ---------------------------------------------------------------------------
 
-DVComponent = Union[Hub, Link, Satellite]
+DVComponent = Union[HubComponent, LinkComponent, SatComponent]
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,9 @@ class MetadataReader:
         required = {"system", "hubs", "satellites", "links"}
         missing = required - set(data.keys())
         if missing:
-            raise ValueError(f"Metadata config is missing required top-level keys: {missing}")
+            raise ValueError(
+                f"Metadata config is missing required top-level keys: {missing}"
+            )
 
     # ------------------------------------------------------------------
     # System info
@@ -75,12 +77,14 @@ class MetadataReader:
     # Hubs
     # ------------------------------------------------------------------
 
-    def get_hubs(self) -> List[Hub]:
+    def get_hubs(self) -> List[HubComponent]:
         """Return one Hub object per hub definition in the YAML."""
-        hubs: List[Hub] = []
+        hubs: List[HubComponent] = []
         for entry in self._config.get("hubs", []):
-            self._require_keys(entry, {"name", "staging_model", "business_key", "hash_key"}, "hub")
-            hub = Hub(
+            self._require_keys(
+                entry, {"name", "staging_model", "business_key", "hash_key"}, "hub"
+            )
+            hub = HubComponent(
                 name=entry["name"],
                 source_models=[entry["staging_model"]],
                 src_pk=entry["hash_key"],
@@ -93,16 +97,16 @@ class MetadataReader:
     # Satellites
     # ------------------------------------------------------------------
 
-    def get_satellites(self) -> List[Satellite]:
+    def get_satellites(self) -> List[SatComponent]:
         """Return one Satellite object per satellite definition in the YAML."""
-        satellites: List[Satellite] = []
+        satellites: List[SatComponent] = []
         for entry in self._config.get("satellites", []):
             self._require_keys(
                 entry,
                 {"name", "source_model", "hash_key", "hashdiff", "payload"},
                 "satellite",
             )
-            sat = Satellite(
+            sat = SatComponent(
                 name=entry["name"],
                 source_models=[entry["source_model"]],
                 src_pk=entry["hash_key"],
@@ -117,16 +121,16 @@ class MetadataReader:
     # Links
     # ------------------------------------------------------------------
 
-    def get_links(self) -> List[Link]:
+    def get_links(self) -> List[LinkComponent]:
         """Return one Link object per link definition in the YAML."""
-        links: List[Link] = []
+        links: List[LinkComponent] = []
         for entry in self._config.get("links", []):
             self._require_keys(
                 entry,
                 {"name", "source_model", "hash_key", "fk_columns"},
                 "link",
             )
-            link = Link(
+            link = LinkComponent(
                 name=entry["name"],
                 source_models=[entry["source_model"]],
                 src_pk=entry["hash_key"],
@@ -148,9 +152,7 @@ class MetadataReader:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _require_keys(
-        entry: Dict[str, Any], required: set, kind: str
-    ) -> None:
+    def _require_keys(entry: Dict[str, Any], required: set, kind: str) -> None:
         missing = required - set(entry.keys())
         if missing:
             name = entry.get("name", "<unnamed>")

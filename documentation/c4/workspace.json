@@ -4,7 +4,7 @@
   "documentation" : { },
   "id" : 1,
   "lastModifiedAgent" : "structurizr-ui",
-  "lastModifiedDate" : "2026-04-16T14:20:50Z",
+  "lastModifiedDate" : "2026-04-20T09:40:15Z",
   "model" : {
     "deploymentNodes" : [ {
       "containerInstances" : [ {
@@ -14,7 +14,7 @@
         "id" : "78",
         "instanceId" : 1,
         "properties" : {
-          "structurizr.dsl.identifier" : "750c24c0-5bd5-4728-bb98-47c84e3c97c5"
+          "structurizr.dsl.identifier" : "96cee7ea-8cfc-40af-aaed-833b65c519fe"
         },
         "relationships" : [ {
           "description" : "Supplies metadata",
@@ -30,7 +30,7 @@
       "instances" : "1",
       "name" : "Metadata Store Server",
       "properties" : {
-        "structurizr.dsl.identifier" : "cc6cec23-f602-4227-b730-ba18335f9abc"
+        "structurizr.dsl.identifier" : "bff08333-0dc8-447f-bd2a-594ccc6e2f38"
       },
       "tags" : "Element,Deployment Node"
     }, {
@@ -41,7 +41,7 @@
         "id" : "80",
         "instanceId" : 1,
         "properties" : {
-          "structurizr.dsl.identifier" : "d0092f38-3a56-46cb-be54-e54f2de43478"
+          "structurizr.dsl.identifier" : "2af90d77-cd1c-4251-947a-8041cba4fb8d"
         },
         "relationships" : [ {
           "description" : "Provides generated DBT project",
@@ -57,7 +57,7 @@
       "instances" : "1",
       "name" : "DBT Builder Server",
       "properties" : {
-        "structurizr.dsl.identifier" : "9383a725-992a-4000-bf5a-5661f81c9f69"
+        "structurizr.dsl.identifier" : "f53de90e-5baa-499f-9a3f-efd1be816c7b"
       },
       "tags" : "Element,Deployment Node"
     }, {
@@ -68,7 +68,7 @@
         "id" : "83",
         "instanceId" : 1,
         "properties" : {
-          "structurizr.dsl.identifier" : "3f60ddbd-3461-4877-a29a-06aa2f29415d"
+          "structurizr.dsl.identifier" : "a50fa60a-ed04-4bd4-ba02-0f9e4f1c8c6b"
         },
         "tags" : "Container Instance"
       } ],
@@ -77,7 +77,7 @@
       "instances" : "1",
       "name" : "DBT Execution Server",
       "properties" : {
-        "structurizr.dsl.identifier" : "52393218-a35f-4246-b651-3623ee939454"
+        "structurizr.dsl.identifier" : "e27f78a8-ea25-49c9-9f3b-7b3e5b5cf6bd"
       },
       "tags" : "Element,Deployment Node"
     } ],
@@ -890,7 +890,7 @@
       } ]
     }, {
       "automaticLayout" : {
-        "applied" : false,
+        "applied" : true,
         "edgeSeparation" : 0,
         "implementation" : "Graphviz",
         "nodeSeparation" : 300,
@@ -899,26 +899,30 @@
         "vertices" : false
       },
       "containerId" : "51",
+      "dimensions" : {
+        "height" : 1538,
+        "width" : 3180
+      },
       "elements" : [ {
         "id" : "53",
-        "x" : 0,
-        "y" : 0
+        "x" : 239,
+        "y" : 500
       }, {
         "id" : "54",
-        "x" : 0,
-        "y" : 0
+        "x" : 989,
+        "y" : 800
       }, {
         "id" : "55",
-        "x" : 0,
-        "y" : 0
+        "x" : 1739,
+        "y" : 800
       }, {
         "id" : "56",
-        "x" : 0,
-        "y" : 0
+        "x" : 2489,
+        "y" : 800
       }, {
         "id" : "57",
-        "x" : 0,
-        "y" : 0
+        "x" : 989,
+        "y" : 200
       } ],
       "externalContainerBoundariesVisible" : false,
       "key" : "05-DataVaultRunnerComponents",
@@ -936,7 +940,7 @@
     } ],
     "configuration" : {
       "branding" : { },
-      "lastSavedView" : "02-Container",
+      "lastSavedView" : "05-DataVaultRunnerComponents",
       "metadataSymbols" : "SquareBrackets",
       "properties" : {
         "structurizr.sort" : "key"
@@ -986,28 +990,28 @@
       },
       "elements" : [ {
         "id" : "1",
-        "x" : 200,
-        "y" : 159
+        "x" : 199,
+        "y" : 160
       }, {
         "id" : "2",
-        "x" : 3150,
-        "y" : 809
+        "x" : 3149,
+        "y" : 810
       }, {
         "id" : "6",
-        "x" : 900,
-        "y" : 209
+        "x" : 899,
+        "y" : 210
       }, {
         "id" : "26",
-        "x" : 1650,
-        "y" : 209
+        "x" : 1649,
+        "y" : 210
       }, {
         "id" : "51",
-        "x" : 2400,
-        "y" : 209
+        "x" : 2399,
+        "y" : 210
       }, {
         "id" : "63",
-        "x" : 3150,
-        "y" : 209
+        "x" : 3149,
+        "y" : 210
       } ],
       "externalSoftwareSystemBoundariesVisible" : false,
       "key" : "02-Container",

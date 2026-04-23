@@ -1,0 +1,15 @@
+version: 2
+models:
+- name: sat_connectivity_node_details
+  description: Data Vault satellite for sat_connectivity_node_details
+  columns:
+  - name: HK_CONNECTIVITY_NODE
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null
+  - name: HASHDIFF_CONNECTIVITY_NODE_DETAILS
+    tests:
+    - not_null

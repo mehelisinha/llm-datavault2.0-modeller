@@ -1,0 +1,15 @@
+version: 2
+models:
+- name: sat_terminal_details
+  description: Data Vault satellite for sat_terminal_details
+  columns:
+  - name: HK_TERMINAL
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null
+  - name: HASHDIFF_TERMINAL_DETAILS
+    tests:
+    - not_null

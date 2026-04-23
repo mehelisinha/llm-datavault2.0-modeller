@@ -1089,9 +1089,21 @@ Goal: full **Data Vault generation**
         - Staging model generator
         - PIT
         - Bridge (optional)
-        - Mart
-    - Macro Generation
-    - Tests Generation
+        - Mart (Star Schema) - may take couple of sprints
+            - Fact:
+                - Pydantic Model
+                - Derive metadata and fill pydantic model
+                - create Fact class
+            - Dim
+                - Pydantic Model
+                - Derive metadata and fill pydantic model
+                - create Fact class
+        - Denormalized Views
+                - Pydantic Model
+                - Derive metadata and fill pydantic model
+                - create Fact class
+        - Macro Generation
+        - Tests Generation
 
 🎯 Milestone
 👉 Generate full DV structure for one source

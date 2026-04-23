@@ -1,7 +1,7 @@
 import sys
 from typing import Optional, cast
 
-from shared.logger.default_logger import default_logger
+from shared.src.logger.default_logger import default_logger
 
 SparkSessionType = None
 
@@ -22,13 +22,28 @@ def get_spark() -> Optional[SparkSession]:
     else:
         return None
 
+    # @staticmethod
+    # def _get_spark_session() -> Any | None:
+    #     try:
+    #         from pyspark.sql import SparkSession
+    #     except Exception:
+    #         return None
+
+    #     spark = SparkSession.getActiveSession()
+    #     if spark is None:
+    #         try:
+    #             spark = SparkSession.builder.getOrCreate()
+    #         except Exception:
+    #             return None
+    #     return spark
+
 
 def get_dbutils(spark):  # type: ignore
     try:
         from pyspark.dbutils import DBUtils
 
         return DBUtils(spark)  # type: ignore
-    except:
+    except Exception:
         default_logger.error("Dbutils not available")
 
 

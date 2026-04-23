@@ -1,0 +1,8 @@
+sources:
+- name: bronze
+  database: edh_unreg_silver_dev_st
+  schema: bronze
+  tables:
+  - name: conducting_equipment
+  - name: connectivity_nodes
+  - name: terminals

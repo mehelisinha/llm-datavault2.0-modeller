@@ -1,0 +1,11 @@
+version: 2
+models:
+- name: stg_connectivity_nodes
+  description: Data Vault staging for stg_connectivity_nodes
+  columns:
+  - name: HK_CONNECTIVITY_NODE
+    tests:
+    - not_null
+  - name: HASHDIFF_CONNECTIVITY_NODE_DETAILS
+    tests:
+    - not_null

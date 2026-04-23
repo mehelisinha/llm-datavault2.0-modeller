@@ -1,0 +1,12 @@
+version: 2
+models:
+- name: hub_conducting_equipment
+  description: Data Vault hub for hub_conducting_equipment
+  columns:
+  - name: HK_CONDUCTING_EQUIPMENT
+    tests:
+    - not_null
+    - unique
+  - name: LOAD_DATE
+    tests:
+    - not_null
