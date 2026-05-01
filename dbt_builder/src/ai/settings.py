@@ -55,9 +55,9 @@ class AISettings(BaseSettings):
     chat_deployment_gpt5: str = Field(default="gpt-5")
     embedding_deployment: str = Field(default="text-embedding-3-small")
 
-    # ── Azure AI Search ───────────────────────────────────────────────────────
-    search_endpoint: str = Field(..., description="Azure AI Search endpoint URL")
-    search_admin_key: SecretStr = Field(..., description="Admin API key")
+    # ── Azure AI Search (optional in Phase 0/1; required from Phase 2 onward) ─
+    search_endpoint: str | None = Field(default=None, description="Azure AI Search endpoint URL")
+    search_admin_key: SecretStr | None = Field(default=None, description="Admin API key")
     search_index_patterns: str = Field(default="dv-patterns")
     search_index_decisions: str = Field(default="approved-decisions")
 

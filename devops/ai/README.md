@@ -36,7 +36,7 @@ python -m dbt_builder.src.ai.hello_foundry   # smoke test
 | Resource group | `rg-data-and-ai-chapter-database-refactoring` | Pre-existing |
 | AI Foundry hub (AI Services account) | `dwa-foundry-hub` | Region: `westeurope` |
 | Foundry project | `dwa-foundry-prj` | Child of hub |
-| AI Search | `dwa-ai-search` | Tier: Standard S1 (vector + semantic) |
+| AI Search | `dwa-ai-search` | Default: Basic tier (~€68/mo, vector only). Use `-SearchSku standard` for semantic ranker (~€245/mo) |
 | App Insights | `dwa-ai-appi` | Connection-string-only auth |
 
 > **GPT-5 availability**: as of May 2026, GPT-5 may not be available in

@@ -28,9 +28,17 @@
     Optional suffix appended to globally-unique resource names
     (AI Services account, AI Search). Use this if default names collide.
 
+.PARAMETER SearchSku
+    AI Search tier: 'basic' (~€68/mo, vector only) or 'standard' (~€245/mo,
+    vector + semantic ranker). Default 'basic' to minimize thesis budget.
+
 .EXAMPLE
     ./devops/ai/00_provision.ps1
-    # Uses defaults; emits .env lines on success.
+    # Uses defaults (basic search); emits .env lines on success.
+
+.EXAMPLE
+    ./devops/ai/00_provision.ps1 -SearchSku standard
+    # Provision S1 search (needed for semantic re-ranker in later phases).
 
 .EXAMPLE
     ./devops/ai/00_provision.ps1 -NameSuffix "eon01"
@@ -42,7 +50,14 @@ param(
     [string]$SubscriptionId = "5e6b8f4d-257e-485d-957b-577be337833e",
     [string]$ResourceGroup  = "rg-data-and-ai-chapter-database-refactoring",
     [string]$Region         = "germanywestcentral",
-    [string]$NameSuffix     = ""
+    [string]$NameSuffix     = "",
+    # AI Search SKU. Cost (germanywestcentral, May 2026):
+    #   basic    ≈ €68/mo  — vector search OK, NO semantic ranker
+    #   standard ≈ €245/mo — vector + semantic ranker (S1)
+    # Default kept low to minimize thesis budget. Override with -SearchSku standard
+    # when the semantic re-ranker is needed (later phases).
+    [ValidateSet("basic", "standard")]
+    [string]$SearchSku      = "basic"
 )
 
 $ErrorActionPreference = "Continue"
@@ -224,14 +239,14 @@ foreach ($d in $deployments) {
     }
 }
 
-# ── 6. Azure AI Search (Standard S1) ──────────────────────────────────────────
-Write-Step "Azure AI Search: $searchName"
+# ── 6. Azure AI Search ($SearchSku tier) ─────────────────────────────────────
+Write-Step "Azure AI Search: $searchName (sku=$SearchSku)"
 $searchEndpoint = az search service show -g $ResourceGroup -n $searchName --query "hostingMode" -o tsv 2>$null
 if (-not $searchEndpoint) {
     az search service create `
         -g $ResourceGroup -n $searchName -l $Region `
-        --sku standard --partition-count 1 --replica-count 1 -o none
-    Write-Ok "Created"
+        --sku $SearchSku --partition-count 1 --replica-count 1 -o none
+    Write-Ok "Created (sku=$SearchSku)"
 } else {
     Write-Skip "Already exists"
 }

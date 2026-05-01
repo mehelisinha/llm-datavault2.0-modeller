@@ -81,8 +81,15 @@ def _check_embedding(client: AzureOpenAI, deployment: str) -> int:
     return len(response.data[0].embedding)
 
 
-def _check_search(settings: AISettings) -> list[str]:
-    """List existing index names on the AI Search service."""
+def _check_search(settings: AISettings) -> list[str] | str:
+    """List existing index names on the AI Search service.
+
+    Returns the literal string "skipped (not configured)" if the Search
+    service is not provisioned. This keeps Phase 0 valid in cost-minimized
+    setups where Search is deferred until Phase 2.
+    """
+    if not settings.search_endpoint or not settings.search_admin_key:
+        return "skipped (not configured)"
     client = SearchIndexClient(
         endpoint=settings.search_endpoint,
         credential=AzureKeyCredential(settings.search_admin_key.get_secret_value()),
