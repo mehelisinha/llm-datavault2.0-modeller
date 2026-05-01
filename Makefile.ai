@@ -1,0 +1,53 @@
+# =============================================================================
+# DWA AI layer — phase-scoped developer targets
+# =============================================================================
+# Usage (from repo root):
+#     make -f Makefile.ai <target>
+#
+# These targets are intentionally separate from the existing root Makefile so
+# the AI work cannot accidentally break dbt / dagster pipelines.
+# All targets are idempotent and safe to re-run.
+# =============================================================================
+
+PY        := .venv/Scripts/python.exe
+PYTEST    := .venv/Scripts/pytest.exe
+RUFF      := .venv/Scripts/ruff.exe
+AI_SRC    := dbt_builder/src/ai
+AI_TESTS  := tests/ai
+RUFF_OPTS := --isolated --line-length 100
+
+.PHONY: help ai-install ai-lint ai-format ai-test ai-test-live ai-smoke ai-check ai-clean
+
+help:	## Show this help
+	@echo "DWA AI layer targets:"
+	@echo "  ai-install     Install [ai] + [dev] optional dependencies"
+	@echo "  ai-lint        Ruff check (no fixes) on AI sources + tests"
+	@echo "  ai-format      Ruff format (in place) on AI sources + tests"
+	@echo "  ai-test        Run offline AI unit tests (no Azure, no network)"
+	@echo "  ai-test-live   Run live AI integration tests (requires .env, costs tokens)"
+	@echo "  ai-smoke       Run Phase 0 Azure smoke test (requires .env)"
+	@echo "  ai-check       Lint + offline tests (use before committing)"
+	@echo "  ai-clean       Remove pytest / ruff caches under AI tree"
+
+ai-install:
+	uv pip install --prerelease=allow -e ".[ai,dev]"
+
+ai-lint:
+	$(RUFF) check $(RUFF_OPTS) --select E,F,I,B $(AI_SRC) $(AI_TESTS)
+
+ai-format:
+	$(RUFF) format $(RUFF_OPTS) $(AI_SRC) $(AI_TESTS)
+
+ai-test:
+	$(PYTEST) $(AI_TESTS) -m "not live" -ra
+
+ai-test-live:
+	$(PYTEST) $(AI_TESTS) -m "live" -ra
+
+ai-smoke:
+	$(PY) -m dbt_builder.src.ai.hello_foundry
+
+ai-check: ai-lint ai-test
+
+ai-clean:
+	-rm -rf $(AI_TESTS)/__pycache__ $(AI_SRC)/__pycache__ .pytest_cache .ruff_cache
