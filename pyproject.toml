@@ -51,6 +51,24 @@ dev = [
 
 ]
 
+# ── AI layer (Phase 0+) ────────────────────────────
+# Note: azure-ai-projects / azure-ai-inference / azure-ai-evaluation are still
+# in pre-release as of May 2026; allow betas for those. The Phase 0 smoke test
+# uses only the openai SDK + azure-search-documents + azure-identity.
+ai = [
+    "azure-ai-projects>=1.0.0b1",
+    "azure-ai-inference>=1.0.0b9",
+    "azure-ai-evaluation>=1.0.0b1",
+    "azure-search-documents>=11.5.0",
+    "azure-identity>=1.17.0",
+    "azure-monitor-opentelemetry>=1.6.0",
+    "openai>=1.40.0",
+    "pydantic-settings>=2.5.0",
+    "ruamel.yaml>=0.18.0",
+    "openpyxl>=3.1.0",
+    "tenacity>=9.0.0",
+]
+
 # ── Foramt and Linting ─────────────────────────────
 [tool.ruff]
 line-length = 100

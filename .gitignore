@@ -15,3 +15,10 @@ output/
 .DS_Store
 PRIVAT/
 .egg-info
+
+# AI layer
+.env
+.env.local
+*.pdf
+!documentation/**/*.pdf
+
