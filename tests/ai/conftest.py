@@ -12,10 +12,20 @@ fixtures should stay close to the test that uses them.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+# Make the repo root importable so ``dbt_builder.src.ai...`` resolves without
+# needing an editable install. The existing pyproject.toml has a known
+# setuptools flat-layout issue that prevents ``pip install -e .`` today; this
+# bootstrap keeps the AI test suite runnable in the meantime and is harmless
+# once the project is properly installable.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -27,9 +37,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Auto-tag everything under tests/ai/ with the ``ai`` marker."""
     for item in items:
         item.add_marker(pytest.mark.ai)
