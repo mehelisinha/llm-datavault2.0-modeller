@@ -23,10 +23,14 @@ from dbt_builder.src.ai.discovery.schema_discovery import (
     discover_from_dict,
     discover_from_yaml,
 )
+from dbt_builder.src.ai.discovery.spark_discovery import discover_from_spark
+from dbt_builder.src.ai.discovery.system_columns import is_system_column
 
 __all__ = [
     "discover_from_dict",
+    "discover_from_spark",
     "discover_from_yaml",
+    "is_system_column",
     "profile_column",
     "profile_table",
 ]

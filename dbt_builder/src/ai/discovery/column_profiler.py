@@ -148,6 +148,10 @@ def profile_table(
             continue
         column_values = (row.get(column.name) for row in rows)
         profile = profile_column(column_values, sample_value_count=sample_value_count)
+        # System columns must never be flagged as candidate business keys, no
+        # matter how unique their values look in a sample.
+        if column.is_system and profile.is_likely_key:
+            profile = profile.model_copy(update={"is_likely_key": False})
         new_columns.append(column.model_copy(update={"profile": profile}))
 
     return table.model_copy(

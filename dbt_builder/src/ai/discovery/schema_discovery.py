@@ -47,6 +47,11 @@ from dbt_builder.src.ai.contracts.payloads import (
     SourceSystem,
     SourceTable,
 )
+from dbt_builder.src.ai.discovery.system_columns import is_system_column
+
+# Default source_type stamped on a SourceSystem when YAML / caller omits it.
+# Lives here (rather than in spark_discovery) so both adapters share it.
+DEFAULT_SOURCE_TYPE = "delta"
 
 # Mapping from raw dtype prefixes to coarse semantic types. Order matters: the
 # first prefix that matches wins, so put longer / more specific prefixes first.
@@ -73,8 +78,12 @@ _DTYPE_PREFIX_MAP: tuple[tuple[str, InferredType], ...] = (
 )
 
 
-def _infer_type(raw_dtype: str) -> InferredType:
-    """Map a raw dtype string (case-insensitive) to a coarse semantic type."""
+def infer_type(raw_dtype: str) -> InferredType:
+    """Map a raw dtype string (case-insensitive) to a coarse semantic type.
+
+    Public so other discovery adapters (e.g. Spark) can share the mapping
+    without reaching into a private symbol.
+    """
     lowered = raw_dtype.strip().lower()
     for prefix, inferred in _DTYPE_PREFIX_MAP:
         if lowered.startswith(prefix):
@@ -82,18 +91,60 @@ def _infer_type(raw_dtype: str) -> InferredType:
     return InferredType.UNKNOWN
 
 
+# Backwards-compatible private alias (kept so existing call sites keep working
+# until any future refactor; new code should call ``infer_type``).
+_infer_type = infer_type
+
+
+def build_source_column(
+    name: str,
+    raw_dtype: str,
+    *,
+    nullable: bool = True,
+    description: str | None = None,
+    ordinal: int | None = None,
+    is_system: bool | None = None,
+) -> SourceColumn:
+    """Construct a :class:`SourceColumn` with consistent type / system inference.
+
+    Used by every discovery adapter so YAML, Spark, and future sources never
+    drift on how columns are normalised.
+
+    Parameters
+    ----------
+    name, raw_dtype
+        Column identity. Both required.
+    nullable, description, ordinal
+        Optional column attributes carried through to the contract.
+    is_system
+        Explicit override for the ``is_system`` flag. ``None`` means "apply the
+        :func:`is_system_column` heuristic".
+    """
+    resolved_is_system = is_system_column(name) if is_system is None else bool(is_system)
+    return SourceColumn(
+        name=name,
+        raw_dtype=raw_dtype,
+        inferred_type=infer_type(raw_dtype),
+        nullable=nullable,
+        description=description,
+        ordinal_position=ordinal,
+        is_system=resolved_is_system,
+    )
+
+
 def _build_column(raw: dict[str, Any], ordinal: int) -> SourceColumn:
     if "name" not in raw or "raw_dtype" not in raw:
         raise ValueError(
             f"Column at ordinal {ordinal} is missing required keys 'name' / 'raw_dtype'"
         )
-    return SourceColumn(
+    return build_source_column(
         name=str(raw["name"]),
         raw_dtype=str(raw["raw_dtype"]),
-        inferred_type=_infer_type(str(raw["raw_dtype"])),
         nullable=bool(raw.get("nullable", True)),
         description=raw.get("description"),
-        ordinal_position=ordinal,
+        ordinal=ordinal,
+        # YAML override wins over the heuristic in either direction.
+        is_system=raw["is_system"] if "is_system" in raw else None,
     )
 
 
@@ -116,7 +167,7 @@ def _build_system(raw: dict[str, Any]) -> SourceSystem:
     return SourceSystem(
         system_id=str(raw["system_id"]),
         system_name=str(raw["system_name"]),
-        source_type=str(raw.get("source_type", "delta")),
+        source_type=str(raw.get("source_type", DEFAULT_SOURCE_TYPE)),
         catalog=raw.get("catalog"),
         # Accept both 'schema' (legacy YAML) and 'schema_name' (Pydantic field).
         schema_name=raw.get("schema_name") or raw.get("schema"),
