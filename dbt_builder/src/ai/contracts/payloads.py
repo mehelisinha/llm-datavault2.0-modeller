@@ -115,6 +115,15 @@ class SourceColumn(BaseModel):
         ge=0,
         description="Zero-based ordinal in the source table, if known.",
     )
+    is_system: bool = Field(
+        default=False,
+        description=(
+            "True when the column is a load / audit / CDC sidecar column that "
+            "must not be considered for business-key inference (e.g. "
+            "record_source, dl_loaded_at, __$start_lsn). Auto-detected by "
+            "schema_discovery; can be overridden via YAML."
+        ),
+    )
     profile: ColumnProfile | None = Field(
         default=None,
         description="Empirical statistics; None when the column was not profiled.",
