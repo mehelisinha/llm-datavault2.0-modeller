@@ -28,6 +28,16 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add ``--live`` flag so live tests stay opt-in (and zero-cost) by default."""
+    parser.addoption(
+        "--live",
+        action="store_true",
+        default=False,
+        help="Run @pytest.mark.live tests against real Azure resources (incurs cost).",
+    )
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers so ``pytest --strict-markers`` does not warn."""
     config.addinivalue_line("markers", "ai: AI-layer test")
@@ -38,9 +48,16 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Auto-tag everything under tests/ai/ with the ``ai`` marker."""
+    """Auto-tag everything under tests/ai/ with the ``ai`` marker.
+
+    Live tests are skipped by default; pass ``--live`` (or ``-m live``) to run them.
+    """
+    skip_live = pytest.mark.skip(reason="Skipped by default. Pass --live to run.")
+    run_live = config.getoption("--live")
     for item in items:
         item.add_marker(pytest.mark.ai)
+        if "live" in item.keywords and not run_live:
+            item.add_marker(skip_live)
 
 
 @pytest.fixture(scope="session")

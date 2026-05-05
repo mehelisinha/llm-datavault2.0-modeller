@@ -1,0 +1,49 @@
+# =============================================================================
+# IEC61968 CIM — Discovery payload (source-side schema only)
+# =============================================================================
+# This file is the *Phase 1 discovery shape* (system + tables + columns).
+# It is consumed by `discover_from_yaml()` and fed to the AI modelling agent
+# in tests/ai/test_eval_models.py. The hand-modelled hubs/sats/links live in
+# poc/metadata/iec_cim_metadata.yaml (the gold target), separate on purpose so
+# the eval never accidentally peeks at the answer.
+# =============================================================================
+
+system:
+  system_id: IEC_CIM_001
+  system_name: IEC61968_CIM
+  source_type: delta
+  catalog: edh_unreg_silver_dev_st
+  schema: bronze
+  record_source: IEC61968_CIM_v2.0
+
+tables:
+  - name: conducting_equipment
+    description: Energised grid asset (transformer, breaker, line, etc.).
+    columns:
+      - {name: mrid,            raw_dtype: varchar(64),     nullable: false, description: Master resource identifier (business key).}
+      - {name: name,            raw_dtype: varchar(255)}
+      - {name: equipment_type,  raw_dtype: varchar(64)}
+      - {name: base_voltage_kv, raw_dtype: decimal(10,3)}
+      - {name: manufacturer,    raw_dtype: varchar(128)}
+      - {name: model,           raw_dtype: varchar(128)}
+      - {name: serial_number,   raw_dtype: varchar(128)}
+      - {name: in_service,      raw_dtype: boolean}
+      - {name: asset_status,    raw_dtype: varchar(32)}
+
+  - name: connectivity_nodes
+    description: Topological connection points in the grid (busbars, junctions).
+    columns:
+      - {name: mrid,        raw_dtype: varchar(64),   nullable: false, description: Master resource identifier (business key).}
+      - {name: name,        raw_dtype: varchar(255)}
+      - {name: description, raw_dtype: varchar(1024)}
+
+  - name: terminals
+    description: Connection of a piece of conducting equipment to a connectivity node.
+    columns:
+      - {name: mrid,                       raw_dtype: varchar(64), nullable: false, description: Master resource identifier (business key).}
+      - {name: name,                       raw_dtype: varchar(255)}
+      - {name: sequence_number,            raw_dtype: int}
+      - {name: phases,                     raw_dtype: varchar(16)}
+      - {name: connected,                  raw_dtype: boolean}
+      - {name: conducting_equipment_mrid,  raw_dtype: varchar(64), nullable: false, description: FK to conducting_equipment.mrid.}
+      - {name: connectivity_node_mrid,     raw_dtype: varchar(64), nullable: false, description: FK to connectivity_nodes.mrid.}

@@ -67,6 +67,9 @@ ai = [
     "ruamel.yaml>=0.18.0",
     "openpyxl>=3.1.0",
     "tenacity>=9.0.0",
+    # Phase 2: local vector backend (CPU build, no GPU dep, ~18 MB).
+    "faiss-cpu>=1.8.0",
+    "numpy>=1.26",
 ]
 
 # ── Foramt and Linting ─────────────────────────────

@@ -1,0 +1,340 @@
+# =============================================================================
+# ServiceNow IT4IT — Discovery payload (source-side schema only)
+# =============================================================================
+# Phase 1 discovery shape (system + tables + columns), consumed by
+# `discover_from_yaml()` and fed to the AI modelling agent in
+# tests/ai/test_eval_models.py.
+#
+# Source: edh_unreg_consumption_dev.it4it_servicenow
+# Schema dump: ../../../Downloads/it4it_servicenow_schema.pdf (9 tables,
+#              299 columns total).
+#
+# CDC sidecar columns (__$start_lsn, __$end_lsn, __$seqval, __$operation,
+# __$update_mask, __$command_id) are intentionally excluded — they are SQL
+# Server change-tracking metadata, not business attributes.
+# Audit columns (sys_created_on, sys_updated_on, sys_id, sys_mod_count,
+# mirror_*) are kept as the modeller benefits from seeing them.
+# =============================================================================
+
+system:
+  system_id: SNOW_IT4IT_001
+  system_name: ServiceNow_IT4IT
+  source_type: delta
+  catalog: edh_unreg_consumption_dev
+  schema: it4it_servicenow
+  record_source: SERVICENOW_IT4IT_v1
+
+tables:
+  # ── cmn_department (master data) ──────────────────────────────────────────
+  - name: cmn_department
+    description: ServiceNow department reference — organisational units.
+    columns:
+      - {name: sys_id,            raw_dtype: string,    nullable: false, description: ServiceNow primary key (business key).}
+      - {name: name,              raw_dtype: string}
+      - {name: id,                raw_dtype: string,    description: Human-readable department code.}
+      - {name: parent,            raw_dtype: string,    description: FK to cmn_department.sys_id (parent department).}
+      - {name: business_unit,     raw_dtype: string}
+      - {name: company,           raw_dtype: string,    description: FK to core_company.sys_id.}
+      - {name: cost_center,       raw_dtype: string}
+      - {name: dept_head,         raw_dtype: string,    description: FK to sys_user.sys_id (department head).}
+      - {name: description,       raw_dtype: string}
+      - {name: head_count,        raw_dtype: bigint}
+      - {name: primary_contact,   raw_dtype: string,    description: FK to sys_user.sys_id.}
+      - {name: sys_domain,        raw_dtype: string}
+      - {name: u_short_name,      raw_dtype: string}
+      - {name: sys_created_on,    raw_dtype: timestamp}
+      - {name: sys_updated_on,    raw_dtype: timestamp}
+      - {name: sys_created_by,    raw_dtype: string}
+      - {name: sys_updated_by,    raw_dtype: string}
+      - {name: sys_mod_count,     raw_dtype: bigint}
+      - {name: mirror_created_on, raw_dtype: timestamp}
+      - {name: mirror_updated_on, raw_dtype: timestamp}
+
+  # ── cmn_location (master data) ────────────────────────────────────────────
+  - name: cmn_location
+    description: ServiceNow location reference — offices, sites, data centres.
+    columns:
+      - {name: sys_id,                                  raw_dtype: string,         nullable: false, description: ServiceNow primary key (business key).}
+      - {name: name,                                    raw_dtype: string}
+      - {name: full_name,                               raw_dtype: string}
+      - {name: parent,                                  raw_dtype: string,         description: FK to cmn_location.sys_id (parent location).}
+      - {name: company,                                 raw_dtype: string,         description: FK to core_company.sys_id.}
+      - {name: country,                                 raw_dtype: string,         description: FK to core_country.sys_id.}
+      - {name: city,                                    raw_dtype: string}
+      - {name: state,                                   raw_dtype: string}
+      - {name: street,                                  raw_dtype: string}
+      - {name: zip,                                     raw_dtype: string}
+      - {name: phone,                                   raw_dtype: string}
+      - {name: phone_territory,                         raw_dtype: string}
+      - {name: fax_phone,                               raw_dtype: string}
+      - {name: contact,                                 raw_dtype: string,         description: FK to sys_user.sys_id.}
+      - {name: time_zone,                               raw_dtype: string}
+      - {name: latitude,                                raw_dtype: decimal(18,7)}
+      - {name: longitude,                               raw_dtype: decimal(18,7)}
+      - {name: lat_long_error,                          raw_dtype: string}
+      - {name: coordinates_retrieved_on,                raw_dtype: timestamp}
+      - {name: cmn_location_source,                     raw_dtype: string}
+      - {name: cmn_location_type,                       raw_dtype: string}
+      - {name: duplicate,                               raw_dtype: boolean}
+      - {name: life_cycle_stage,                        raw_dtype: string}
+      - {name: life_cycle_stage_status,                 raw_dtype: string}
+      - {name: managed_by_group,                        raw_dtype: string,         description: FK to sys_user_group.sys_id.}
+      - {name: primary_location,                        raw_dtype: string}
+      - {name: stock_room,                              raw_dtype: boolean}
+      - {name: u_accountable_bu,                        raw_dtype: string}
+      - {name: u_additional_bus,                        raw_dtype: string}
+      - {name: u_alternative_site_access_3_email,       raw_dtype: string}
+      - {name: u_alternative_site_access_3_landline,    raw_dtype: string}
+      - {name: u_alternative_site_access_3_mobile,      raw_dtype: string}
+      - {name: u_alternative_site_access_3_name,        raw_dtype: string}
+      - {name: u_bit_cluster,                           raw_dtype: string}
+      - {name: u_bit_coordinator_name,                  raw_dtype: string}
+      - {name: u_closure_date,                          raw_dtype: timestamp}
+      - {name: u_comment,                               raw_dtype: string}
+      - {name: u_contract_mcs,                          raw_dtype: string}
+      - {name: u_contract_mwp,                          raw_dtype: string}
+      - {name: u_country,                               raw_dtype: string}
+      - {name: u_eon_internal_name,                     raw_dtype: string}
+      - {name: u_expected_closure_date,                 raw_dtype: date}
+      - {name: u_itc_room,                              raw_dtype: string}
+      - {name: u_lan_site_type,                         raw_dtype: string}
+      - {name: u_location_id,                           raw_dtype: string}
+      - {name: u_location_type,                         raw_dtype: string}
+      - {name: u_number,                                raw_dtype: string}
+      - {name: u_post_office_box,                       raw_dtype: string}
+      - {name: u_security_requirements,                 raw_dtype: string}
+      - {name: u_site_access_1_availability,            raw_dtype: string}
+      - {name: u_site_access_1_name,                    raw_dtype: string}
+      - {name: u_site_access_2_availability,            raw_dtype: string}
+      - {name: u_site_access_2_name,                    raw_dtype: string}
+      - {name: u_site_access_3_availability,            raw_dtype: string}
+      - {name: u_site_access_instructions,              raw_dtype: string}
+      - {name: u_site_classification,                   raw_dtype: string}
+      - {name: u_site_id,                               raw_dtype: string}
+      - {name: u_status,                                raw_dtype: string}
+      - {name: u_users_on_site,                         raw_dtype: bigint}
+      - {name: u_vip_on_site,                           raw_dtype: bigint}
+      - {name: u_wan_provider,                          raw_dtype: string}
+      - {name: u_wan_site_type,                         raw_dtype: string}
+      - {name: u_work_info,                             raw_dtype: string}
+      - {name: sys_created_on,                          raw_dtype: timestamp}
+      - {name: sys_updated_on,                          raw_dtype: timestamp}
+      - {name: sys_created_by,                          raw_dtype: string}
+      - {name: sys_updated_by,                          raw_dtype: string}
+      - {name: sys_mod_count,                           raw_dtype: bigint}
+      - {name: mirror_created_on,                       raw_dtype: timestamp}
+      - {name: mirror_updated_on,                       raw_dtype: timestamp}
+
+  # ── contract_sla (SLA template) ───────────────────────────────────────────
+  - name: contract_sla
+    description: SLA definition — agreed service-level template applied to tasks.
+    columns:
+      - {name: sys_id,                       raw_dtype: string,    nullable: false, description: ServiceNow primary key (business key).}
+      - {name: name,                         raw_dtype: string}
+      - {name: type,                         raw_dtype: string,    description: SLA / OLA / underpinning_contract.}
+      - {name: target,                       raw_dtype: string,    description: response | resolution.}
+      - {name: collection,                   raw_dtype: string,    description: Table the SLA applies to (e.g. incident, task).}
+      - {name: active,                       raw_dtype: boolean}
+      - {name: duration,                     raw_dtype: bigint}
+      - {name: duration_type,                raw_dtype: string}
+      - {name: schedule,                     raw_dtype: string}
+      - {name: schedule_source,              raw_dtype: string}
+      - {name: schedule_source_field,        raw_dtype: string}
+      - {name: timezone,                     raw_dtype: string}
+      - {name: timezone_source,              raw_dtype: string}
+      - {name: workflow,                     raw_dtype: string}
+      - {name: flow,                         raw_dtype: string}
+      - {name: vendor,                       raw_dtype: string,    description: FK to core_company.sys_id (vendor).}
+      - {name: adv_condition_type,           raw_dtype: string}
+      - {name: condition_class,              raw_dtype: string}
+      - {name: start_condition,              raw_dtype: string}
+      - {name: stop_condition,               raw_dtype: string}
+      - {name: pause_condition,              raw_dtype: string}
+      - {name: resume_condition,             raw_dtype: string}
+      - {name: cancel_condition,             raw_dtype: string}
+      - {name: reset_condition,              raw_dtype: string}
+      - {name: reset_action,                 raw_dtype: string}
+      - {name: when_to_cancel,               raw_dtype: string}
+      - {name: when_to_resume,               raw_dtype: string}
+      - {name: set_start_to,                 raw_dtype: string}
+      - {name: relative_duration_works_on,   raw_dtype: string}
+      - {name: retroactive,                  raw_dtype: boolean}
+      - {name: retroactive_pause,            raw_dtype: boolean}
+      - {name: enable_logging,               raw_dtype: boolean}
+      - {name: sys_overrides,                raw_dtype: string}
+      - {name: sys_domain,                   raw_dtype: string}
+      - {name: sys_domain_path,              raw_dtype: string}
+      - {name: u_actual_duration,            raw_dtype: bigint}
+      - {name: u_module,                     raw_dtype: string}
+      - {name: u_service_contract,           raw_dtype: string}
+      - {name: u_sla_owner,                  raw_dtype: string,    description: FK to sys_user.sys_id.}
+      - {name: mirror_created_on,            raw_dtype: timestamp}
+      - {name: mirror_updated_on,            raw_dtype: timestamp}
+
+  # ── core_company (master data) ────────────────────────────────────────────
+  - name: core_company
+    description: ServiceNow company / customer / vendor reference table.
+    columns:
+      - {name: sys_id,                   raw_dtype: string,         nullable: false, description: ServiceNow primary key (business key).}
+      - {name: name,                     raw_dtype: string}
+      - {name: parent,                   raw_dtype: string,         description: FK to core_company.sys_id (parent company).}
+      - {name: sys_class_name,           raw_dtype: string}
+      - {name: customer,                 raw_dtype: boolean}
+      - {name: vendor,                   raw_dtype: boolean}
+      - {name: vendor_type,              raw_dtype: string}
+      - {name: vendor_manager,           raw_dtype: string,         description: FK to sys_user.sys_id.}
+      - {name: manufacturer,             raw_dtype: boolean}
+      - {name: primary,                  raw_dtype: boolean}
+      - {name: country,                  raw_dtype: string,         description: FK to core_country.sys_id.}
+      - {name: state,                    raw_dtype: string}
+      - {name: city,                     raw_dtype: string}
+      - {name: street,                   raw_dtype: string}
+      - {name: zip,                      raw_dtype: string}
+      - {name: phone,                    raw_dtype: string}
+      - {name: fax_phone,                raw_dtype: string}
+      - {name: contact,                  raw_dtype: string,         description: FK to sys_user.sys_id.}
+      - {name: latitude,                 raw_dtype: decimal(18,7)}
+      - {name: longitude,                raw_dtype: decimal(18,7)}
+      - {name: lat_long_error,           raw_dtype: string}
+      - {name: coordinates_retrieved_on, raw_dtype: timestamp}
+      - {name: website,                  raw_dtype: string}
+      - {name: notes,                    raw_dtype: string}
+      - {name: stock_symbol,             raw_dtype: string}
+      - {name: stock_price,              raw_dtype: string}
+      - {name: market_cap,               raw_dtype: decimal(32,2)}
+      - {name: revenue_per_year,         raw_dtype: decimal(32,2)}
+      - {name: profits,                  raw_dtype: decimal(32,2)}
+      - {name: discount,                 raw_dtype: decimal(32,2)}
+      - {name: num_employees,            raw_dtype: bigint}
+      - {name: publicly_traded,          raw_dtype: boolean}
+      - {name: fiscal_year,              raw_dtype: date}
+      - {name: rank_tier,                raw_dtype: string}
+      - {name: theme,                    raw_dtype: string}
+      - {name: apple_icon,               raw_dtype: string}
+      - {name: banner_image,             raw_dtype: string}
+      - {name: banner_image_light,       raw_dtype: string}
+      - {name: banner_text,              raw_dtype: string}
+      - {name: sso_source,               raw_dtype: string}
+      - {name: u_active,                 raw_dtype: boolean}
+      - {name: u_checked_in,             raw_dtype: date}
+      - {name: u_export_restricted,      raw_dtype: boolean}
+      - {name: u_id,                     raw_dtype: string}
+      - {name: u_market_unit,            raw_dtype: string}
+      - {name: u_preferred_language,     raw_dtype: string}
+      - {name: u_short_name,             raw_dtype: string}
+      - {name: u_l1_approval,            raw_dtype: boolean}
+      - {name: u_invoice_recipient,      raw_dtype: string}
+      - {name: sys_created_on,           raw_dtype: timestamp}
+      - {name: sys_updated_on,           raw_dtype: timestamp}
+      - {name: sys_created_by,           raw_dtype: string}
+      - {name: sys_updated_by,           raw_dtype: string}
+      - {name: sys_mod_count,            raw_dtype: bigint}
+      - {name: mirror_created_on,        raw_dtype: timestamp}
+      - {name: mirror_updated_on,        raw_dtype: timestamp}
+
+  # ── core_country (reference data) ─────────────────────────────────────────
+  - name: core_country
+    description: ServiceNow country reference table (ISO 3166).
+    columns:
+      - {name: sys_id,            raw_dtype: string,    nullable: false, description: ServiceNow primary key (business key).}
+      - {name: name,              raw_dtype: string}
+      - {name: iso3166_2,         raw_dtype: string,    description: ISO 3166-1 alpha-2 code.}
+      - {name: iso3166_3,         raw_dtype: string,    description: ISO 3166-1 alpha-3 code.}
+      - {name: iana,              raw_dtype: string}
+      - {name: un_numeric,        raw_dtype: bigint}
+      - {name: order,             raw_dtype: bigint}
+      - {name: population,        raw_dtype: bigint}
+      - {name: active,            raw_dtype: boolean}
+      - {name: sys_created_on,    raw_dtype: timestamp}
+      - {name: sys_updated_on,    raw_dtype: timestamp}
+      - {name: sys_created_by,    raw_dtype: string}
+      - {name: sys_updated_by,    raw_dtype: string}
+      - {name: sys_mod_count,     raw_dtype: bigint}
+      - {name: mirror_created_on, raw_dtype: timestamp}
+      - {name: mirror_updated_on, raw_dtype: timestamp}
+
+  # ── sys_user_grmember (user-to-group membership link) ─────────────────────
+  - name: sys_user_grmember
+    description: Many-to-many membership of users in user groups.
+    columns:
+      - {name: sys_id,            raw_dtype: string,    nullable: false, description: ServiceNow primary key.}
+      - {name: user,              raw_dtype: string,    nullable: false, description: FK to sys_user.sys_id.}
+      - {name: group,             raw_dtype: string,    nullable: false, description: FK to sys_user_group.sys_id.}
+      - {name: scrum_role,        raw_dtype: string}
+      - {name: points,            raw_dtype: bigint}
+      - {name: u_expiry_date,     raw_dtype: date}
+      - {name: sys_created_on,    raw_dtype: timestamp}
+      - {name: sys_updated_on,    raw_dtype: timestamp}
+      - {name: sys_created_by,    raw_dtype: string}
+      - {name: sys_updated_by,    raw_dtype: string}
+      - {name: sys_mod_count,     raw_dtype: bigint}
+      - {name: mirror_created_on, raw_dtype: timestamp}
+      - {name: mirror_updated_on, raw_dtype: timestamp}
+
+  # ── task_sla (SLA instance per task) ──────────────────────────────────────
+  - name: task_sla
+    description: SLA instance attached to a single task / incident — measures actual against contract_sla.
+    columns:
+      - {name: sys_id,                   raw_dtype: string,         nullable: false, description: ServiceNow primary key (business key).}
+      - {name: task,                     raw_dtype: string,         nullable: false, description: FK to task.sys_id (incident / change / request).}
+      - {name: sla,                      raw_dtype: string,         nullable: false, description: FK to contract_sla.sys_id.}
+      - {name: stage,                    raw_dtype: string,         description: in_progress | paused | completed | cancelled.}
+      - {name: active,                   raw_dtype: boolean}
+      - {name: has_breached,             raw_dtype: boolean}
+      - {name: start_time,               raw_dtype: timestamp}
+      - {name: end_time,                 raw_dtype: timestamp}
+      - {name: pause_time,               raw_dtype: timestamp}
+      - {name: planned_end_time,         raw_dtype: timestamp}
+      - {name: original_breach_time,     raw_dtype: timestamp}
+      - {name: duration,                 raw_dtype: bigint}
+      - {name: business_duration,        raw_dtype: bigint}
+      - {name: business_pause_duration,  raw_dtype: bigint}
+      - {name: business_time_left,       raw_dtype: bigint}
+      - {name: business_percentage,      raw_dtype: decimal(32,2)}
+      - {name: pause_duration,           raw_dtype: bigint}
+      - {name: percentage,               raw_dtype: decimal(32,2)}
+      - {name: time_left,                raw_dtype: bigint}
+      - {name: schedule,                 raw_dtype: string}
+      - {name: timezone,                 raw_dtype: string}
+      - {name: sys_created_on,           raw_dtype: timestamp}
+      - {name: sys_updated_on,           raw_dtype: timestamp}
+      - {name: sys_created_by,           raw_dtype: string}
+      - {name: sys_updated_by,           raw_dtype: string}
+      - {name: sys_mod_count,            raw_dtype: bigint}
+      - {name: mirror_created_on,        raw_dtype: timestamp}
+      - {name: mirror_updated_on,        raw_dtype: timestamp}
+
+  # ── u_mcs_company_and_approval_group_mapping (ExampleCorp-custom mapping) ────────
+  - name: u_mcs_company_and_approval_group_mapping
+    description: ExampleCorp-custom mapping between companies, departments and ServiceNow approval groups.
+    columns:
+      - {name: sys_id,            raw_dtype: string,    nullable: false, description: ServiceNow primary key.}
+      - {name: u_company,         raw_dtype: string,    description: FK to core_company.sys_id.}
+      - {name: u_department,      raw_dtype: string,    description: FK to cmn_department.sys_id.}
+      - {name: u_approval_group,  raw_dtype: string,    description: FK to sys_user_group.sys_id.}
+      - {name: u_approval_level,  raw_dtype: string}
+      - {name: sys_created_on,    raw_dtype: timestamp}
+      - {name: sys_updated_on,    raw_dtype: timestamp}
+      - {name: sys_created_by,    raw_dtype: string}
+      - {name: sys_updated_by,    raw_dtype: string}
+      - {name: sys_mod_count,     raw_dtype: bigint}
+      - {name: mirror_created_on, raw_dtype: timestamp}
+      - {name: mirror_updated_on, raw_dtype: timestamp}
+
+  # ── volumemetrics (operational metrics) ───────────────────────────────────
+  - name: volumemetrics
+    description: Volume metrics — pipeline counters per source table per loading run.
+    columns:
+      - {name: source_system,         raw_dtype: string}
+      - {name: business_unit,         raw_dtype: string}
+      - {name: table_name,            raw_dtype: string}
+      - {name: loading_timestamp,     raw_dtype: string}
+      - {name: erwin_load_type,       raw_dtype: string}
+      - {name: databricks_load_type,  raw_dtype: string}
+      - {name: time_taken_lan_std,    raw_dtype: string}
+      - {name: records_landing,       raw_dtype: string}
+      - {name: records_inserted,      raw_dtype: string}
+      - {name: records_updated,       raw_dtype: string}
+      - {name: records_deleted,       raw_dtype: string}
+      - {name: total_records,         raw_dtype: string}
+      - {name: time_taken_std_cons,   raw_dtype: string}
