@@ -19,6 +19,11 @@ PRIVAT/
 # AI layer
 .env
 .env.local
+.cache/
+.env.generated
 *.pdf
 !documentation/**/*.pdf
 
+
+# Local-only scratch docs (not committed)
+.local-docs/

@@ -29,8 +29,9 @@
     (AI Services account, AI Search). Use this if default names collide.
 
 .PARAMETER SearchSku
-    AI Search tier: 'basic' (~€68/mo, vector only) or 'standard' (~€245/mo,
-    vector + semantic ranker). Default 'basic' to minimize thesis budget.
+    AI Search tier: 'free' (€0, 50 MB / 3 indexes, no SLA, ONE per subscription),
+    'basic' (~€68/mo, vector only), or 'standard' (~€245/mo, vector + semantic
+    ranker). Default 'free' for thesis-scale workloads.
 
 .EXAMPLE
     ./devops/ai/00_provision.ps1
@@ -52,12 +53,13 @@ param(
     [string]$Region         = "germanywestcentral",
     [string]$NameSuffix     = "",
     # AI Search SKU. Cost (germanywestcentral, May 2026):
+    #   free     ≈ €0      — 50 MB / 3 indexes / ONE per subscription, no SLA
     #   basic    ≈ €68/mo  — vector search OK, NO semantic ranker
     #   standard ≈ €245/mo — vector + semantic ranker (S1)
-    # Default kept low to minimize thesis budget. Override with -SearchSku standard
-    # when the semantic re-ranker is needed (later phases).
-    [ValidateSet("basic", "standard")]
-    [string]$SearchSku      = "basic"
+    # Default 'free' for thesis-scale workloads (a few thousand columns ≈ <12 MB).
+    # Override with -SearchSku basic / standard when production capacity is needed.
+    [ValidateSet("free", "basic", "standard")]
+    [string]$SearchSku      = "free"
 )
 
 $ErrorActionPreference = "Continue"
@@ -243,10 +245,22 @@ foreach ($d in $deployments) {
 Write-Step "Azure AI Search: $searchName (sku=$SearchSku)"
 $searchEndpoint = az search service show -g $ResourceGroup -n $searchName --query "hostingMode" -o tsv 2>$null
 if (-not $searchEndpoint) {
-    az search service create `
-        -g $ResourceGroup -n $searchName -l $Region `
-        --sku $SearchSku --partition-count 1 --replica-count 1 -o none
-    Write-Ok "Created (sku=$SearchSku)"
+    # The Free (F1) tier does not accept --partition-count / --replica-count;
+    # paid tiers default to 1/1 anyway.
+    if ($SearchSku -eq "free") {
+        az search service create `
+            -g $ResourceGroup -n $searchName -l $Region `
+            --sku free -o none
+    } else {
+        az search service create `
+            -g $ResourceGroup -n $searchName -l $Region `
+            --sku $SearchSku --partition-count 1 --replica-count 1 -o none
+    }
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok "Created (sku=$SearchSku)"
+    } else {
+        Write-Warn2 "Search creation failed (sku=$SearchSku). If 'free' is exhausted in this subscription, retry with -SearchSku basic."
+    }
 } else {
     Write-Skip "Already exists"
 }
