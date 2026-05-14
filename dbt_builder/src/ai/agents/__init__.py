@@ -30,6 +30,11 @@ from dbt_builder.src.ai.agents.schema_analyzer import (
     SkipPredicate,
     bronze_table_to_source_table,
 )
+from dbt_builder.src.ai.agents.yaml_generator import (
+    YamlBundle,
+    YamlFile,
+    YamlGenerator,
+)
 
 __all__ = [
     "BvArchitect",
@@ -40,6 +45,9 @@ __all__ = [
     "SchemaAnalyzer",
     "SchemaAnalyzerError",
     "SkipPredicate",
+    "YamlBundle",
+    "YamlFile",
+    "YamlGenerator",
     "bronze_table_to_source_table",
     "get_modelling_agent",
 ]
