@@ -14,6 +14,11 @@ Sub-modules:
 
 from __future__ import annotations
 
+from dbt_builder.src.ai.agents.bv_architect import (
+    BvArchitect,
+    BvArchitectError,
+    ProposeBvSatsFn,
+)
 from dbt_builder.src.ai.agents.modeller import (
     ModellingAgent,
     ModellingAgentError,
@@ -27,8 +32,11 @@ from dbt_builder.src.ai.agents.schema_analyzer import (
 )
 
 __all__ = [
+    "BvArchitect",
+    "BvArchitectError",
     "ModellingAgent",
     "ModellingAgentError",
+    "ProposeBvSatsFn",
     "SchemaAnalyzer",
     "SchemaAnalyzerError",
     "SkipPredicate",
