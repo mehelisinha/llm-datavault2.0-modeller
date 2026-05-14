@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Default theme tokens — overridden by Phase B6.2 design pass. */
+:root {
+  --color-surface: 248 250 252; /* slate-50 */
+  --color-surface-muted: 226 232 240; /* slate-200 */
+  --color-accent: 59 130 246; /* blue-500 */
+  --color-accent-fg: 248 250 252;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
