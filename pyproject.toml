@@ -70,6 +70,10 @@ ai = [
     # Phase 2: local vector backend (CPU build, no GPU dep, ~18 MB).
     "faiss-cpu>=1.8.0",
     "numpy>=1.26",
+    # Phase B: HTTP service surface backing the React UI.
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
 ]
 
 # ── Foramt and Linting ─────────────────────────────

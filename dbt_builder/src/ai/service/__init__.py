@@ -24,13 +24,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dbt_builder.src.ai.agents import (
+    BvArchitect,
+    SchemaAnalyzer,
+    YamlBundle,
+    YamlGenerator,
+)
 from dbt_builder.src.ai.contracts.approval import ApprovalRecord, ApprovalStatus
+from dbt_builder.src.ai.contracts.bv import BvProposal
 from dbt_builder.src.ai.contracts.catalog import (
     BronzeSnapshot,
     CatalogSnapshot,
     ChangeSet,
 )
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
+from dbt_builder.src.ai.contracts.payloads import SourceSystem
 from dbt_builder.src.ai.contracts.validation import ValidationReport
 from dbt_builder.src.ai.pipeline import bronze_reader, catalog_inspector, diff_analyzer
 from dbt_builder.src.ai.store import (
@@ -45,13 +53,35 @@ class ApprovalGateError(RuntimeError):
     """Raised when a caller tries to approve a plan that has ERROR-severity issues."""
 
 
+class LlmAgentNotConfiguredError(RuntimeError):
+    """Raised when an LLM-backed agent (SchemaAnalyzer) is invoked without being wired.
+
+    The deterministic agents (BvArchitect, YamlGenerator) always have safe
+    defaults; the SchemaAnalyzer needs an Azure OpenAI client and so cannot
+    be defaulted without a credential. Callers (the API) translate this to
+    HTTP 503.
+    """
+
+
 class DwaService:
     """High-level orchestration entry point used by the API."""
 
-    def __init__(self, *, approval_store: ApprovalStore | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        approval_store: ApprovalStore | None = None,
+        schema_analyzer: SchemaAnalyzer | None = None,
+        bv_architect: BvArchitect | None = None,
+        yaml_generator: YamlGenerator | None = None,
+    ) -> None:
         self._store: ApprovalStore = approval_store or SqliteApprovalStore(
             Path(".cache") / "approvals.sqlite"
         )
+        # Optional — analyze() raises LlmAgentNotConfiguredError if missing.
+        self._schema_analyzer = schema_analyzer
+        # Deterministic agents always have safe defaults.
+        self._bv_architect = bv_architect or BvArchitect()
+        self._yaml_generator = yaml_generator or YamlGenerator()
 
     # ── Step 1 ──────────────────────────────────────────────────────────────
     def inspect_catalog(
@@ -94,6 +124,37 @@ class DwaService:
     # ── Step 3 ──────────────────────────────────────────────────────────────
     def diff(self, catalog: CatalogSnapshot, bronze: BronzeSnapshot) -> ChangeSet:
         return diff_analyzer.diff(catalog, bronze)
+
+    # ── Step 4 (LLM) ─────────────────────────────────────────────────────────────────
+    def analyze(
+        self,
+        *,
+        system: SourceSystem,
+        bronze: BronzeSnapshot,
+        change_set: ChangeSet,
+    ) -> ModelingPlan:
+        """Step 4 — SchemaAnalyzer agent. Requires an LLM-bound analyzer."""
+        if self._schema_analyzer is None:
+            raise LlmAgentNotConfiguredError(
+                "DwaService was constructed without a SchemaAnalyzer; "
+                "bind one (DwaService(schema_analyzer=...)) before calling analyze()."
+            )
+        return self._schema_analyzer.analyze(system=system, bronze=bronze, change_set=change_set)
+
+    # ── Step 4b ──────────────────────────────────────────────────────────────────────
+    def architect_bv(self, plan: ModelingPlan) -> BvProposal:
+        """Step 4b — BV Architect; deterministic, always available."""
+        return self._bv_architect.propose(plan)
+
+    # ── Step 5 ──────────────────────────────────────────────────────────────────────
+    def generate_yaml(
+        self,
+        *,
+        plan: ModelingPlan,
+        bv: BvProposal | None = None,
+    ) -> YamlBundle:
+        """Step 5 — YAML Generator; deterministic, always available."""
+        return self._yaml_generator.render(plan=plan, bv=bv)
 
     # ── Step 6 ──────────────────────────────────────────────────────────────
     def validate(

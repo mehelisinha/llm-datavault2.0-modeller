@@ -1,27 +1,89 @@
-"""Routes backing the Review page.
+"""Routes backing the Plan-builder pages.
 
-Phase A exposes the validator endpoint so the UI can render the green/red
-"Validation passed / N issues" banner. The analyze (Step 4) and generate
-(Step 5) endpoints are placeholders that 501 until Phase B connects the
-Schema Analyzer + YAML Generator agents.
+Endpoints:
+
+* ``POST /api/plans/validate``     — Step 6: Validator (always available).
+* ``POST /api/plans/analyze``      — Step 4: SchemaAnalyzer (LLM; 503 if unwired).
+* ``POST /api/plans/architect-bv`` — Step 4b: BV Architect (deterministic).
+* ``POST /api/plans/generate``     — Step 5: YAML Generator (deterministic).
+
+Every endpoint goes through :class:`DwaService` — never imports an
+``ai/*`` internal directly. The architecture test enforces this so the
+API surface stays small and the agents can refactor freely.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from dbt_builder.src.ai.contracts.bv import BvProposal
+from dbt_builder.src.ai.contracts.catalog import BronzeSnapshot, ChangeSet
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
+from dbt_builder.src.ai.contracts.payloads import SourceSystem
 from dbt_builder.src.ai.contracts.validation import ValidationReport
-from dbt_builder.src.ai.service import DwaService, get_service
+from dbt_builder.src.ai.service import (
+    DwaService,
+    LlmAgentNotConfiguredError,
+    get_service,
+)
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
+
+
+# ── Request bodies ──────────────────────────────────────────────────────────
 
 
 class ValidateRequest(BaseModel):
     plan: ModelingPlan | None = None
     rendered_yaml: str | None = Field(default=None)
     dbt_project_path: str | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    """Inputs for Step 4 — Schema Analyzer.
+
+    ``system`` and ``bronze`` are produced by the discovery + bronze-reader
+    steps; ``change_set`` is the diff analyzer's output. The UI fetches
+    them via earlier endpoints and re-posts them here so the call is
+    explicit and the API stays stateless.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    system: SourceSystem
+    bronze: BronzeSnapshot
+    change_set: ChangeSet
+
+
+class GenerateRequest(BaseModel):
+    """Inputs for Step 5 — YAML Generator."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    plan: ModelingPlan
+    bv: BvProposal | None = None
+
+
+# ── Response bodies ─────────────────────────────────────────────────────────
+
+
+class GeneratedYamlFile(BaseModel):
+    """API-friendly view of a YamlFile (text body, not bytes)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: str
+    body: str = Field(description="UTF-8 decoded YAML content.")
+
+
+class GenerateResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    files: tuple[GeneratedYamlFile, ...]
+
+
+# ── Endpoints ───────────────────────────────────────────────────────────────
 
 
 @router.post("/validate", response_model=ValidationReport)
@@ -41,19 +103,45 @@ def validate(
     )
 
 
-@router.post("/analyze", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-def analyze() -> dict[str, str]:
-    """Step 4 — Schema Analyzer LLM agent. Wired in Phase B."""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Schema Analyzer agent is wired in Phase B.",
-    )
+@router.post("/analyze", response_model=ModelingPlan)
+def analyze(
+    body: AnalyzeRequest,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> ModelingPlan:
+    """Step 4 — SchemaAnalyzer LLM agent."""
+    try:
+        return service.analyze(
+            system=body.system,
+            bronze=body.bronze,
+            change_set=body.change_set,
+        )
+    except LlmAgentNotConfiguredError as exc:
+        # 503: the route exists but the LLM dependency is not wired in this
+        # deployment. Distinct from 501 (not implemented) and 500 (bug).
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
 
-@router.post("/generate", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-def generate() -> dict[str, str]:
-    """Step 5 — YAML Generator LLM agent. Wired in Phase B."""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="YAML Generator agent is wired in Phase B.",
+@router.post("/architect-bv", response_model=BvProposal)
+def architect_bv(
+    plan: ModelingPlan,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> BvProposal:
+    """Step 4b — BV Architect (deterministic)."""
+    return service.architect_bv(plan)
+
+
+@router.post("/generate", response_model=GenerateResponse)
+def generate(
+    body: GenerateRequest,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> GenerateResponse:
+    """Step 5 — YAML Generator (deterministic)."""
+    bundle = service.generate_yaml(plan=body.plan, bv=body.bv)
+    return GenerateResponse(
+        files=tuple(
+            GeneratedYamlFile(path=f.path, body=f.body.decode("utf-8")) for f in bundle.files
+        )
     )
