@@ -30,6 +30,24 @@ NON_AI_PYTHON_ROOTS = (
     REPO_ROOT / "shared" / "src",
 )
 
+# The HTTP/UI surface (``dbt_builder/api/*``) MAY import the AI layer, but only
+# through the public facade (``ai.service``) and the typed contracts
+# (``ai.contracts.*``). Any other AI sub-package (``ai.agents``, ``ai.pipeline``,
+# ``ai.discovery``, ``ai.rendering``, ``ai.embeddings``, ``ai.validation``,
+# ``ai.store``, ``ai.utils``) is internal — touching it from the API layer
+# would let a route bypass approval / validation guardrails.
+API_PYTHON_ROOT = REPO_ROOT / "dbt_builder" / "api"
+API_ALLOWED_AI_PREFIXES = (
+    "dbt_builder.src.ai.service",
+    "dbt_builder.src.ai.contracts",
+)
+
+# Removed sub-packages (or sub-packages on a removal path) that nothing should
+# import. Embeddings/RAG infrastructure is being deprecated in Phase C; this
+# guardrail makes the deprecation visible immediately as a failing test on any
+# new import. Remove an entry once the corresponding folder is deleted.
+DEPRECATED_AI_SUBPACKAGES = ("dbt_builder.src.ai.embeddings",)
+
 # Modules that the AI layer is allowed to import. Anything starting with one
 # of these prefixes is fine; everything else is flagged. Standard-library and
 # third-party packages are not constrained here (managed via pyproject [ai]).
@@ -96,4 +114,55 @@ def test_ai_layer_only_imports_allowed_first_party_modules(source_file: Path):
         f"{source_file.relative_to(REPO_ROOT)} imports disallowed first-party "
         f"modules: {bad}. Update AI_ALLOWED_IMPORT_PREFIXES if the new "
         f"dependency is intentional."
+    )
+
+
+@pytest.mark.parametrize("source_file", _iter_python_files((API_PYTHON_ROOT,)))
+def test_api_layer_only_imports_ai_service_and_contracts(source_file: Path):
+    """The HTTP/UI layer must go through the service facade.
+
+    Anything in ``dbt_builder/api/`` may import only ``ai.service`` and
+    ``ai.contracts.*``. Reaching into ``ai.agents``, ``ai.pipeline``,
+    ``ai.embeddings``, ``ai.validation``, ``ai.store``, ``ai.discovery``,
+    ``ai.rendering`` or ``ai.utils`` would let a route call internals and
+    bypass approval / validation guardrails.
+    """
+    offending: list[str] = []
+    for name in _imports_in(source_file):
+        if not name.startswith(AI_PACKAGE_PREFIX):
+            continue
+        if not any(name.startswith(prefix) for prefix in API_ALLOWED_AI_PREFIXES):
+            offending.append(name)
+    assert not offending, (
+        f"{source_file.relative_to(REPO_ROOT)} imports AI internals: {offending}. "
+        "API layer must go through dbt_builder.src.ai.service / .contracts."
+    )
+
+
+@pytest.mark.parametrize(
+    "source_file",
+    _iter_python_files((AI_PACKAGE_PATH, API_PYTHON_ROOT) + NON_AI_PYTHON_ROOTS),
+)
+def test_no_one_imports_deprecated_ai_subpackages(source_file: Path):
+    """Nothing in the repo (except the deprecated package itself) may import
+    deprecated AI sub-packages — currently the embeddings / RAG stack."""
+    offending: list[str] = []
+    for name in _imports_in(source_file):
+        for deprecated in DEPRECATED_AI_SUBPACKAGES:
+            if not name.startswith(deprecated):
+                continue
+            # Allow modules inside the deprecated package itself to import
+            # their own siblings while it still exists.
+            try:
+                rel = source_file.relative_to(REPO_ROOT)
+            except ValueError:  # pragma: no cover
+                rel = source_file
+            module_dotted = ".".join(rel.with_suffix("").parts)
+            if module_dotted.startswith(deprecated):
+                continue
+            offending.append(name)
+    assert not offending, (
+        f"{source_file.relative_to(REPO_ROOT)} imports deprecated AI sub-packages: "
+        f"{offending}. These packages are scheduled for removal — replace with "
+        "the deterministic Python pipeline (catalog inspector / diff analyzer)."
     )

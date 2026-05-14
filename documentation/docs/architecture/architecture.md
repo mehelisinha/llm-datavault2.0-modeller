@@ -985,23 +985,23 @@ graph LR
 2 senior engineers → architecture + core engine
 2 mid engineers → generators + tests + integration
 
-### Phase 0 — Architecture & Design & POC (Sprint 1)
+### Phase 0 — Architecture & Design & POC (Sprint 1) ✅ DELIVERED
 Goal: build **POC** and **architecture**
 
-- [ ] Architecture
+- [x] Architecture
     - High-level architecture diagram
     - Component interaction diagram
     - Repository structure
     - Configuration strategy (env-based)
-- [ ] Metadata Contract
+- [x] Metadata Contract
     - Define Data Vault metadata structure
     - Naming convention strategy
     - Hashing strategy (MD5/SHA)
     - Surrogate key strategy
     - Incremental loading strategy
     - Model dependency strategy (Hub → Link → Sat)
-- [ ] **Small PoC**
-    - [ ] Build a thin vertical slice:
+- [x] **Small PoC**
+    - [x] Built a thin vertical slice:
         - Hardcoded metadata (1 Hub + 1 Sat)
         - Simple Jinja SQL template
         - Generate dbt model
@@ -1011,143 +1011,151 @@ Goal: build **POC** and **architecture**
         - Test hashing logic
 
 🎯 Deliverable
-Architecture + metadata contract + POC - run one hub model
+Architecture + metadata contract + POC — one hub model executed end-to-end.
 
-### Phase 1: Foundation - Core Code Generation
+### Phase 1: Foundation - Core Code Generation ✅ DELIVERED
 Goal: build **core platform skeleton**
 
-- [ ] Shared Core
+- [x] Shared Core
     - Logger
     - Secret getter
     - Storage abstraction
     - Path resolver
     - Config loader
     - Databricks workspace file writer
-- [ ] Metadata Layer
-    - Design Static Config ( meta about meta)
-    - Design metadata schema (Delta Tables)
+- [x] Metadata Layer
+    - Static Config (meta about meta)
+    - Metadata schema (Delta Tables)
     - Metadata loader
-    - Metadata Getter:
-        - Pydantic Models:
-            - Base
-            - Hub
-            - Link
-            - Satellite
+    - Metadata Getter — Pydantic models for Base / Hub / Link / Satellite
     - Metadata validation engine
-- [ ] DBT Builder Core
-    - [ ] Generator Classes: (* use {ref} syntax to comply wit dbt dags)
+- [x] DBT Builder Core
+    - [x] Generator Classes (use `{{ ref }}` to comply with dbt DAGs)
         - Base generator class
         - Hub generator (hash key)
         - Link generator (composite keys)
         - Satellite generator
     - Base Project class
     - Staging Generator
-- [ ] DBT Runner (minimal)
-    - Runner interface
-    - CLI wrapper (dbt run, dbt test)
-- [ ] Dependency Engine:
-    - Generation order:Hubs->Links->Satellites
-    - Metadata Dependency Validator
-- [] UI for lineage [skeleton]
-- [] AI Metadata Assistant [skeleton] ( This can be done outside of the foundation timeline as has no impact on the Core framework)
-    - small poc
+- [x] DBT Runner (minimal) — Runner interface + CLI wrapper (`dbt run`, `dbt test`)
+- [x] Dependency Engine — Hubs → Links → Satellites + metadata dependency validator
+- [ ] UI for lineage *(skeleton — descoped to v2 React UI in Phase 4)*
+- [~] AI Metadata Assistant *(POC built; superseded by v2 multi-agent pipeline in Phase 4)*
 
-🎯 Milestone:
-👉 Able to generate one simple Hub model from metadata
+🎯 Milestone
+👉 Generated simple Hub models from metadata.
 
 
-### Phase 2: DBT Builder Framework
+### Phase 2: DBT Builder Framework ✅ DELIVERED
 Goal: full **Data Vault Framework**
 
-- [ ] Model Generators:
-    - Satellite generator
-        - SCD2 ...
-        - Link:
-            -Same as Link or other flavors
-- [ ] Macro Framework
-    - Macro generator base
-    - Hash macro
-    - Surrogate key macro
-    - Audit macro
-- [ ] Core Classes
-    - Project class
-    - Naming strategy class
-    - Template loader
+- [x] Model Generators — Satellite (SCD2) + Link variants
+- [x] Macro Framework — base + hash + surrogate-key + audit macros
+- [x] Core Classes — Project class, Naming strategy class, Template loader
 
 🎯 Deliverable
-Framework ready for model generation
+Framework ready for model generation.
 
-### Phase 2: Model Generation
+### Phase 2b: Model Generation ✅ DELIVERED (mart layer partial)
 Goal: full **Data Vault generation**
 
-- [ ] DBT Builder
-        - Factory for model generators
-    - Template loader
-    - SQL template library (skeleton)
-    - [ ] Supporting Generators
-        - Source model generator
-        - Staging model generator
-        - PIT
-        - Bridge (optional)
-        - Mart (Star Schema) - may take couple of sprints
-            - Fact:
-                - Pydantic Model
-                - Derive metadata and fill pydantic model
-                - create Fact class
-            - Dim
-                - Pydantic Model
-                - Derive metadata and fill pydantic model
-                - create Fact class
-        - Denormalized Views
-                - Pydantic Model
-                - Derive metadata and fill pydantic model
-                - create Fact class
-        - Macro Generation
-        - Tests Generation
+- [x] DBT Builder — factory for model generators, template loader, SQL template library
+- [x] Supporting Generators — Source, Staging, PIT, Bridge
+- [~] Mart (Star Schema) — Fact / Dim Pydantic models + classes built; full mart auto-derivation rolled into Phase 4 pipeline
+- [ ] Denormalized Views *(deferred to Phase 5)*
+- [x] Macro Generation
+- [x] Tests Generation
 
 🎯 Milestone
-👉 Generate full DV structure for one source
+👉 Generated full DV structure for one source system.
 
-### Phase 3: Execution & Orchestration
+### Phase 3: Execution & Orchestration ✅ DELIVERED
 Goal: **production-ready** execution
 
-- [ ] Runner
-    - Project Runner
-    - Environment config (dev/qa/prod)
-    - Selective model run support
-- [ ] Observability
-    - Audit logging (Delta)
-    - Run metadata logging
-    - Model execution time tracking
-    - Error logging
-- [ ] Orchestration
-    - Databricks Workflows integration
-    - Retry mechanism
-    - Failure recovery
+- [x] Runner — Project Runner, environment config (dev/qa/prod), selective model run
+- [x] Observability — audit logging (Delta), run metadata, execution-time tracking, error logging
+- [x] Orchestration — Databricks Workflows integration, retry, failure recovery
 
 🎯 Milestone
-👉 Fully automated metadata → generate → run → log
+👉 Fully automated metadata → generate → run → log.
 
-### Phase 4: Enhancement & Scale
-Goal: **enterprise readiness**
+### Phase 4: Metadata Generator v2 — Multi-Agent + UI + Governance 🚧 IN PROGRESS
+Goal: replace the single-shot LLM POC with an **incremental, idempotent, governed** metadata generator that matches the *Option B* pipeline (six steps, three LLM agents, deterministic Python everywhere else).
 
-- [ ] Data Quality
-- [ ] Documentation
-    - Auto-generate dbt docs
-    - Metadata documentation generator
-- [ ] Lineage
-    - Column lineage
-    - Source to DV lineage
-- [ ] Performance
-    - Incremental optimization
-    - Partition strategy
-    - Caching strategy
-- [ ] UX Improvements
-    - CLI for generation
-    - Dry-run mode
-    - Diff mode (only changed models)
+Decision log entries that drive this phase:
+
+* **RAG removed.** The FAISS / Azure AI Search / embedding stack is deprecated. "Context for the LLM" is now done by deterministic Python (parse the reference YAML once, pass it through prompt-cached on the LLM call). Cheaper, reproducible, debuggable.
+* **Excel review dropped before it was built.** Replaced by a React UI backed by a FastAPI service facade.
+* **Approval store added.** Every plan transition (DRAFT / APPROVED / REJECTED / CHANGES_REQUESTED) is an insert-only audit row — SQLite for local dev, Delta on Databricks for prod.
+* **Multi-agent kept and refocused.** Three agents replace the single `ModellingAgent`: Schema Analyzer (optional, ambiguous tables only), BV Architect (per-domain BV reasoning), YAML Generator (always runs, prompt-cached).
+
+#### Pipeline (Option B — six steps)
+
+| # | Step | Type | Notes |
+|---|---|---|---|
+| 1 | Catalog Inspector | Python | Reads vault `information_schema` + existing `system_metadata.yml` |
+| 2 | Bronze Schema Reader | Python | `DESCRIBE TABLE`, include/exclude patterns, BK sanity check |
+| 3 | Diff Analyzer | Python | NEW / DRIFT / UNCHANGED / ORPHANED + per-change risk |
+| 4 | Schema Analyzer Agent | LLM (optional) | Runs only on ambiguous NEW/DRIFT tables; outputs JSON decisions |
+| 4b | BV Architect Agent | LLM | Pattern presets + free-form requirements → BV satellites |
+| 5 | YAML Generator Agent | LLM (always) | Merges decisions + existing YAML + reference template; preserves UNCHANGED entries verbatim |
+| 6 | Validator | Python | YAML syntax → Pydantic → referential integrity → `dbt parse` |
+
+#### Phase 4A — Deterministic core + governance (additive, no removals) ✅ DELIVERED
+- [x] New typed contracts: `CatalogSnapshot`, `BronzeSnapshot`, `ChangeSet`, `ValidationReport`, `ApprovalRecord`
+- [x] Catalog Inspector (Step 1)
+- [x] Bronze Schema Reader (Step 2) — Spark-free at import time, callable injection
+- [x] Diff Analyzer (Step 3) — NEW / DRIFT / UNCHANGED / ORPHANED with risk levels
+- [x] Validator module (Step 6) — YAML / Pydantic / referential integrity / optional `dbt parse`
+- [x] Approval store — `ApprovalStore` Protocol + `SqliteApprovalStore` (insert-only, versioned)
+- [x] Service facade `DwaService` — single entry point used by API + tests
+- [x] FastAPI skeleton — `/api/plans/validate`, `/api/plans/{id}/approve|reject|request-changes`, `/api/history`
+- [x] Architecture-test extensions — API may import only `ai.service` + `ai.contracts`; nothing may import deprecated `ai.embeddings`
+- [x] Idempotency snapshot test — pipeline byte-equal across runs
+- [x] Validator + approval-gate guardrail tests (9 rules + audit chain)
+
+#### Phase 4B — Agents + React UI 🚧 NEXT
+- [ ] Rename `ModellingAgent` → `SchemaAnalyzer`; add per-table skip predicate
+- [ ] BV Architect agent — consumes pattern presets + free-form domain context from UI Step 3
+- [ ] YAML Generator agent — merge with existing YAML, preserve UNCHANGED slice byte-for-byte (snapshot-tested)
+- [ ] Reference-YAML loader — in-memory cache + lookup helpers (Python replacement for RAG)
+- [ ] React UI (Vite + TypeScript) — five pages matching the GUI mockups: Connect / Select Tables / Define BV / Review / History
+- [ ] Entra ID auth — MSAL on the React side, JWT validation in FastAPI
+- [ ] Preservation snapshot test — Step 5 must not mutate UNCHANGED entries
+
+#### Phase 4C — RAG removal + prod approval store 🧹 CLEANUP
+- [ ] Delete `dbt_builder/src/ai/embeddings/` (faiss_store, azure_search_store, embedder, vector_store)
+- [ ] Delete `tests/ai/test_vector_store.py`, `tests/ai/test_embedder.py`
+- [ ] Remove RAG env vars (`DWA_AI_VECTOR_BACKEND`, `DWA_AI_VECTOR_CACHE_DIR`, `DWA_AI_SEARCH_ENDPOINT`, `DWA_AI_SEARCH_ADMIN_KEY`, `DWA_AI_EMBEDDING_DEPLOYMENT`) and matching `AISettings` fields
+- [ ] Wrap Azure AI Search + `text-embedding-3-small` blocks in `devops/ai/00_provision.ps1` behind a `-IncludeRag` switch (off by default)
+- [ ] `DeltaApprovalStore` for prod (Databricks SQL connector, table `dwa.governance.metadata_approvals`, `delta.appendOnly: true`)
+- [ ] Update `.env.template`, `README.md`, this document
+
+#### Guardrails (current state)
+- Pydantic frozen contracts on every step boundary (input + output).
+- `ModelingPlan` cross-entity invariants (orphan sat, link FK count, no name collisions).
+- Validator referential rules from `dv-metadata-architect.agent.md`: orphan sat, undeclared hashdiff, system column in payload, `appendOnly` forbidden on eff-sat / PIT / bridge, `on_schema_change` on every incremental model.
+- Approval gate blocks any plan with ERROR-severity issues; UI Approve button is disabled accordingly.
+- Insert-only audit chain — every transition creates a new versioned row.
+- Architecture test forbids: non-AI modules importing AI; API importing AI internals (must use service facade); anyone importing deprecated `ai.embeddings`.
+- Idempotency snapshot — Steps 1-3 byte-equal across runs.
+- Schema validator vs live catalog (`runners/schema_validator.py`) still runs before generation.
+
 🎯 Milestone
-👉 Enterprise-ready metadata-driven dbt generator
+👉 Engineer kicks off generation in the React UI; pipeline runs incrementally on NEW/DRIFT only; validator passes; reviewer approves; YAML lands in dbt repo with full audit trail. Target cost ~$0.10 per incremental run.
+
+### Phase 5: Enhancement & Scale
+Goal: **enterprise readiness** beyond the v2 pipeline.
+
+- [ ] Data Quality — Great Expectations + dbt tests at scale
+- [ ] Documentation — auto-generate dbt docs + metadata documentation generator
+- [ ] Lineage — column-level lineage and source-to-DV lineage in the UI
+- [ ] Performance — incremental optimisation, partition strategy, caching strategy
+- [ ] UX — CLI for generation, dry-run mode, diff mode (only changed models)
+- [ ] Denormalized views (carried over from Phase 2b)
+
+🎯 Milestone
+👉 Enterprise-ready metadata-driven dbt generator.
 
 ---
 
@@ -1170,6 +1178,15 @@ CI/CD Pipeline        | GitLab
 Monitoring            | Databricks Job UI, Custom Dashboards
 Local Env.            | UV and MakeFile
 Linting               | Ruff
+
+── Phase 4 (v2 metadata generator) additions ─────────
+Metadata Pipeline     | Python (Catalog Inspector / Bronze Reader / Diff Analyzer / Validator)
+LLM Agents            | 3 agents — Schema Analyzer (optional), BV Architect, YAML Generator
+LLM Context           | Deterministic Python lookup + prompt caching (RAG removed)
+Review UI             | React (Vite + TypeScript)
+Review API            | FastAPI (service facade in dbt_builder/api)
+Approval Store        | SQLite (dev) / Delta on Databricks (prod) — insert-only audit
+Auth                  | Entra ID (MSAL on React, JWT on FastAPI)
 ```
 
 ---
