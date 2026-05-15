@@ -1,6 +1,7 @@
 import { createRoute, redirect } from "@tanstack/react-router";
 
 import { PageShell } from "@/components/PageShell";
+import { PlaceholderCard } from "@/components/PlaceholderCard";
 import { ROUTES } from "@/constants/routes";
 
 import { rootRoute } from "./root";
@@ -8,11 +9,19 @@ import { rootRoute } from "./root";
 /**
  * Code-based route definitions.
  *
- * One factory per route, all parented to `rootRoute`. Pages currently render
- * placeholder shells; B6.5 fills in the real interactions. Keeping the page
- * components inline avoids one-file-per-shell boilerplate while leaving an
- * obvious extraction point once a page grows beyond ~80 LOC.
+ * One factory per route, all parented to `rootRoute`. Pages currently
+ * compose the shared `PlaceholderCard`; B6.4+ replace the body with real
+ * page logic. The placeholder copy lives inline so each route advertises
+ * which sub-phase fills it in.
  */
+
+const PLACEHOLDER_PHASES = Object.freeze({
+  discovery: "B6.4",
+  diff: "B6.5",
+  planReview: "B6.5",
+  generatePreview: "B6.5",
+  history: "B6.5",
+} as const);
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -30,9 +39,11 @@ export const discoveryRoute = createRoute({
       title="Discovery"
       description="Pick a catalog and schema, snapshot bronze, and prepare a change set."
     >
-      <p className="text-sm text-slate-500">
-        UI for this step lands in B6.5 — wiring `inspect_catalog` + `read_bronze`.
-      </p>
+      <PlaceholderCard
+        title="Catalog inspection"
+        description="Connects to Unity Catalog and stages a bronze snapshot for diffing."
+        upcomingPhase={PLACEHOLDER_PHASES.discovery}
+      />
     </PageShell>
   ),
 });
@@ -45,7 +56,11 @@ export const diffRoute = createRoute({
       title="Diff"
       description="Review change-set rows and choose actionable tables."
     >
-      <p className="text-sm text-slate-500">B6.5 fills this in.</p>
+      <PlaceholderCard
+        title="Change set"
+        description="NEW / SCHEMA_CHANGED / UNCHANGED / ORPHANED rows from `read_bronze`."
+        upcomingPhase={PLACEHOLDER_PHASES.diff}
+      />
     </PageShell>
   ),
 });
@@ -58,7 +73,11 @@ export const planReviewRoute = createRoute({
       title="Plan review"
       description="Inspect hubs, satellites, links, and BV proposals before generation."
     >
-      <p className="text-sm text-slate-500">B6.5 fills this in.</p>
+      <PlaceholderCard
+        title="Modelling plan"
+        description="Hub / satellite / link / PIT / bridge layout from the agents pipeline."
+        upcomingPhase={PLACEHOLDER_PHASES.planReview}
+      />
     </PageShell>
   ),
 });
@@ -71,7 +90,11 @@ export const generatePreviewRoute = createRoute({
       title="Generate preview"
       description="Render YAML files deterministically and review before submit."
     >
-      <p className="text-sm text-slate-500">B6.5 fills this in.</p>
+      <PlaceholderCard
+        title="YAML bundle"
+        description="Deterministic per-file output ready for review and approval."
+        upcomingPhase={PLACEHOLDER_PHASES.generatePreview}
+      />
     </PageShell>
   ),
 });
@@ -84,7 +107,11 @@ export const historyRoute = createRoute({
       title="History"
       description="Audit log of past plans, decisions, and reviewer activity."
     >
-      <p className="text-sm text-slate-500">B6.5 fills this in.</p>
+      <PlaceholderCard
+        title="Audit log"
+        description="Plans, decisions, and approvals recorded by `SqliteApprovalStore`."
+        upcomingPhase={PLACEHOLDER_PHASES.history}
+      />
     </PageShell>
   ),
 });
@@ -98,3 +125,4 @@ export const routeTree = rootRoute.addChildren([
   generatePreviewRoute,
   historyRoute,
 ]);
+

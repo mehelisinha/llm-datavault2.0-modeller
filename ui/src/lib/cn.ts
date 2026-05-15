@@ -1,9 +1,14 @@
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
 /**
- * Tiny classnames helper (Tailwind-friendly).
+ * Conditional classname helper that resolves Tailwind utility conflicts.
  *
- * Avoids pulling in `clsx` for one-line concatenation. Drops falsy values
- * so callers can write `cn("base", isActive && "active")`.
+ * Combines `clsx` (truthy filtering, array / object inputs) with
+ * `tailwind-merge` (last-wins resolution for conflicting utilities like
+ * `p-2` vs `p-4`). This is the shadcn/ui convention and the only sanctioned
+ * way to compose class strings inside primitives.
  */
-export function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(" ");
+export function cn(...inputs: ClassValue[]): string {
+  return twMerge(clsx(inputs));
 }

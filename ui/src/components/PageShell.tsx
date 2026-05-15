@@ -8,17 +8,21 @@ interface PageShellProps {
 }
 
 /**
- * Standard page chrome. Centralised so every page has the same heading
- * rhythm and we never re-implement title/description markup per route.
+ * Standard page chrome.
+ *
+ * Centralised so every route renders the same heading rhythm, spacing, and
+ * actions slot. Pages must never re-implement the title/description markup.
  */
 export function PageShell({ title, description, children, actions }: PageShellProps) {
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 animate-fade-in">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {title}
+          </h1>
           {description ? (
-            <p className="mt-1 text-sm text-slate-600">{description}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
@@ -27,3 +31,4 @@ export function PageShell({ title, description, children, actions }: PageShellPr
     </section>
   );
 }
+

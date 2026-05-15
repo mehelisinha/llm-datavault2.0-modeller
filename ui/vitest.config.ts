@@ -9,6 +9,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./tests/setup.ts"],
+    // Limit discovery to TypeScript sources so the `tsc -b` composite emit
+    // (`*.js` / `*.d.ts`) is never picked up as duplicate suites.
+    include: ["tests/**/*.test.{ts,tsx}"],
     css: false,
     restoreMocks: true,
     clearMocks: true,

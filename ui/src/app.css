@@ -2,16 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Default theme tokens — overridden by Phase B6.2 design pass. */
-:root {
-  --color-surface: 248 250 252; /* slate-50 */
-  --color-surface-muted: 226 232 240; /* slate-200 */
-  --color-accent: 59 130 246; /* blue-500 */
-  --color-accent-fg: 248 250 252;
-}
+/*
+ * Design tokens (shadcn/ui convention).
+ *
+ * All values are HSL channel triplets so utilities can apply alpha via
+ * `hsl(var(--token) / <alpha-value>)`. Light theme is the default; dark
+ * theme is opt-in via the `.dark` class on `<html>` (B6.2 only ships the
+ * tokens — toggle UX lands later in B6.5).
+ *
+ * Components MUST consume these via the semantic Tailwind utilities
+ * (`bg-background`, `text-foreground`, …) declared in `tailwind.config.ts`.
+ * Never embed raw colour literals (`#fff`, `rgb(...)`) in component code.
+ */
 
-html,
-body,
-#root {
-  height: 100%;
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Brand / accents */
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    /* States */
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+
+    /* Borders / inputs / focus */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    /* Radius */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 13%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 13%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 65%;
+    --destructive: 0 63% 41%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 142 71% 36%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 40%;
+    --warning-foreground: 210 40% 98%;
+    --info: 199 89% 38%;
+    --info-foreground: 210 40% 98%;
+
+    --border: 217 33% 22%;
+    --input: 217 33% 22%;
+    --ring: 217 91% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
 }
