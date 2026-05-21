@@ -8,7 +8,6 @@ import GeneratePreviewPage from "@/pages/GeneratePreview";
 import HistoryPage from "@/pages/History";
 
 import { rootRoute } from "./root";
-
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: ROUTES.root,

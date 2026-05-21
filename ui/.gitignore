@@ -1,0 +1,38 @@
+# Build output
+dist/
+build/
+
+# tsc -b emit (composite project references emit JS+d.ts even on --noEmit;
+# we treat these as transient build artefacts and never commit them).
+src/**/*.js
+src/**/*.d.ts
+tests/**/*.js
+tests/**/*.d.ts
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+.npm/
+.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/coverage
+coverage/
+.vitest-cache/
+
+# Generated API schema is committed (acts as a lockfile).
