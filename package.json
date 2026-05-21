@@ -3,6 +3,7 @@
   "private": true,
   "description": "DWA Metadata Generator — dev orchestration (API + UI).",
   "scripts": {
+    "predev": "pnpm --dir ui install",
     "dev": "concurrently -k -n api,ui -c blue,green \"node scripts/dev-api.mjs\" \"pnpm --dir ui dev\"",
     "dev:api": "node scripts/dev-api.mjs",
     "dev:ui": "pnpm --dir ui dev",
