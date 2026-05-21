@@ -1,0 +1,66 @@
+# B8 — end-to-end verification matrix (API + UI contract)
+# Each row is exercised by tests/e2e/test_verification_matrix.py
+
+scenarios:
+  - id: health
+    description: Liveness probe returns ok
+    method: GET
+    path: /health
+    expect_status: 200
+
+  - id: discovery_catalogs
+    description: Stub mode lists configured catalogs
+    method: GET
+    path: /api/discovery/catalogs
+    expect_status: 200
+  - id: discovery_schemas
+    description: Stub mode lists schemas for a catalog
+    method: GET
+    path: /api/discovery/catalogs/edh_unreg_silver_dev_st/schemas
+    expect_status: 200
+
+  - id: discovery_snapshot
+    description: Snapshot runs Steps 1-3 and returns pipeline inputs
+    method: POST
+    path: /api/discovery/snapshot
+    json:
+      catalog: edh_unreg_silver_dev_st
+      bronze_schema: bronze
+      vault_schema: raw_vault
+    expect_status: 200
+
+  - id: analyze
+    description: Schema analyzer returns a modeling plan when LLM is wired
+    method: POST
+    path: /api/plans/analyze
+    use_snapshot: true
+    expect_status: 200
+
+  - id: architect_bv
+    description: BV architect is deterministic
+    method: POST
+    path: /api/plans/architect-bv
+    use_analyze_plan: true
+    expect_status: 200
+
+  - id: generate
+    description: YAML generator emits per-object files
+    method: POST
+    path: /api/plans/generate
+    use_analyze_plan: true
+    expect_status: 200
+
+  - id: validate
+    description: Validator accepts a minimal plan
+    method: POST
+    path: /api/plans/validate
+    json:
+      plan:
+        system_id: iec_cim
+    expect_status: 200
+
+  - id: history
+    description: Audit log endpoint is reachable
+    method: GET
+    path: /api/history
+    expect_status: 200

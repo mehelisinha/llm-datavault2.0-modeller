@@ -1,0 +1,21 @@
+{
+  "name": "dwa",
+  "private": true,
+  "description": "DWA Metadata Generator — dev orchestration (API + UI).",
+  "scripts": {
+    "dev": "concurrently -k -n api,ui -c blue,green \"node scripts/dev-api.mjs\" \"pnpm --dir ui dev\"",
+    "dev:api": "node scripts/dev-api.mjs",
+    "dev:ui": "pnpm --dir ui dev",
+    "gen:api": "pnpm --dir ui gen:api",
+    "build:ui": "pnpm --dir ui build",
+    "typecheck:ui": "pnpm --dir ui typecheck",
+    "test:ui": "pnpm --dir ui test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.18.0",
+    "pnpm": ">=9.0.0"
+  }
+}
