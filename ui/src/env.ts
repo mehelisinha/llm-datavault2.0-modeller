@@ -12,6 +12,10 @@ const envSchema = z.object({
   VITE_API_BASE_URL: z.string().default(""),
   /** Reviewer identity sent as `X-Actor` header (B6 stub; B7 swaps to JWT). */
   VITE_DEV_ACTOR: z.string().min(1).default("dev@local"),
+  /** Optional defaults forwarded to discovery snapshot when set. */
+  VITE_DEFAULT_SYSTEM_ID: z.string().default(""),
+  VITE_DEFAULT_SYSTEM_NAME: z.string().default(""),
+  VITE_DEFAULT_RECORD_SOURCE: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);
@@ -25,6 +29,11 @@ if (!parsed.success) {
 export const env = Object.freeze({
   apiBaseUrl: parsed.data.VITE_API_BASE_URL,
   devActor: parsed.data.VITE_DEV_ACTOR,
+  defaults: Object.freeze({
+    systemId: parsed.data.VITE_DEFAULT_SYSTEM_ID,
+    systemName: parsed.data.VITE_DEFAULT_SYSTEM_NAME,
+    recordSource: parsed.data.VITE_DEFAULT_RECORD_SOURCE,
+  }),
 });
 
 export type Env = typeof env;

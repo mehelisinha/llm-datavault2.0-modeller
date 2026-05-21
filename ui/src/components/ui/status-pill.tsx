@@ -1,31 +1,28 @@
 import { Badge, type BadgeIntent } from "./badge";
 
-import { type ChangeCategory } from "@/constants/dv";
-
-/**
- * Maps a backend `ChangeCategory` to a visually meaningful badge intent.
- *
- * The `Record` type forces the table to stay total: adding a new category
- * to `CHANGE_CATEGORIES` will fail the typecheck until a render decision is
- * made here. Components must never branch on category strings directly.
- */
-const CHANGE_CATEGORY_INTENT: Readonly<Record<ChangeCategory, BadgeIntent>> = {
-  NEW: "success",
-  SCHEMA_CHANGED: "warning",
-  UNCHANGED: "neutral",
-  ORPHANED: "destructive",
-};
+import {
+  CHANGE_CATEGORY_INTENTS,
+  CHANGE_CATEGORY_LABELS,
+  type ChangeCategory,
+} from "@/constants/dv";
 
 interface StatusPillProps {
   category: ChangeCategory;
   className?: string;
 }
 
-/** Domain-aware pill rendering a `ChangeCategory` consistently across the app. */
+/**
+ * Domain-aware pill rendering a `ChangeCategory` consistently across the app.
+ *
+ * Both the intent (color) and the display label come from the generated
+ * `dv.ts` constants, which mirror the Python source of truth. Components
+ * must never branch on category strings directly.
+ */
 export function StatusPill({ category, className }: StatusPillProps) {
+  const intent = CHANGE_CATEGORY_INTENTS[category] as BadgeIntent | undefined;
   return (
-    <Badge intent={CHANGE_CATEGORY_INTENT[category]} className={className}>
-      {category}
+    <Badge intent={intent} className={className}>
+      {CHANGE_CATEGORY_LABELS[category]}
     </Badge>
   );
 }

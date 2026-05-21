@@ -5,6 +5,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 
 import { queryClient } from "@/api/queryClient";
+import { DwaPipelineProvider } from "@/context/DwaPipelineContext";
+import { Toaster } from "@/components/ui/toaster";
 import { routeTree } from "@/routes";
 
 import "./app.css";
@@ -25,7 +27,10 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <DwaPipelineProvider>
+        <RouterProvider router={router} />
+        <Toaster />
+      </DwaPipelineProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

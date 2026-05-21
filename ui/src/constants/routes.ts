@@ -35,3 +35,23 @@ export const PRIMARY_NAV: readonly RoutePath[] = Object.freeze([
   ROUTES.generatePreview,
   ROUTES.history,
 ]);
+
+export const GENERATE_LABELS = Object.freeze({
+  pageTitle: "YAML Preview",
+  pageDescription: "Preview the generated YAML before approval.",
+  button: "Generate YAML Preview",
+  empty: 'Click "Generate YAML Preview" to see the output.',
+  previewCardTitle: "Generated YAML",
+  noSystemWarning:
+    "No source system metadata is available. YAML can still be generated from the plan.",
+  noPlanHint: "Run the schema analyzer on the Diff page first.",
+  download: "Download YAML",
+  downloadDisabledHint: "Generate YAML first",
+  downloadFilename: (systemId: string) => `${systemId || "metadata"}.yaml`,
+} as const);
+
+export const HISTORY_LABELS = Object.freeze({
+  pageTitle: "Plan History",
+  pageDescription: "View the audit trail of all plan transitions.",
+  noRecords: "No history records found.",
+} as const);

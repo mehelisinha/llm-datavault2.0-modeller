@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from dbt_builder.api.routers import approvals, history, plans
+from dbt_builder.api.routers import approvals, discovery, history, plans
 
 _TITLE = "DWA Metadata Generator API"
 _VERSION = "0.2.0-phase-b"
@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
     fixtures without leaking module-level state.
     """
     app = FastAPI(title=_TITLE, version=_VERSION, description=_DESCRIPTION)
+    app.include_router(discovery.router)
     app.include_router(plans.router)
     app.include_router(approvals.router)
     app.include_router(history.router)

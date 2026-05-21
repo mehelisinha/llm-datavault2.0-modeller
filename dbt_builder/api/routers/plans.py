@@ -14,6 +14,8 @@ API surface stays small and the agents can refactor freely.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +24,7 @@ from dbt_builder.src.ai.contracts.catalog import BronzeSnapshot, ChangeSet
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 from dbt_builder.src.ai.contracts.payloads import SourceSystem
 from dbt_builder.src.ai.contracts.validation import ValidationReport
+from dbt_builder.src.ai.rendering.metadata_v3_emitter import render_v3
 from dbt_builder.src.ai.service import (
     DwaService,
     LlmAgentNotConfiguredError,
@@ -29,6 +32,8 @@ from dbt_builder.src.ai.service import (
 )
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
+
+GenerateFormat = Literal["metadata_v3", "dbt_per_file"]
 
 
 # ── Request bodies ──────────────────────────────────────────────────────────
@@ -57,12 +62,20 @@ class AnalyzeRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    """Inputs for Step 5 — YAML Generator."""
+    """Inputs for Step 5 — YAML Generator.
+
+    The default ``format`` (``metadata_v3``) renders a single monolithic
+    document and requires ``system`` so the ``system:`` block can be filled
+    in. ``dbt_per_file`` keeps the legacy per-object output and ignores
+    ``system``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     plan: ModelingPlan
     bv: BvProposal | None = None
+    system: SourceSystem | None = None
+    format: GenerateFormat = "metadata_v3"
 
 
 # ── Response bodies ─────────────────────────────────────────────────────────
@@ -78,9 +91,16 @@ class GeneratedYamlFile(BaseModel):
 
 
 class GenerateResponse(BaseModel):
+    """Step 5 output. Exactly one of ``monolithic_yaml`` or ``files`` is set.
+
+    ``metadata_v3`` returns a single document in ``monolithic_yaml``;
+    ``dbt_per_file`` returns one file per object in ``files``.
+    """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    files: tuple[GeneratedYamlFile, ...]
+    files: tuple[GeneratedYamlFile, ...] = ()
+    monolithic_yaml: str | None = None
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
@@ -138,10 +158,25 @@ def generate(
     body: GenerateRequest,
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> GenerateResponse:
-    """Step 5 — YAML Generator (deterministic)."""
+    """Step 5 — YAML Generator (deterministic).
+
+    ``metadata_v3`` (default): single monolithic document via ``render_v3``;
+    ``files`` is empty.
+    ``dbt_per_file``: legacy per-object output via ``service.generate_yaml``;
+    ``monolithic_yaml`` is ``None``.
+    """
+    if body.format == "metadata_v3":
+        if body.system is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="'system' is required when format='metadata_v3'.",
+            )
+        yaml_text = render_v3(plan=body.plan, system=body.system, bv=body.bv)
+        return GenerateResponse(monolithic_yaml=yaml_text)
+
     bundle = service.generate_yaml(plan=body.plan, bv=body.bv)
     return GenerateResponse(
         files=tuple(
             GeneratedYamlFile(path=f.path, body=f.body.decode("utf-8")) for f in bundle.files
-        )
+        ),
     )

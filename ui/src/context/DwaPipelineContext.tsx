@@ -99,7 +99,9 @@ export function DwaPipelineProvider({ children }: { children: ReactNode }) {
 
   const reset = useCallback(() => setState(emptyState), []);
 
-  const planId = state.validation?.plan_id ?? null;
+  // Validator sets plan_id to plan.system_id; fall back so governance works
+  // even when the user skipped "Validate plan" on the Diff page.
+  const planId = state.validation?.plan_id ?? state.plan?.system_id ?? null;
 
   const value = useMemo(
     () => ({

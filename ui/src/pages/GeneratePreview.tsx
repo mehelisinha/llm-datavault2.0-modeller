@@ -6,6 +6,7 @@ import {
   useRejectPlan,
   useRequestChanges,
   useSubmitForReview,
+  useValidatePlan,
 } from "@/api/hooks";
 import { validationPassed } from "@/api/types";
 import { PageShell } from "@/components/PageShell";
@@ -41,34 +42,9 @@ function downloadTextFile(content: string, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 200);
 }
 
-// ── Scroll helper ────────────────────────────────────────────────────────────
-// Finds the nearest scrollable ancestor (not necessarily window) and scrolls
-// it so the target element is near the top with an offset for the fixed nav.
-const SCROLL_OFFSET_PX = 88; // approximate nav height
-
 function scrollToElement(el: HTMLElement): void {
-  // Walk up the DOM to find the first element that actually scrolls.
-  let container: Element | null = el.parentElement;
-  while (container && container !== document.documentElement) {
-    const style = window.getComputedStyle(container);
-    const overflowY = style.overflowY;
-    if (
-      (overflowY === "auto" || overflowY === "scroll") &&
-      container.scrollHeight > container.clientHeight
-    ) {
-      break;
-    }
-    container = container.parentElement;
-  }
-
-  const scrollRoot = container ?? document.documentElement;
-  const elTop = el.getBoundingClientRect().top;
-  const containerTop = scrollRoot === document.documentElement
-    ? 0
-    : scrollRoot.getBoundingClientRect().top;
-  const targetScroll = scrollRoot.scrollTop + elTop - containerTop - SCROLL_OFFSET_PX;
-
-  scrollRoot.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+  // scroll-mt-24 on the target offsets for the fixed nav header.
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /**
@@ -80,28 +56,41 @@ function scrollToElement(el: HTMLElement): void {
  * 4. **Approve / Reject / Request changes** — governance gate.
  */
 export default function GeneratePreviewPage() {
-  const { plan, bv, system, validation, planId, renderedYaml, setRenderedYaml } = usePipeline();
+  const {
+    plan,
+    bv,
+    system,
+    validation,
+    planId,
+    renderedYaml,
+    setRenderedYaml,
+    setValidation,
+  } = usePipeline();
   const [comment, setComment] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const decisionRef = useRef<HTMLDivElement>(null);
 
-  // ── Scroll after submit ──────────────────────────────────────────────────
-  // Stored in a ref so the effect can detect the moment hasSubmitted flips.
-  const shouldScrollRef = useRef(false);
+  const effectivePlanId = planId ?? plan?.system_id ?? null;
 
   useEffect(() => {
-    if (shouldScrollRef.current && decisionRef.current) {
-      shouldScrollRef.current = false;
-      scrollToElement(decisionRef.current);
+    if (hasSubmitted && decisionRef.current) {
+      window.requestAnimationFrame(() => {
+        if (decisionRef.current) {
+          scrollToElement(decisionRef.current);
+        }
+      });
     }
+  }, [hasSubmitted]);
+
+  const validatePlan = useValidatePlan({
+    onSuccess: (data) => setValidation(data),
   });
 
   // ── Mutations ──────────────────────────────────────────────────────────
   const generate = useGenerateYaml({
     onSuccess: (data) => {
-      const anyData = data as any;
       const yaml: string =
-        anyData.monolithic_yaml ||
+        data.monolithic_yaml ||
         (data.files && data.files.length > 0
           ? data.files[0].body
           : (data.files ?? []).map((f) => f.body).join("\n---\n"));
@@ -111,39 +100,44 @@ export default function GeneratePreviewPage() {
         APPROVAL_LABELS.generateSuccess,
         yaml ? `${lineCount} lines generated` : "No YAML returned — check pipeline steps.",
       );
+      if (plan && yaml) {
+        validatePlan.mutate({ plan, rendered_yaml: yaml });
+      }
     },
     onError: (err) => toast.error(APPROVAL_LABELS.generateError, err.message),
   });
 
-  const submit = useSubmitForReview(planId ?? "", {
+  const submit = useSubmitForReview({
     onSuccess: () => {
-      shouldScrollRef.current = true;
-      setHasSubmitted(true); // triggers re-render → useEffect fires → scroll
-      toast.success(APPROVAL_LABELS.submitSuccess, `Plan ID: ${planId ?? "—"}`);
+      setHasSubmitted(true);
+      toast.success(APPROVAL_LABELS.submitSuccess, `Plan ID: ${effectivePlanId ?? "—"}`);
     },
     onError: (err) => toast.error(APPROVAL_LABELS.submitError, err.message),
   });
 
-  const approve = useApprovePlan(planId ?? "", {
+  const approve = useApprovePlan({
     onSuccess: () => {
       setComment("");
-      toast.success(APPROVAL_LABELS.approveSuccess, `Plan ID: ${planId ?? "—"}`);
+      toast.success(APPROVAL_LABELS.approveSuccess, `Plan ID: ${effectivePlanId ?? "—"}`);
     },
     onError: (err) => toast.error(APPROVAL_LABELS.approveError, err.message),
   });
 
-  const reject = useRejectPlan(planId ?? "", {
+  const reject = useRejectPlan({
     onSuccess: () => {
       setComment("");
-      toast.success(APPROVAL_LABELS.rejectSuccess, `Plan ID: ${planId ?? "—"}`);
+      toast.success(APPROVAL_LABELS.rejectSuccess, `Plan ID: ${effectivePlanId ?? "—"}`);
     },
     onError: (err) => toast.error(APPROVAL_LABELS.rejectError, err.message),
   });
 
-  const requestChanges = useRequestChanges(planId ?? "", {
+  const requestChanges = useRequestChanges({
     onSuccess: () => {
       setComment("");
-      toast.success(APPROVAL_LABELS.requestChangesSuccess, `Plan ID: ${planId ?? "—"}`);
+      toast.success(
+        APPROVAL_LABELS.requestChangesSuccess,
+        `Plan ID: ${effectivePlanId ?? "—"}`,
+      );
     },
     onError: (err) => toast.error(APPROVAL_LABELS.requestChangesError, err.message),
   });
@@ -160,35 +154,62 @@ export default function GeneratePreviewPage() {
     downloadTextFile(renderedYaml, GENERATE_LABELS.downloadFilename(systemId));
   }, [renderedYaml, system, plan]);
 
-  const handleSubmit = () => {
-    if (!plan || !validation || !planId || !renderedYaml) return;
-    submit.mutate({ plan, rendered_yaml: renderedYaml, validation });
+  const handleSubmit = async () => {
+    if (!plan || !renderedYaml || !effectivePlanId) return;
+    try {
+      let report = validation;
+      if (!report) {
+        report = await validatePlan.mutateAsync({ plan, rendered_yaml: renderedYaml });
+        setValidation(report);
+      }
+      await submit.mutateAsync({
+        planId: effectivePlanId,
+        body: { plan, rendered_yaml: renderedYaml, validation: report },
+      });
+    } catch {
+      // Errors surfaced via mutation onError / toast
+    }
   };
 
   const handleApprove = () => {
-    if (!planId) return;
-    approve.mutate(comment.trim() ? { comment: comment.trim() } : { comment: null });
+    if (!effectivePlanId) return;
+    approve.mutate({
+      planId: effectivePlanId,
+      body: comment.trim() ? { comment: comment.trim() } : { comment: null },
+    });
   };
 
   const handleReject = () => {
-    if (!planId || !comment.trim()) return;
-    reject.mutate({ comment: comment.trim() });
+    if (!effectivePlanId || !comment.trim()) return;
+    reject.mutate({ planId: effectivePlanId, body: { comment: comment.trim() } });
   };
 
   const handleRequestChanges = () => {
-    if (!planId || !comment.trim()) return;
-    requestChanges.mutate({ comment: comment.trim() });
+    if (!effectivePlanId || !comment.trim()) return;
+    requestChanges.mutate({ planId: effectivePlanId, body: { comment: comment.trim() } });
   };
 
   // ── Derived state ──────────────────────────────────────────────────────
   const hasYaml = Boolean(renderedYaml && renderedYaml.length > 0);
   const canGenerate = Boolean(plan) && !generate.isPending;
-  const canSubmit = Boolean(plan && validation && planId && renderedYaml);
+  const canSubmit =
+    Boolean(plan && renderedYaml && effectivePlanId) &&
+    !submit.isPending &&
+    !validatePlan.isPending;
   const validationOk = validation ? validationPassed(validation) : false;
-  const canApprove = hasSubmitted && validationOk && Boolean(planId) && !approve.isPending;
-  const canReject = hasSubmitted && Boolean(planId) && Boolean(comment.trim()) && !reject.isPending;
+  const canApprove =
+    hasSubmitted && validationOk && Boolean(effectivePlanId) && !approve.isPending;
+  const canReject =
+    hasSubmitted && Boolean(effectivePlanId) && Boolean(comment.trim()) && !reject.isPending;
   const canRequestChanges =
-    hasSubmitted && Boolean(planId) && Boolean(comment.trim()) && !requestChanges.isPending;
+    hasSubmitted && Boolean(effectivePlanId) && Boolean(comment.trim()) && !requestChanges.isPending;
+
+  const submitBlockReason = (() => {
+    if (!plan) return GENERATE_LABELS.noPlanHint;
+    if (!hasYaml) return GENERATE_LABELS.empty;
+    if (!effectivePlanId) return "Plan ID is missing — run the schema analyzer on Diff first.";
+    return null;
+  })();
 
   return (
     <PageShell
@@ -210,10 +231,13 @@ export default function GeneratePreviewPage() {
           </Button>
           <Button
             intent="secondary"
-            onClick={handleSubmit}
-            disabled={!canSubmit || submit.isPending}
+            onClick={() => void handleSubmit()}
+            disabled={!canSubmit}
+            title={submitBlockReason ?? undefined}
           >
-            {submit.isPending ? <Spinner className="h-4 w-4" /> : null}
+            {submit.isPending || validatePlan.isPending ? (
+              <Spinner className="h-4 w-4" />
+            ) : null}
             {APPROVAL_LABELS.submitLabel}
           </Button>
         </div>
@@ -269,10 +293,21 @@ export default function GeneratePreviewPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {!hasSubmitted ? (
-              <p className="text-sm text-muted-foreground">{APPROVAL_LABELS.submitNeeded}</p>
+              <p className="text-sm text-muted-foreground">
+                {submitBlockReason ?? APPROVAL_LABELS.submitNeeded}
+              </p>
             ) : !validationOk ? (
-              <p className="text-sm text-destructive">{APPROVAL_LABELS.validationBlock}</p>
-            ) : null}
+              <p className="text-sm text-destructive">
+                {APPROVAL_LABELS.validationBlock}
+                {validation
+                  ? ` (${validation.summary.errors} error(s) — fix on the Diff page or regenerate.)`
+                  : null}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Plan submitted. Approve when ready, or reject / request changes with a comment.
+              </p>
+            )}
             <label className="block text-sm">
               {APPROVAL_LABELS.commentLabel}
               <input

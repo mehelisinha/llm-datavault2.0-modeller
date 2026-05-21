@@ -152,12 +152,19 @@ export function useGenerateYaml(
   });
 }
 
+type PlanRouteVars<TBody> = { planId: string; body: TBody };
+type SubmitVars = PlanRouteVars<SubmitBody>;
+type ApproveBody =
+  operations["approve_api_plans__plan_id__approve_post"]["requestBody"]["content"]["application/json"];
+type RejectBody =
+  operations["reject_api_plans__plan_id__reject_post"]["requestBody"]["content"]["application/json"];
+
+/** planId is passed per mutate() call so the URL never goes stale. */
 export function useSubmitForReview(
-  planId: string,
-  options?: UseMutationOptions<unknown, Error, SubmitBody>,
+  options?: UseMutationOptions<unknown, Error, SubmitVars>,
 ) {
   return useMutation({
-    mutationFn: async (body) => {
+    mutationFn: async ({ planId, body }) => {
       const res = await api.POST("/api/plans/{plan_id}/submit-for-review", {
         params: { path: { plan_id: planId } },
         body,
@@ -169,15 +176,10 @@ export function useSubmitForReview(
 }
 
 export function useApprovePlan(
-  planId: string,
-  options?: UseMutationOptions<
-    unknown,
-    Error,
-    operations["approve_api_plans__plan_id__approve_post"]["requestBody"]["content"]["application/json"]
-  >,
+  options?: UseMutationOptions<unknown, Error, PlanRouteVars<ApproveBody>>,
 ) {
   return useMutation({
-    mutationFn: async (body) => {
+    mutationFn: async ({ planId, body }) => {
       const res = await api.POST("/api/plans/{plan_id}/approve", {
         params: { path: { plan_id: planId } },
         body,
@@ -189,15 +191,10 @@ export function useApprovePlan(
 }
 
 export function useRejectPlan(
-  planId: string,
-  options?: UseMutationOptions<
-    unknown,
-    Error,
-    operations["reject_api_plans__plan_id__reject_post"]["requestBody"]["content"]["application/json"]
-  >,
+  options?: UseMutationOptions<unknown, Error, PlanRouteVars<RejectBody>>,
 ) {
   return useMutation({
-    mutationFn: async (body) => {
+    mutationFn: async ({ planId, body }) => {
       const res = await api.POST("/api/plans/{plan_id}/reject", {
         params: { path: { plan_id: planId } },
         body,
@@ -209,15 +206,10 @@ export function useRejectPlan(
 }
 
 export function useRequestChanges(
-  planId: string,
-  options?: UseMutationOptions<
-    unknown,
-    Error,
-    operations["request_changes_api_plans__plan_id__request_changes_post"]["requestBody"]["content"]["application/json"]
-  >,
+  options?: UseMutationOptions<unknown, Error, PlanRouteVars<RejectBody>>,
 ) {
   return useMutation({
-    mutationFn: async (body) => {
+    mutationFn: async ({ planId, body }) => {
       const res = await api.POST("/api/plans/{plan_id}/request-changes", {
         params: { path: { plan_id: planId } },
         body,
