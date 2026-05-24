@@ -40,6 +40,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from dbt_builder.src.ai.agents.tool_loop import (
+    ToolLoopError,
+    ToolSpec,
+    run_tool_loop,
+)
 from dbt_builder.src.ai.contracts.decisions import (
     DecisionConfidence,
     ModelingPlan,
@@ -114,17 +119,23 @@ class ModellingAgent:
         api_version: str = "",
         samples: int = 3,
         max_tokens: int = 4096,
+        tool_specs: tuple[ToolSpec, ...] | None = None,
+        max_tool_rounds: int = 6,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
+        if max_tool_rounds <= 0:
+            raise ValueError("max_tool_rounds must be positive")
         self._client = client
         self._deployment = deployment
         self._api_version = api_version
         self._samples = samples
         self._max_tokens = max_tokens
         self._is_gpt5 = deployment.startswith("gpt-5")
+        self._tool_specs = tool_specs
+        self._max_tool_rounds = max_tool_rounds
 
     @property
     def deployment(self) -> str:
@@ -183,9 +194,16 @@ class ModellingAgent:
         if content or not self._is_gpt5:
             return content
         # gpt-5 occasionally returns empty content on the first attempt; retry
-        # once with a doubled token budget. This is a documented quirk.
+        # once with a doubled token budget. Retry always bypasses the tool loop
+        # (which is incompatible with response_format=json_object).
         _LOG.warning("gpt-5 returned empty content; retrying with doubled budget")
-        return self._call(user_prompt, self._build_kwargs(self._max_tokens * 2))
+        return self._call_single(
+            [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            self._build_kwargs(self._max_tokens * 2),
+        )
 
     def _build_kwargs(self, token_budget: int) -> dict[str, Any]:
         if self._is_gpt5:
@@ -201,12 +219,28 @@ class ModellingAgent:
         }
 
     def _call(self, user_prompt: str, kwargs: dict[str, Any]) -> str:
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+        if self._tool_specs:
+            try:
+                return run_tool_loop(
+                    client=self._client,
+                    deployment=self._deployment,
+                    call_kwargs=kwargs,
+                    initial_messages=messages,
+                    tools=self._tool_specs,
+                    max_rounds=self._max_tool_rounds,
+                )
+            except ToolLoopError as exc:
+                _LOG.warning("Tool loop failed (%s); falling back to single-shot call", exc)
+        return self._call_single(messages, kwargs)
+
+    def _call_single(self, messages: list[dict[str, Any]], kwargs: dict[str, Any]) -> str:
         response = self._client.chat.completions.create(
             model=self._deployment,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=messages,
             **kwargs,
         )
         return (response.choices[0].message.content or "").strip()
@@ -347,6 +381,8 @@ def get_modelling_agent(
     deployment: str | None = None,
     samples: int = 3,
     max_tokens: int | None = None,
+    tool_specs: tuple[ToolSpec, ...] | None = None,
+    max_tool_rounds: int = 6,
 ) -> ModellingAgent:
     """Build a :class:`ModellingAgent` from settings.
 
@@ -375,4 +411,6 @@ def get_modelling_agent(
         api_version=cfg.azure_openai_api_version,
         samples=samples,
         max_tokens=budget,
+        tool_specs=tool_specs,
+        max_tool_rounds=max_tool_rounds,
     )

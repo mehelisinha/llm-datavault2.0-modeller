@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import { useCatalogs, useDiscoverySnapshot, useSchemas, useSchemaTables } from "@/api/hooks";
+import { useCatalogs, useDiscoverySnapshot, useRunPipeline, useSchemas, useSchemaTables } from "@/api/hooks";
 import { PageShell } from "@/components/PageShell";
 import { Button, Card, CardContent, CardHeader, CardTitle, Spinner } from "@/components/ui";
 import { DISCOVERY_LABELS } from "@/constants/discovery";
@@ -29,9 +29,9 @@ export default function DiscoveryPage() {
   const navigate = useNavigate();
   const { setSnapshot } = usePipeline();
 
-  const [catalog, setCatalog] = useState<string>("");
-  const [bronzeSchema, setBronzeSchema] = useState<string>("");
-  const [vaultSchema, setVaultSchema] = useState<string>("");
+  const [catalog, setCatalog] = useState<string>(env.defaults.catalog ?? "");
+  const [bronzeSchema, setBronzeSchema] = useState<string>(env.defaults.bronzeSchema ?? "");
+  const [vaultSchema, setVaultSchema] = useState<string>(env.defaults.vaultSchema ?? "");
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
 
   // ── Remote data ──────────────────────────────────────────────────────────
@@ -75,8 +75,9 @@ export default function DiscoveryPage() {
   };
 
   // Auto-select defaults once schemas arrive for the chosen catalog.
+  // useEffect (not useMemo) because we're producing a side effect — setState.
   const prevSchemasKey = schemas.join(",");
-  useMemo(() => {
+  useEffect(() => {
     if (!catalog || schemas.length === 0) return;
     const vault =
       schemas.find((s) => VAULT_SCHEMA_HINTS.some((h) => s.toLowerCase().includes(h))) ?? "";
@@ -122,15 +123,58 @@ export default function DiscoveryPage() {
 
   const canSnapshot = Boolean(catalog && bronzeSchema && vaultSchema && !snapshot.isPending);
 
+  // ── Agentic run-pipeline action ────────────────────────────────────────
+  const runPipeline = useRunPipeline({
+    onSuccess: (run) => {
+      const req = {
+        catalog,
+        bronze_schema: bronzeSchema,
+        vault_schema: vaultSchema,
+        system_id: env.defaults.systemId || catalog,
+        system_name: env.defaults.systemName || catalog,
+        source_type: env.defaults.systemId || catalog,
+        record_source: env.defaults.recordSource || env.defaults.systemId || catalog,
+      };
+      void navigate({
+        to: ROUTES.pipelineRun,
+        search: {
+          runId: run.run_id,
+          req: encodeURIComponent(JSON.stringify(req)),
+        } as never,
+      });
+    },
+    onError: (err) => toast.error("Pipeline run failed", String(err.message)),
+  });
+
+  const handleRunPipeline = () => {
+    if (!canSnapshot) return;
+    const systemId = env.defaults.systemId || catalog;
+    runPipeline.mutate({
+      catalog,
+      bronze_schema: bronzeSchema,
+      vault_schema: vaultSchema,
+      system_id: systemId,
+      system_name: env.defaults.systemName || catalog,
+      source_type: systemId,
+      record_source: env.defaults.recordSource || systemId,
+    });
+  };
+
   return (
     <PageShell
       title={DISCOVERY_LABELS.pageTitle}
       description={DISCOVERY_LABELS.pageDescription}
       actions={
-        <Button onClick={handleSnapshot} disabled={!canSnapshot}>
-          {snapshot.isPending ? <Spinner className="h-4 w-4" /> : null}
-          {DISCOVERY_LABELS.snapshot}
-        </Button>
+        <div className="flex gap-2">
+          <Button intent="outline" onClick={handleSnapshot} disabled={!canSnapshot}>
+            {snapshot.isPending ? <Spinner className="h-4 w-4" /> : null}
+            {DISCOVERY_LABELS.snapshot}
+          </Button>
+          <Button onClick={handleRunPipeline} disabled={!canSnapshot || runPipeline.isPending}>
+            {runPipeline.isPending ? <Spinner className="h-4 w-4" /> : null}
+            Run pipeline
+          </Button>
+        </div>
       }
     >
       <Card>

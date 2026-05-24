@@ -85,6 +85,33 @@ class AISettings(BaseSettings):
     search_index_patterns: str = Field(default="dv-patterns")
     search_index_decisions: str = Field(default="approved-decisions")
 
+    # ── YAML Metadata store (ADLS Gen2) ──────────────────────────────────────
+    # Set DWA_AI_METADATA_STORE_ACCOUNT to enable ADLS Gen2-backed storage.
+    # When unset the service falls back to LocalYamlStore (.cache/approved_yamls/).
+    metadata_store_account: str | None = Field(
+        default=None,
+        description=(
+            "ADLS Gen2 storage account name (without .dfs.core.windows.net). "
+            "Leave blank to use the local filesystem store in dev/CI."
+        ),
+    )
+    metadata_store_container: str = Field(
+        default="dwa-metadata",
+        description="Container / filesystem name within the storage account.",
+    )
+    metadata_store_sp_client_id: str | None = Field(
+        default=None,
+        description="Service principal client ID for ADLS Gen2 read/write access.",
+    )
+    metadata_store_sp_client_secret: SecretStr | None = Field(
+        default=None,
+        description="Service principal client secret for ADLS Gen2 read/write access.",
+    )
+    metadata_store_tenant_id: str | None = Field(
+        default=None,
+        description="Azure AD tenant ID for the ADLS Gen2 service principal.",
+    )
+
     # ── Observability ─────────────────────────────────────────────────────────
     appinsights_connection_string: SecretStr | None = Field(default=None)
 

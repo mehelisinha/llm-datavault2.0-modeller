@@ -23,24 +23,8 @@ import {
 import { APPROVAL_LABELS } from "@/constants/dv";
 import { GENERATE_LABELS } from "@/constants/routes";
 import { usePipeline } from "@/context/DwaPipelineContext";
+import { downloadTextFile, YAML_MIME } from "@/lib/download";
 import { toast } from "@/lib/toast";
-
-// ── Download helper ─────────────────────────────────────────────────────────
-// Appends a temporary <a> to the DOM before clicking so all browsers honour
-// the download attribute without security restrictions on detached elements.
-function downloadTextFile(content: string, filename: string): void {
-  const blob = new Blob([content], { type: "text/yaml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.style.display = "none";
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  // Revoke slightly later so the browser has time to start the download.
-  window.setTimeout(() => URL.revokeObjectURL(url), 200);
-}
 
 function scrollToElement(el: HTMLElement): void {
   // scroll-mt-24 on the target offsets for the fixed nav header.
@@ -151,7 +135,7 @@ export default function GeneratePreviewPage() {
   const handleDownload = useCallback(() => {
     if (!renderedYaml) return;
     const systemId = system?.system_id ?? plan?.system_id ?? "metadata";
-    downloadTextFile(renderedYaml, GENERATE_LABELS.downloadFilename(systemId));
+    downloadTextFile(renderedYaml, GENERATE_LABELS.downloadFilename(systemId), YAML_MIME);
   }, [renderedYaml, system, plan]);
 
   const handleSubmit = async () => {

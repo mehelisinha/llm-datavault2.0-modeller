@@ -39,13 +39,41 @@ from dbt_builder.src.ai.contracts.catalog import (
 )
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 from dbt_builder.src.ai.contracts.payloads import SourceSystem
+from dbt_builder.src.ai.contracts.pipeline_run import (
+    PipelineRun,
+    PipelineRunStatus,
+    PipelineStepName,
+    PipelineStepResult,
+    StopAfter,
+)
+from dbt_builder.src.ai.contracts.supervision import (
+    RiskAssessment,
+    RiskKind,
+    RiskSeverity,
+    RiskSignal,
+    SupervisionRecommendation,
+)
 from dbt_builder.src.ai.contracts.validation import ValidationReport
+from dbt_builder.src.ai.orchestration import PipelineInput, PipelineOrchestrator
 from dbt_builder.src.ai.pipeline import bronze_reader, catalog_inspector, diff_analyzer
 from dbt_builder.src.ai.store import (
     ApprovalStore,
     SqliteApprovalStore,
     make_record,
 )
+from dbt_builder.src.ai.store.pipeline_run_store import (
+    InMemoryPipelineRunStore,
+    PipelineRunStore,
+    get_pipeline_run_store,
+    set_pipeline_run_store,
+)
+from dbt_builder.src.ai.store.yaml_store import (
+    LocalYamlStore,
+    YamlStore,
+    catalog_from_yaml,
+    make_yaml_store,
+)
+from dbt_builder.src.ai.supervision import PipelineSupervisor, SupervisorConfig
 from dbt_builder.src.ai.validation import validate as run_validation
 
 
@@ -73,6 +101,9 @@ class DwaService:
         schema_analyzer: SchemaAnalyzer | None = None,
         bv_architect: BvArchitect | None = None,
         yaml_generator: YamlGenerator | None = None,
+        pipeline_run_store: PipelineRunStore | None = None,
+        supervisor: PipelineSupervisor | None = None,
+        yaml_store: YamlStore | None = None,
     ) -> None:
         self._store: ApprovalStore = approval_store or SqliteApprovalStore(
             Path(".cache") / "approvals.sqlite"
@@ -82,6 +113,20 @@ class DwaService:
         # Deterministic agents always have safe defaults.
         self._bv_architect = bv_architect or BvArchitect()
         self._yaml_generator = yaml_generator or YamlGenerator()
+        # Pipeline run history (in-memory by default).
+        self._pipeline_run_store: PipelineRunStore = pipeline_run_store or get_pipeline_run_store()
+        # Default supervisor; override at construction time for custom thresholds.
+        self._supervisor = supervisor if supervisor is not None else PipelineSupervisor()
+        # YAML metadata store — local dev fallback until ADLS settings are provided.
+        if yaml_store is not None:
+            self._yaml_store: YamlStore = yaml_store
+        else:
+            try:
+                from dbt_builder.src.ai.settings import get_settings
+
+                self._yaml_store = make_yaml_store(get_settings())
+            except Exception:
+                self._yaml_store = LocalYamlStore()
 
     # ── Step 1 ──────────────────────────────────────────────────────────────
     def inspect_catalog(
@@ -187,6 +232,7 @@ class DwaService:
             plan_json=plan.model_dump_json(),
             validation_json=validation.model_dump_json(),
             previous_version=self._latest_version(validation.plan_id),
+            rendered_yaml=rendered_yaml,
         )
         self._store.append(record)
         return record
@@ -198,7 +244,7 @@ class DwaService:
         actor: str,
         comment: str | None = None,
     ) -> ApprovalRecord:
-        """Transition the latest DRAFT to APPROVED. Blocks on ERROR issues."""
+        """Transition the latest DRAFT to APPROVED and persist YAML to the store."""
         latest = self._store.latest(plan_id)
         if latest is None:
             raise ApprovalGateError(f"No plan found for plan_id={plan_id}")
@@ -209,6 +255,27 @@ class DwaService:
                     f"Cannot approve plan_id={plan_id}: "
                     f"{report.summary.errors} ERROR-severity issues outstanding."
                 )
+
+        # Persist the approved YAML to the configured store (ADLS Gen2 or local).
+        yaml_path: str | None = None
+        if latest.rendered_yaml:
+            catalog_id = catalog_from_yaml(latest.rendered_yaml)
+            next_version = (latest.version or 0) + 1
+            try:
+                yaml_path = self._yaml_store.save(
+                    catalog_id=catalog_id,
+                    plan_id=plan_id,
+                    version=next_version,
+                    rendered_yaml=latest.rendered_yaml,
+                )
+            except Exception as exc:  # pragma: no cover
+                # Storage failure must never block approval — log and continue.
+                import logging
+
+                logging.getLogger(__name__).error(
+                    "Failed to persist YAML for plan_id=%s: %s", plan_id, exc
+                )
+
         record = make_record(
             plan_id=plan_id,
             status=ApprovalStatus.APPROVED,
@@ -217,6 +284,8 @@ class DwaService:
             validation_json=latest.validation_json,
             comment=comment,
             previous_version=latest.version,
+            rendered_yaml=latest.rendered_yaml,
+            yaml_path=yaml_path,
         )
         self._store.append(record)
         return record
@@ -271,6 +340,46 @@ class DwaService:
     def list_recent(self, *, limit: int = 50) -> tuple[ApprovalRecord, ...]:
         return self._store.list_recent(limit=limit)
 
+    # ── Pipeline orchestration (Phase B-2) ──────────────────────────────────
+    def run_pipeline(
+        self,
+        pipeline_input: PipelineInput,
+        *,
+        run_id: str | None = None,
+        acknowledge_risks: bool = False,
+        stop_after: StopAfter | None = None,
+    ) -> PipelineRun:
+        """Run the full pipeline end-to-end and persist the result.
+
+        Parameters
+        ----------
+        acknowledge_risks
+            When True, supervisor-recommended pauses are surfaced on the run
+            (so the UI keeps the banner) but execution continues to YAML.
+        stop_after
+            Internal checkpoint, used by tests; the public UI never sets it.
+        """
+        orchestrator = PipelineOrchestrator(
+            schema_analyzer=self._schema_analyzer,
+            bv_architect=self._bv_architect,
+            yaml_generator=self._yaml_generator,
+            supervisor=self._supervisor,
+        )
+        run = orchestrator.run(
+            pipeline_input,
+            stop_after=stop_after,
+            run_id=run_id,
+            acknowledge_risks=acknowledge_risks,
+        )
+        self._pipeline_run_store.save(run)
+        return run
+
+    def get_pipeline_run(self, run_id: str) -> PipelineRun | None:
+        return self._pipeline_run_store.get(run_id)
+
+    def list_pipeline_runs(self, *, limit: int = 50) -> tuple[PipelineRun, ...]:
+        return self._pipeline_run_store.list_recent(limit=limit)
+
     # ── helpers ─────────────────────────────────────────────────────────────
     def _latest_version(self, plan_id: str) -> int | None:
         latest = self._store.latest(plan_id)
@@ -286,10 +395,28 @@ class DwaService:
 _default_service: DwaService | None = None
 
 
+def _try_build_default_schema_analyzer() -> SchemaAnalyzer | None:
+    """Best-effort construction of a SchemaAnalyzer from environment settings.
+
+    Returns ``None`` if Azure OpenAI configuration is missing/incomplete so the
+    rest of the API stays usable (the analyze step will then surface
+    ``LlmAgentNotConfiguredError`` only when actually invoked).
+    """
+    try:
+        from dbt_builder.src.ai.agents.modeller import get_modelling_agent
+
+        agent = get_modelling_agent()
+    except Exception:  # noqa: BLE001 — env not configured is an expected dev case
+        return None
+    return SchemaAnalyzer.from_modeller(agent)
+
+
 def get_service() -> DwaService:
     global _default_service
     if _default_service is None:
-        _default_service = DwaService()
+        _default_service = DwaService(
+            schema_analyzer=_try_build_default_schema_analyzer(),
+        )
     return _default_service
 
 
@@ -302,3 +429,65 @@ def set_service(service: DwaService | None) -> None:
 def _appease_unused_import(_: Any) -> None:  # pragma: no cover
     """Keep ``Any`` import — used by future typed kwargs."""
     return None
+
+
+# Public facade surface: every name listed here is part of the contract the
+# API / UI layers rely on. Keeping the list explicit also silences F401 for
+# the deliberate re-exports above.
+__all__ = [
+    # Exceptions
+    "ApprovalGateError",
+    "LlmAgentNotConfiguredError",
+    # Service
+    "DwaService",
+    "get_service",
+    "set_service",
+    # Contracts re-exported for caller convenience
+    "ApprovalRecord",
+    "ApprovalStatus",
+    "BronzeSnapshot",
+    "BvProposal",
+    "CatalogSnapshot",
+    "ChangeSet",
+    "ModelingPlan",
+    "PipelineRun",
+    "PipelineRunStatus",
+    "PipelineStepName",
+    "PipelineStepResult",
+    "RiskAssessment",
+    "RiskKind",
+    "RiskSeverity",
+    "RiskSignal",
+    "SourceSystem",
+    "StopAfter",
+    "SupervisionRecommendation",
+    "ValidationReport",
+    "YamlBundle",
+    # Orchestration / supervision
+    "PipelineInput",
+    "PipelineOrchestrator",
+    "PipelineSupervisor",
+    "SupervisorConfig",
+    # Stores
+    "ApprovalStore",
+    "InMemoryPipelineRunStore",
+    "PipelineRunStore",
+    "SqliteApprovalStore",
+    "YamlStore",
+    "LocalYamlStore",
+    "get_pipeline_run_store",
+    "set_pipeline_run_store",
+    "make_record",
+    "make_yaml_store",
+    "catalog_from_yaml",
+    # Agents (deterministic — safe to construct directly in tests)
+    "BvArchitect",
+    "SchemaAnalyzer",
+    "YamlGenerator",
+    # Validation helper
+    "run_validation",
+    # Pipeline submodules (used by the API for deterministic steps)
+    "bronze_reader",
+    "catalog_inspector",
+    "diff_analyzer",
+]

@@ -1,8 +1,9 @@
-import { createRoute, redirect } from "@tanstack/react-router";
+﻿import { createRoute, redirect } from "@tanstack/react-router";
 
 import { ROUTES } from "@/constants/routes";
 import DiscoveryPage from "@/pages/Discovery";
 import DiffReviewPage from "@/pages/DiffReview";
+import PipelineRunPage from "@/pages/PipelineRunPage";
 import PlanReviewPage from "@/pages/PlanReview";
 import GeneratePreviewPage from "@/pages/GeneratePreview";
 import HistoryPage from "@/pages/History";
@@ -28,6 +29,12 @@ export const diffRoute = createRoute({
   component: DiffReviewPage,
 });
 
+export const pipelineRunRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: ROUTES.pipelineRun,
+  component: PipelineRunPage,
+});
+
 export const planReviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: ROUTES.planReview,
@@ -51,6 +58,7 @@ export const routeTree = rootRoute.addChildren([
   indexRoute,
   discoveryRoute,
   diffRoute,
+  pipelineRunRoute,
   planReviewRoute,
   generatePreviewRoute,
   historyRoute,

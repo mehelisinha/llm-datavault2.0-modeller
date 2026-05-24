@@ -53,7 +53,11 @@ DEPRECATED_AI_SUBPACKAGES = ("dbt_builder.src.ai.embeddings",)
 # third-party packages are not constrained here (managed via pyproject [ai]).
 AI_ALLOWED_IMPORT_PREFIXES = (
     AI_PACKAGE_PREFIX,
-    # Add other sibling modules here as the AI layer grows; e.g. shared.config.
+    # Shared storage utility used by both the AI service facade and the
+    # Databricks notebook task (`dbt_builder/src/tasks/generate_dbt_models.py`).
+    # Keeping the storage classes in `utils` avoids a forbidden non-AI →
+    # AI import; the AI layer only wires them to `AISettings` here.
+    "dbt_builder.src.utils.yaml_store",
 )
 
 # First-party top-level packages whose import from the AI layer would be a

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Centralised route paths.
  *
  * Single source of truth for the URLs the app exposes. TanStack Router
@@ -10,6 +10,7 @@ export const ROUTES = Object.freeze({
   root: "/",
   discovery: "/discovery",
   diff: "/diff",
+  pipelineRun: "/pipeline-run",
   planReview: "/plan-review",
   generatePreview: "/generate-preview",
   history: "/history",
@@ -22,6 +23,7 @@ export const ROUTE_LABELS: Readonly<Record<RoutePath, string>> = Object.freeze({
   [ROUTES.root]: "Home",
   [ROUTES.discovery]: "Discovery",
   [ROUTES.diff]: "Diff",
+  [ROUTES.pipelineRun]: "Pipeline run",
   [ROUTES.planReview]: "Plan review",
   [ROUTES.generatePreview]: "Generate preview",
   [ROUTES.history]: "History",
@@ -30,9 +32,7 @@ export const ROUTE_LABELS: Readonly<Record<RoutePath, string>> = Object.freeze({
 /** Routes shown in the primary nav, in display order. */
 export const PRIMARY_NAV: readonly RoutePath[] = Object.freeze([
   ROUTES.discovery,
-  ROUTES.diff,
-  ROUTES.planReview,
-  ROUTES.generatePreview,
+  ROUTES.pipelineRun,
   ROUTES.history,
 ]);
 

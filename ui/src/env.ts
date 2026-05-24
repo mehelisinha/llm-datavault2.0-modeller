@@ -16,6 +16,10 @@ const envSchema = z.object({
   VITE_DEFAULT_SYSTEM_ID: z.string().default(""),
   VITE_DEFAULT_SYSTEM_NAME: z.string().default(""),
   VITE_DEFAULT_RECORD_SOURCE: z.string().default(""),
+  /** Optional defaults that pre-populate the Discovery form on first load. */
+  VITE_DEFAULT_CATALOG: z.string().default(""),
+  VITE_DEFAULT_BRONZE_SCHEMA: z.string().default(""),
+  VITE_DEFAULT_VAULT_SCHEMA: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);
@@ -33,6 +37,9 @@ export const env = Object.freeze({
     systemId: parsed.data.VITE_DEFAULT_SYSTEM_ID,
     systemName: parsed.data.VITE_DEFAULT_SYSTEM_NAME,
     recordSource: parsed.data.VITE_DEFAULT_RECORD_SOURCE,
+    catalog: parsed.data.VITE_DEFAULT_CATALOG,
+    bronzeSchema: parsed.data.VITE_DEFAULT_BRONZE_SCHEMA,
+    vaultSchema: parsed.data.VITE_DEFAULT_VAULT_SCHEMA,
   }),
 });
 

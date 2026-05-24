@@ -4,7 +4,12 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "src") },
+    // Prefer TypeScript sources over the `tsc -b` composite emit
+    // (`*.js` / `*.d.ts`) so tests never resolve against stale build artefacts.
+    extensions: [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".json"],
+  },
   test: {
     environment: "jsdom",
     globals: true,

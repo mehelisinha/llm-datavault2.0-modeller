@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Protocol
 from dbt_builder.src.ai.contracts.catalog import (
     BronzeSnapshot,
     BronzeTable,
+    CatalogSnapshot,
     ChangeCategory,
     ChangeSet,
     TableChange,
@@ -206,6 +207,7 @@ class SchemaAnalyzer:
         system: SourceSystem,
         bronze: BronzeSnapshot,
         change_set: ChangeSet,
+        catalog_snapshot: CatalogSnapshot | None = None,
     ) -> DiscoveryPayload:
         """Build the :class:`DiscoveryPayload` that will be sent to the LLM."""
         actionable = self.select_actionable(bronze, change_set)
@@ -217,6 +219,7 @@ class SchemaAnalyzer:
         return DiscoveryPayload(
             system=system,
             tables=tuple(bronze_table_to_source_table(t) for t in actionable),
+            catalog_snapshot=catalog_snapshot,
         )
 
     def analyze(
@@ -225,7 +228,13 @@ class SchemaAnalyzer:
         system: SourceSystem,
         bronze: BronzeSnapshot,
         change_set: ChangeSet,
+        catalog_snapshot: CatalogSnapshot | None = None,
     ) -> ModelingPlan:
         """Top-level entry point: select -> build -> delegate to the modeller."""
-        payload = self.build_payload(system=system, bronze=bronze, change_set=change_set)
+        payload = self.build_payload(
+            system=system,
+            bronze=bronze,
+            change_set=change_set,
+            catalog_snapshot=catalog_snapshot,
+        )
         return self._propose_fn(payload)
