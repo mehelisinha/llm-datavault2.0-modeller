@@ -14,10 +14,16 @@ describe("ROUTES", () => {
     }
   });
 
-  it("primary nav contains every non-root route", () => {
-    const expected = (Object.values(ROUTES) as RoutePath[]).filter(
-      (p) => p !== ROUTES.root,
+  it("primary nav entries are all valid non-root routes", () => {
+    const nonRoot = new Set(
+      (Object.values(ROUTES) as RoutePath[]).filter((p) => p !== ROUTES.root),
     );
-    expect([...PRIMARY_NAV].sort()).toEqual([...expected].sort());
+    for (const path of PRIMARY_NAV) {
+      expect(nonRoot.has(path)).toBe(true);
+    }
+  });
+
+  it("primary nav surfaces the consolidated pipeline-run workflow", () => {
+    expect(PRIMARY_NAV).toContain(ROUTES.pipelineRun);
   });
 });

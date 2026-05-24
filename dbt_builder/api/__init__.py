@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from dbt_builder.api.routers import approvals, discovery, history, plans
+from dbt_builder.api.routers import approvals, discovery, history, pipeline, plans
 
 _TITLE = "DWA Metadata Generator API"
 _VERSION = "0.2.0-phase-b"
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(plans.router)
     app.include_router(approvals.router)
     app.include_router(history.router)
+    app.include_router(pipeline.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

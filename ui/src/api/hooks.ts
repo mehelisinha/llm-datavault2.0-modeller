@@ -259,3 +259,35 @@ export function useHealth(options?: UseQueryOptions<{ status: string }, Error>) 
     ...options,
   });
 }
+
+// ── Pipeline-run hooks (Phase B-2) ──────────────────────────────────────────
+import type { PipelineRun, PipelineRunRequest } from "@/constants/pipeline";
+
+export function useRunPipeline(
+  options?: UseMutationOptions<PipelineRun, Error, PipelineRunRequest>,
+) {
+  return useMutation({
+    mutationFn: async (body) => {
+      const res = await api.POST("/api/pipeline/run" as any, { body: body as any });
+      return unwrapApiResult(res) as PipelineRun;
+    },
+    ...options,
+  });
+}
+
+export function usePipelineRun(
+  runId: string | null,
+  options?: UseQueryOptions<PipelineRun, Error>,
+) {
+  return useQuery({
+    queryKey: ["pipeline", "run", runId],
+    enabled: Boolean(runId),
+    queryFn: async () => {
+      const res = await api.GET("/api/pipeline/runs/{run_id}" as any, {
+        params: { path: { run_id: runId! } },
+      });
+      return unwrapApiResult(res) as PipelineRun;
+    },
+    ...options,
+  });
+}
