@@ -172,7 +172,7 @@ export default function DiscoveryPage() {
           </Button>
           <Button onClick={handleRunPipeline} disabled={!canSnapshot || runPipeline.isPending}>
             {runPipeline.isPending ? <Spinner className="h-4 w-4" /> : null}
-            Run pipeline
+            Generate Vault
           </Button>
         </div>
       }

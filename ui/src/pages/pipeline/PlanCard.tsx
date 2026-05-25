@@ -15,7 +15,12 @@ const CONFIDENCE_INTENT: Readonly<Record<string, BadgeIntent>> = Object.freeze({
 
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   return (
-    <Badge intent={CONFIDENCE_INTENT[confidence] ?? "neutral"}>{confidence}</Badge>
+    <Badge
+      intent={CONFIDENCE_INTENT[confidence] ?? "neutral"}
+      title={`Modelling agent confidence: ${confidence}`}
+    >
+      {confidence}
+    </Badge>
   );
 }
 
@@ -95,6 +100,19 @@ export function PlanCard({ run }: { run: PipelineRun }) {
             ({hubs.length} hubs · {links.length} links · {sats.length} sats)
           </span>
         </CardTitle>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Coloured badges show the modelling agent's self-reported confidence:{" "}
+          <Badge intent="success" title="Strong evidence (e.g. declared keys or explicit FKs)">
+            high
+          </Badge>{" "}
+          <Badge intent="warning" title="Partial evidence; reviewer should sanity-check">
+            medium
+          </Badge>{" "}
+          <Badge intent="destructive" title="Weak evidence; reviewer attention recommended">
+            low
+          </Badge>
+          .
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <DecisionList title="Hubs" rows={hubs} />

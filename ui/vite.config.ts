@@ -21,6 +21,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     resolve: {
+      // Prefer TS sources over stale `.js`/`.d.ts` produced by `tsc -b` composite emit.
+      extensions: [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".json"],
       alias: { "@": path.resolve(__dirname, "src") },
     },
     server: {

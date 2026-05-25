@@ -122,7 +122,7 @@ export const PIPELINE_LABELS = Object.freeze({
   pageTitle: "Pipeline run",
   pageDescription:
     "Watch the assistant build your YAML. Review any risks the supervisor surfaces, then approve.",
-  runButton: "Run pipeline",
+  runButton: "Generate Vault",
   ackButton: "Continue anyway",
   approveButton: "Approve",
   empty: "No pipeline run in progress.",
