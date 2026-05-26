@@ -19,12 +19,18 @@ type ValidateBody =
   operations["validate_api_plans_validate_post"]["requestBody"]["content"]["application/json"];
 type ArchitectBody =
   operations["architect_bv_api_plans_architect_bv_post"]["requestBody"]["content"]["application/json"];
-// Extend the generated SnapshotBody with the new optional `tables` field
-// (added to the backend but not yet in the generated schema.d.ts).
-type SnapshotBody =
-  operations["snapshot_api_discovery_snapshot_post"]["requestBody"]["content"]["application/json"] & {
-    tables?: string[];
-  };
+// Extend the generated SnapshotBody with two adjustments not yet reflected in
+// the generated schema.d.ts:
+//   - `tables` — explicit allowlist override for include_patterns
+//   - `vault_schema` — optional (omit for greenfield builds where no vault
+//     schema exists yet; the backend then classifies every bronze table as
+//     NEW). Sending "" would 422 on the backend (min_length=1).
+type _SnapshotBodyBase =
+  operations["snapshot_api_discovery_snapshot_post"]["requestBody"]["content"]["application/json"];
+type SnapshotBody = Omit<_SnapshotBodyBase, "vault_schema"> & {
+  tables?: string[];
+  vault_schema?: string;
+};
 
 // GenerateBody extends the schema with fields added to the backend but not yet
 // reflected in the generated schema.d.ts (format + system).

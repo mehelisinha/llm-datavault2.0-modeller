@@ -5,11 +5,13 @@
 export const DISCOVERY_LABELS = Object.freeze({
   catalog: "Catalog",
   bronzeSchema: "Bronze schema",
-  vaultSchema: "Vault schema",
+  vaultSchema: "Vault schema (optional)",
   selectCatalog: "Select a catalog",
   selectBronzeSchema: "Select a bronze schema",
-  selectVaultSchema: "Select a vault schema",
+  selectVaultSchema: "(leave empty for greenfield)",
   selectCatalogFirst: "Select a catalog first",
+  vaultSchemaHint:
+    "Where existing hub_/lnk_/sat_ tables live. Leave empty for a first-time build — every bronze table will be classified as NEW. Required only for the 'Generate Vault' pipeline run.",
   pageTitle: "Discovery",
   pageDescription: "Pick catalog and schemas, then snapshot bronze and build a change set.",
   cardTitle: "Catalog inspection",

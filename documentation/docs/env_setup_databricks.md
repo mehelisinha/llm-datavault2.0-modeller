@@ -171,6 +171,20 @@ the **filtered** table count, not the full schema. For very large catalogs we
 recommend always providing `include_patterns` or an explicit `tables` allowlist
 in the snapshot request body.
 
+### Greenfield builds: `vault_schema` is optional
+
+For a first-time Data Vault build there is no existing `hub_*` / `lnk_*` /
+`sat_*` schema to diff against. In that case **omit `vault_schema`** from the
+request body (or leave the dropdown blank in the UI). The backend then emits
+an empty `CatalogSnapshot` and the diff analyzer categorises every bronze
+table as `NEW` — the correct semantics for a greenfield run.
+
+Sending `vault_schema: ""` is explicitly rejected with HTTP 422 (the schema
+field is `min_length=1` when present). Use `null` / omit the field instead.
+
+The "Generate Vault" pipeline button still requires `vault_schema` because the
+generator needs to know where to materialise the new hubs/links/sats.
+
 ---
 
 ## 6. Expected Results

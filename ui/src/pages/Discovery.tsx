@@ -76,12 +76,17 @@ export default function DiscoveryPage() {
 
   // Auto-select defaults once schemas arrive for the chosen catalog.
   // useEffect (not useMemo) because we're producing a side effect — setState.
+  // Vault is only auto-filled when a schema name actually contains a vault
+  // hint; otherwise it stays blank so the user can decide between (a) picking
+  // an existing vault schema and (b) running a greenfield snapshot.
   const prevSchemasKey = schemas.join(",");
   useEffect(() => {
     if (!catalog || schemas.length === 0) return;
     const vault =
       schemas.find((s) => VAULT_SCHEMA_HINTS.some((h) => s.toLowerCase().includes(h))) ?? "";
-    const bronze = schemas.find((s) => s !== vault) ?? schemas[0] ?? "";
+    const bronze = vault
+      ? (schemas.find((s) => s !== vault) ?? schemas[0] ?? "")
+      : (schemas[0] ?? "");
     setVaultSchema((prev) => (prev ? prev : vault));
     setBronzeSchema((prev) => (prev ? prev : bronze));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,11 +113,14 @@ export default function DiscoveryPage() {
   };
 
   const handleSnapshot = () => {
-    if (!catalog || !bronzeSchema || !vaultSchema) return;
+    if (!catalog || !bronzeSchema) return;
     snapshot.mutate({
       catalog,
       bronze_schema: bronzeSchema,
-      vault_schema: vaultSchema,
+      // Vault is optional: omit when blank so the backend treats the snapshot
+      // as greenfield (every bronze table → NEW). Sending an empty string
+      // would 422 (min_length=1).
+      ...(vaultSchema ? { vault_schema: vaultSchema } : {}),
       // Pass selected tables; empty means "all" (backend default).
       tables: selectedTables.size > 0 ? Array.from(selectedTables) : [],
       ...(env.defaults.systemId ? { system_id: env.defaults.systemId } : {}),
@@ -121,7 +129,11 @@ export default function DiscoveryPage() {
     });
   };
 
-  const canSnapshot = Boolean(catalog && bronzeSchema && vaultSchema && !snapshot.isPending);
+  // Snapshot: only needs catalog + bronze; vault is optional (greenfield).
+  // Pipeline ("Generate Vault"): still needs vault because the generator
+  // has to know where to materialize hubs/links/sats.
+  const canSnapshot = Boolean(catalog && bronzeSchema && !snapshot.isPending);
+  const canRunPipeline = Boolean(catalog && bronzeSchema && vaultSchema && !snapshot.isPending);
 
   // ── Agentic run-pipeline action ────────────────────────────────────────
   const runPipeline = useRunPipeline({
@@ -147,7 +159,7 @@ export default function DiscoveryPage() {
   });
 
   const handleRunPipeline = () => {
-    if (!canSnapshot) return;
+    if (!canRunPipeline) return;
     const systemId = env.defaults.systemId || catalog;
     runPipeline.mutate({
       catalog,
@@ -170,7 +182,15 @@ export default function DiscoveryPage() {
             {snapshot.isPending ? <Spinner className="h-4 w-4" /> : null}
             {DISCOVERY_LABELS.snapshot}
           </Button>
-          <Button onClick={handleRunPipeline} disabled={!canSnapshot || runPipeline.isPending}>
+          <Button
+            onClick={handleRunPipeline}
+            disabled={!canRunPipeline || runPipeline.isPending}
+            title={
+              !vaultSchema
+                ? "Pick a vault schema to enable pipeline generation"
+                : undefined
+            }
+          >
             {runPipeline.isPending ? <Spinner className="h-4 w-4" /> : null}
             Generate Vault
           </Button>
@@ -233,7 +253,7 @@ export default function DiscoveryPage() {
               </select>
             </FieldRow>
 
-            {/* ── Vault schema ────────────────────────────────────────── */}
+            {/* ── Vault schema (optional — greenfield when blank) ────── */}
             <FieldRow label={DISCOVERY_LABELS.vaultSchema} htmlFor="vaultSchema">
               <select
                 id="vaultSchema"
@@ -251,6 +271,9 @@ export default function DiscoveryPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {DISCOVERY_LABELS.vaultSchemaHint}
+              </p>
               {schemasLoading && (
                 <p className="mt-1 text-xs text-muted-foreground">{DISCOVERY_LABELS.loadingSchemas}</p>
               )}
