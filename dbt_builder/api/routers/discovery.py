@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re as _re
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -48,7 +49,11 @@ class SnapshotRequest(BaseModel):
 
     catalog: str = Field(min_length=1)
     bronze_schema: str = Field(min_length=1)
-    vault_schema: str = Field(min_length=1)
+    # Optional: when omitted (or empty) the snapshot is treated as a greenfield
+    # build — no existing vault to compare against, so every bronze table is
+    # classified as NEW by the diff analyzer. When provided, the existing
+    # behavior runs: `inspect_catalog` scans this schema for hubs/links/sats.
+    vault_schema: str | None = Field(default=None, min_length=1)
     system_id: str | None = None
     system_name: str | None = None
     record_source: str | None = None
@@ -68,6 +73,27 @@ class SnapshotResponse(BaseModel):
     catalog_snapshot: CatalogSnapshot
     bronze_snapshot: BronzeSnapshot
     change_set: ChangeSet
+
+
+def _greenfield_catalog_snapshot(catalog: str, bronze_schema: str) -> CatalogSnapshot:
+    """Empty CatalogSnapshot for greenfield builds (no `vault_schema` provided).
+
+    The diff analyzer matches bronze tables against `catalog.entities`. With an
+    empty entity tuple every bronze table reports as category NEW, which is
+    the correct semantics for a first-time vault build where no `hub_` / `lnk_`
+    / `sat_` objects exist yet.
+
+    `schema_name` is required (`min_length=1`) by the contract, so we carry
+    `bronze_schema` as a placeholder — it is never read by the diff because
+    `entities=()` short-circuits every lookup.
+    """
+    return CatalogSnapshot(
+        catalog=catalog,
+        schema_name=bronze_schema,
+        captured_at=datetime.now(timezone.utc),
+        entities=(),
+        metadata_yaml_path=None,
+    )
 
 
 def _effective_include_patterns(body: SnapshotRequest) -> tuple[str, ...]:
@@ -146,13 +172,16 @@ def _run_snapshot_stub(
     list_vault_entities, describe_vault, list_bronze_tables, describe_bronze = (
         make_stub_callables_for_catalog(catalog, settings.metadata_dir)
     )
-    catalog_snapshot = service.inspect_catalog(
-        catalog=catalog,
-        schema_name=body.vault_schema,
-        list_entities=list_vault_entities,
-        describe_table=describe_vault,
-        metadata_yaml_path=body.metadata_yaml_path,
-    )
+    if body.vault_schema:
+        catalog_snapshot = service.inspect_catalog(
+            catalog=catalog,
+            schema_name=body.vault_schema,
+            list_entities=list_vault_entities,
+            describe_table=describe_vault,
+            metadata_yaml_path=body.metadata_yaml_path,
+        )
+    else:
+        catalog_snapshot = _greenfield_catalog_snapshot(catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=catalog,
         schema_name=body.bronze_schema,
@@ -226,13 +255,16 @@ def _run_snapshot_spark(
             if row.col_name and not str(row.col_name).startswith("#")
         ]
 
-    catalog_snapshot = service.inspect_catalog(
-        catalog=body.catalog,
-        schema_name=body.vault_schema,
-        list_entities=list_entities,
-        describe_table=describe_vault,
-        metadata_yaml_path=body.metadata_yaml_path,
-    )
+    if body.vault_schema:
+        catalog_snapshot = service.inspect_catalog(
+            catalog=body.catalog,
+            schema_name=body.vault_schema,
+            list_entities=list_entities,
+            describe_table=describe_vault,
+            metadata_yaml_path=body.metadata_yaml_path,
+        )
+    else:
+        catalog_snapshot = _greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=body.catalog,
         schema_name=body.bronze_schema,
@@ -268,17 +300,20 @@ def _run_snapshot_databricks(
         databricks_uc.make_snapshot_callables(
             client,
             catalog=body.catalog,
-            vault_schema=body.vault_schema,
+            vault_schema=body.vault_schema or body.bronze_schema,
             bronze_schema=body.bronze_schema,
         )
     )
-    catalog_snapshot = service.inspect_catalog(
-        catalog=body.catalog,
-        schema_name=body.vault_schema,
-        list_entities=list_vault_entities,
-        describe_table=describe_vault,
-        metadata_yaml_path=body.metadata_yaml_path,
-    )
+    if body.vault_schema:
+        catalog_snapshot = service.inspect_catalog(
+            catalog=body.catalog,
+            schema_name=body.vault_schema,
+            list_entities=list_vault_entities,
+            describe_table=describe_vault,
+            metadata_yaml_path=body.metadata_yaml_path,
+        )
+    else:
+        catalog_snapshot = _greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=body.catalog,
         schema_name=body.bronze_schema,

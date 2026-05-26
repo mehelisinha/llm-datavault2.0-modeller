@@ -55,6 +55,44 @@ def test_snapshot_returns_pipeline_artifacts(client: TestClient) -> None:
     assert len(data["change_set"]["changes"]) > 0
 
 
+def test_snapshot_treats_omitted_vault_schema_as_greenfield(client: TestClient) -> None:
+    """Omitting `vault_schema` must classify every bronze table as NEW.
+
+    This is the greenfield path: no existing hubs/links/sats yet, so the
+    diff has nothing to match against. Critically, we must NOT silently
+    fall back to scanning bronze_schema for "vault" entities — that would
+    classify every bronze table as UNCHANGED (matched against itself).
+    """
+    r = client.post(
+        "/api/discovery/snapshot",
+        json={
+            "catalog": "edh_unreg_silver_dev_st",
+            "bronze_schema": "bronze",
+            # vault_schema deliberately omitted
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["catalog_snapshot"]["entities"] == []
+    changes = data["change_set"]["changes"]
+    assert len(changes) > 0
+    categories = {c["category"] for c in changes}
+    assert categories == {"new"}, f"greenfield must categorize all tables as NEW, got {categories}"
+
+
+def test_snapshot_rejects_empty_string_vault_schema(client: TestClient) -> None:
+    """`vault_schema=""` is invalid (min_length=1) — omit the field instead."""
+    r = client.post(
+        "/api/discovery/snapshot",
+        json={
+            "catalog": "edh_unreg_silver_dev_st",
+            "bronze_schema": "bronze",
+            "vault_schema": "",
+        },
+    )
+    assert r.status_code == 422, r.text
+
+
 # ---------------------------------------------------------------------------
 # Databricks (Unity Catalog REST) mode — fully mocked, no live calls
 # ---------------------------------------------------------------------------
@@ -254,6 +292,30 @@ def test_databricks_snapshot_pulls_columns_from_uc_rest(
     by_name = {c["name"]: c for c in cols}
     assert by_name["mrid"]["nullable"] is False
     assert by_name["ingestion_dt"]["is_partition"] is True
+
+
+def test_databricks_snapshot_treats_omitted_vault_schema_as_greenfield(
+    databricks_client: TestClient,
+) -> None:
+    """Same greenfield semantics as stub mode, but driven through UC REST.
+
+    Confirms the new `databricks_uc.make_snapshot_callables(..., vault_schema=...)`
+    fallback (which defaults to bronze_schema when vault is None) does NOT
+    actually scan bronze for vault entities — the helper builds the callables
+    but the router short-circuits to the greenfield snapshot.
+    """
+    r = databricks_client.post(
+        "/api/discovery/snapshot",
+        json={
+            "catalog": "edh_unreg_silver_dev_st",
+            "bronze_schema": "bronze",
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["catalog_snapshot"]["entities"] == []
+    changes = data["change_set"]["changes"]
+    assert {c["category"] for c in changes} == {"new"}
 
 
 def test_databricks_listing_failure_returns_503(monkeypatch) -> None:
