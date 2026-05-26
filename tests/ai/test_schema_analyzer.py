@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 import pytest
 
 from dbt_builder.src.ai.agents import (
+    UNCLASSIFIED_SKIP_REASON,
+    BronzeAnalysisSummary,
     SchemaAnalyzer,
     SchemaAnalyzerError,
     bronze_table_to_source_table,
@@ -204,6 +206,136 @@ def test_build_payload_raises_when_nothing_actionable() -> None:
     analyzer = SchemaAnalyzer(propose_fn=_stub_propose)
     with pytest.raises(SchemaAnalyzerError):
         analyzer.build_payload(system=_system(), bronze=bronze, change_set=cs)
+
+
+# ── empty-actionable diagnostics ───────────────────────────────────────────
+
+
+def test_empty_bronze_snapshot_error_distinguishes_empty_schema() -> None:
+    """When bronze itself is empty the message must point at the schema, not
+    the skip predicate — those are very different operator problems."""
+    bronze = _bronze_snapshot()  # zero tables
+    analyzer = SchemaAnalyzer(propose_fn=_stub_propose)
+    with pytest.raises(SchemaAnalyzerError) as exc_info:
+        analyzer.build_payload(system=_system(), bronze=bronze, change_set=_change_set())
+
+    msg = str(exc_info.value)
+    assert "empty" in msg.lower()
+    # Location is included so operators can see *which* schema is empty.
+    assert "edh_unreg_silver_dev_st.bronze" in msg
+    # Structured summary is attached even in the empty case.
+    summary = exc_info.value.summary
+    assert isinstance(summary, BronzeAnalysisSummary)
+    assert summary.bronze_total == 0
+    assert summary.actionable_count == 0
+    assert summary.skipped_count == 0
+    assert summary.skipped_by_category == {}
+
+
+def test_empty_actionable_error_carries_structured_summary() -> None:
+    """All-UNCHANGED is the exact symptom the user hit when vault==bronze.
+    The error must expose counts + sample names so the UI / orchestrator
+    can render a real diagnostic, not just a string."""
+    cols = (BronzeColumn(name="mrid", raw_dtype="string"),)
+    bronze = _bronze_snapshot(
+        _bronze_table("alpha", columns=cols),
+        _bronze_table("bravo", columns=cols),
+        _bronze_table("charlie", columns=cols),
+    )
+    cs = _change_set(
+        TableChange(table_name="alpha", category=ChangeCategory.UNCHANGED),
+        TableChange(table_name="bravo", category=ChangeCategory.UNCHANGED),
+        TableChange(table_name="charlie", category=ChangeCategory.UNCHANGED),
+    )
+    analyzer = SchemaAnalyzer(propose_fn=_stub_propose)
+    with pytest.raises(SchemaAnalyzerError) as exc_info:
+        analyzer.build_payload(system=_system(), bronze=bronze, change_set=cs)
+
+    summary = exc_info.value.summary
+    assert isinstance(summary, BronzeAnalysisSummary)
+    assert summary.bronze_total == 3
+    assert summary.actionable_count == 0
+    assert summary.skipped_count == 3
+    assert summary.skipped_by_category == {ChangeCategory.UNCHANGED: 3}
+    # Snapshot order is preserved in the sample.
+    assert summary.skipped_sample_names[ChangeCategory.UNCHANGED] == ("alpha", "bravo", "charlie")
+    # And the rendered message references the location, the count, and the category.
+    msg = str(exc_info.value)
+    assert "edh_unreg_silver_dev_st.bronze" in msg
+    assert "3 bronze tables" in msg
+    assert ChangeCategory.UNCHANGED.value in msg
+    assert "alpha" in msg
+
+
+def test_empty_actionable_error_separates_unclassified_from_categories() -> None:
+    """A bronze table missing from the change-set must show up under the
+    UNCLASSIFIED_SKIP_REASON bucket, not be silently folded into a category."""
+    cols = (BronzeColumn(name="mrid", raw_dtype="string"),)
+    bronze = _bronze_snapshot(
+        _bronze_table("known", columns=cols),
+        _bronze_table("unknown", columns=cols),
+    )
+    cs = _change_set(TableChange(table_name="known", category=ChangeCategory.ORPHANED))
+    analyzer = SchemaAnalyzer(propose_fn=_stub_propose)
+    with pytest.raises(SchemaAnalyzerError) as exc_info:
+        analyzer.build_payload(system=_system(), bronze=bronze, change_set=cs)
+
+    summary = exc_info.value.summary
+    assert isinstance(summary, BronzeAnalysisSummary)
+    assert summary.skipped_by_category == {
+        ChangeCategory.ORPHANED: 1,
+        UNCLASSIFIED_SKIP_REASON: 1,
+    }
+    assert summary.skipped_sample_names[ChangeCategory.ORPHANED] == ("known",)
+    assert summary.skipped_sample_names[UNCLASSIFIED_SKIP_REASON] == ("unknown",)
+
+
+def test_empty_actionable_sample_is_truncated_for_large_skip_lists() -> None:
+    """The sample list shows up to a small fixed cap; the count stays exact."""
+    cols = (BronzeColumn(name="mrid", raw_dtype="string"),)
+    bronze = _bronze_snapshot(*(_bronze_table(f"t{i:02d}", columns=cols) for i in range(20)))
+    cs = _change_set(
+        *(TableChange(table_name=f"t{i:02d}", category=ChangeCategory.UNCHANGED) for i in range(20))
+    )
+    analyzer = SchemaAnalyzer(propose_fn=_stub_propose)
+    with pytest.raises(SchemaAnalyzerError) as exc_info:
+        analyzer.build_payload(system=_system(), bronze=bronze, change_set=cs)
+
+    summary = exc_info.value.summary
+    assert isinstance(summary, BronzeAnalysisSummary)
+    assert summary.skipped_by_category[ChangeCategory.UNCHANGED] == 20
+    # The sample is bounded; the precise cap is an implementation detail, but
+    # it must be strictly less than the total so message truncation kicks in.
+    sample = summary.skipped_sample_names[ChangeCategory.UNCHANGED]
+    assert 1 <= len(sample) < 20
+    # Message indicates how many additional skipped tables were elided.
+    msg = str(exc_info.value)
+    assert f"+{20 - len(sample)} more" in msg
+
+
+def test_classify_runs_skip_predicate_once_per_table() -> None:
+    """The DRY contract: select_actionable + build_payload must share one
+    pass, so a custom predicate with side effects sees each table once
+    per analyzer call — not twice."""
+    cols = (BronzeColumn(name="mrid", raw_dtype="string"),)
+    bronze = _bronze_snapshot(
+        _bronze_table("x", columns=cols),
+        _bronze_table("y", columns=cols),
+    )
+    cs = _change_set(
+        TableChange(table_name="x", category=ChangeCategory.NEW),
+        TableChange(table_name="y", category=ChangeCategory.NEW),
+    )
+    seen: list[str] = []
+
+    def counting_predicate(t: BronzeTable, _c: TableChange | None) -> bool:
+        seen.append(t.name)
+        return False  # keep everything
+
+    analyzer = SchemaAnalyzer(propose_fn=_stub_propose, skip_predicate=counting_predicate)
+    analyzer.build_payload(system=_system(), bronze=bronze, change_set=cs)
+    # One predicate invocation per bronze table — no double evaluation.
+    assert seen == ["x", "y"]
 
 
 def test_analyze_round_trip_with_stub_modeller() -> None:

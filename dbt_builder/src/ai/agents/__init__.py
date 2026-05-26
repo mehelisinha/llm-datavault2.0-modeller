@@ -25,9 +25,12 @@ from dbt_builder.src.ai.agents.modeller import (
     get_modelling_agent,
 )
 from dbt_builder.src.ai.agents.schema_analyzer import (
+    UNCLASSIFIED_SKIP_REASON,
+    BronzeAnalysisSummary,
     SchemaAnalyzer,
     SchemaAnalyzerError,
     SkipPredicate,
+    SkipReason,
     bronze_table_to_source_table,
 )
 from dbt_builder.src.ai.agents.yaml_generator import (
@@ -37,6 +40,8 @@ from dbt_builder.src.ai.agents.yaml_generator import (
 )
 
 __all__ = [
+    "UNCLASSIFIED_SKIP_REASON",
+    "BronzeAnalysisSummary",
     "BvArchitect",
     "BvArchitectError",
     "ModellingAgent",
@@ -45,6 +50,7 @@ __all__ = [
     "SchemaAnalyzer",
     "SchemaAnalyzerError",
     "SkipPredicate",
+    "SkipReason",
     "YamlBundle",
     "YamlFile",
     "YamlGenerator",
