@@ -123,6 +123,56 @@ DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/..." python src/scripts/poc_runner.py 
 
 ---
 
+## 5b. (Optional) Drive the UI Catalog Dropdown from Live Unity Catalog
+
+The discovery API has three modes, set via `DWA_API_DISCOVERY_MODE`:
+
+| Mode         | What it does                                                              | When to use |
+| ------------ | ------------------------------------------------------------------------- | ----------- |
+| `stub`       | Reads catalogs/schemas/tables from `poc/metadata/*.yaml`. Default.        | Offline dev, CI, no Databricks login required. |
+| `spark`      | Runs `SHOW CATALOGS / SCHEMAS / TABLES` through `get_spark()`.            | When you already have Databricks Connect attached to a cluster and want the same compute path as dbt. |
+| `databricks` | Calls the Unity Catalog REST API via `databricks-sdk`. No cluster needed. | Local dev when you just want the UI to reflect every catalog your identity can see, with sub-second responses. |
+
+### Switching the local API to `databricks` mode
+
+1. Make sure `databricks-sdk` is importable (it ships with `databricks-connect`, already pinned in `pyproject.toml`).
+2. Sign in once with the Azure CLI:
+   ```bash
+   az login
+   az account set --subscription 5e6b8f4d-257e-485d-957b-577be337833e
+   ```
+3. Append these to `dwa/.env` (already gitignored):
+   ```bash
+   DWA_API_DISCOVERY_MODE=databricks
+   DWA_API_DATABRICKS_HOST=https://redacted-host.example.net
+   DWA_API_DATABRICKS_AUTH_TYPE=azure-cli
+   # Leave DWA_API_DATABRICKS_TOKEN blank — Azure CLI OAuth does not need one.
+   ```
+4. Restart the dev API (`pnpm dev` from `dwa/`). Hit `/api/discovery/catalogs` —
+   the response now lists every catalog your Databricks identity has
+   `USE CATALOG` on, not just the two stubbed YAMLs.
+
+### Falling back to PAT auth
+
+If your environment cannot use `az login` (e.g. headless CI), use a PAT instead:
+
+```bash
+DWA_API_DISCOVERY_MODE=databricks
+DWA_API_DATABRICKS_HOST=https://redacted-host.example.net
+DWA_API_DATABRICKS_TOKEN=dapi...
+# DWA_API_DATABRICKS_AUTH_TYPE optional — SDK detects PAT from token presence.
+```
+
+### Behavior of `/api/discovery/snapshot` in `databricks` mode
+
+Snapshot uses `WorkspaceClient.tables.get(full_name=...)` for each table that
+passes the include/exclude filter. That means snapshot cost is proportional to
+the **filtered** table count, not the full schema. For very large catalogs we
+recommend always providing `include_patterns` or an explicit `tables` allowlist
+in the snapshot request body.
+
+---
+
 ## 6. Expected Results
 
 After a successful run, the following Delta tables should exist in:

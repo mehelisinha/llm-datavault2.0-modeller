@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re as _re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from dbt_builder.api import databricks_uc
 from dbt_builder.api.settings import ApiSettings, get_settings
 from dbt_builder.api.stub_catalog import list_tables_for_catalog, make_stub_callables_for_catalog
 from dbt_builder.src.ai.contracts.catalog import (
@@ -68,9 +70,6 @@ class SnapshotResponse(BaseModel):
     change_set: ChangeSet
 
 
-import re as _re
-
-
 def _effective_include_patterns(body: SnapshotRequest) -> tuple[str, ...]:
     """Convert the ``tables`` allowlist to regex include-patterns when provided.
 
@@ -104,9 +103,19 @@ def _list_catalogs_spark() -> tuple[str, ...]:
     return tuple(sorted(str(row[0]) for row in rows))
 
 
-def _list_tables_stub(
-    catalog: str, schema_name: str, settings: ApiSettings
-) -> tuple[str, ...]:
+def _list_catalogs_databricks(settings: ApiSettings) -> tuple[str, ...]:
+    return databricks_uc.list_catalogs(databricks_uc.get_workspace_client(settings))
+
+
+def _list_schemas_databricks(settings: ApiSettings, catalog: str) -> tuple[str, ...]:
+    return databricks_uc.list_schemas(databricks_uc.get_workspace_client(settings), catalog)
+
+
+def _list_tables_databricks(settings: ApiSettings, catalog: str, schema: str) -> tuple[str, ...]:
+    return databricks_uc.list_tables(databricks_uc.get_workspace_client(settings), catalog, schema)
+
+
+def _list_tables_stub(catalog: str, schema_name: str, settings: ApiSettings) -> tuple[str, ...]:
     return list_tables_for_catalog(catalog, schema_name, settings.metadata_dir)
 
 
@@ -116,11 +125,7 @@ def _list_tables_spark(catalog: str, schema_name: str) -> tuple[str, ...]:
     spark = get_spark()
     rows = spark.sql(f"SHOW TABLES IN `{catalog}`.`{schema_name}`").collect()
     return tuple(
-        sorted(
-            str(row.tableName)
-            for row in rows
-            if not getattr(row, "isTemporary", False)
-        )
+        sorted(str(row.tableName) for row in rows if not getattr(row, "isTemporary", False))
     )
 
 
@@ -186,10 +191,17 @@ def _run_snapshot_spark(
         rows = spark.sql(f"SHOW TABLES IN `{catalog}`.`{schema_name}`").collect()
         return [(str(row.tableName), str(row.tableType or "TABLE")) for row in rows]
 
-    def describe_vault(catalog: str, schema_name: str, table: str) -> list[tuple[str, str, bool, str | None]]:
+    def describe_vault(
+        catalog: str, schema_name: str, table: str
+    ) -> list[tuple[str, str, bool, str | None]]:
         rows = spark.sql(f"DESCRIBE TABLE `{catalog}`.`{schema_name}`.`{table}`").collect()
         return [
-            (str(row.col_name), str(row.data_type), bool(row.nullable), getattr(row, "comment", None))
+            (
+                str(row.col_name),
+                str(row.data_type),
+                bool(row.nullable),
+                getattr(row, "comment", None),
+            )
             for row in rows
             if row.col_name and not str(row.col_name).startswith("#")
         ]
@@ -246,12 +258,66 @@ def _run_snapshot_spark(
     )
 
 
+def _run_snapshot_databricks(
+    body: SnapshotRequest,
+    settings: ApiSettings,
+    service: DwaService,
+) -> SnapshotResponse:
+    client = databricks_uc.get_workspace_client(settings)
+    list_vault_entities, describe_vault, list_bronze_tables, describe_bronze = (
+        databricks_uc.make_snapshot_callables(
+            client,
+            catalog=body.catalog,
+            vault_schema=body.vault_schema,
+            bronze_schema=body.bronze_schema,
+        )
+    )
+    catalog_snapshot = service.inspect_catalog(
+        catalog=body.catalog,
+        schema_name=body.vault_schema,
+        list_entities=list_vault_entities,
+        describe_table=describe_vault,
+        metadata_yaml_path=body.metadata_yaml_path,
+    )
+    bronze_snapshot = service.read_bronze(
+        catalog=body.catalog,
+        schema_name=body.bronze_schema,
+        list_tables=list_bronze_tables,
+        describe_table=describe_bronze,
+        include_patterns=_effective_include_patterns(body),
+        exclude_patterns=body.exclude_patterns,
+    )
+    change_set = service.diff(catalog_snapshot, bronze_snapshot)
+    system = SourceSystem(
+        system_id=body.system_id or settings.default_system_id,
+        system_name=body.system_name or settings.default_system_name,
+        source_type="delta",
+        catalog=body.catalog,
+        schema_name=body.bronze_schema,
+        record_source=body.record_source or settings.default_record_source,
+    )
+    return SnapshotResponse(
+        system=system,
+        catalog_snapshot=catalog_snapshot,
+        bronze_snapshot=bronze_snapshot,
+        change_set=change_set,
+    )
+
+
 @router.get("/catalogs", response_model=CatalogListResponse)
 def list_catalogs(
     settings: Annotated[ApiSettings, Depends(get_settings)],
 ) -> CatalogListResponse:
     if settings.discovery_mode == "stub":
         return CatalogListResponse(catalogs=_list_catalogs_stub(settings))
+    if settings.discovery_mode == "databricks":
+        try:
+            return CatalogListResponse(catalogs=_list_catalogs_databricks(settings))
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Unity Catalog REST listing failed: {exc}",
+            ) from exc
     try:
         return CatalogListResponse(catalogs=_list_catalogs_spark())
     except Exception as exc:
@@ -268,6 +334,17 @@ def list_schemas(
 ) -> SchemaListResponse:
     if settings.discovery_mode == "stub":
         return SchemaListResponse(catalog=catalog, schemas=_list_schemas_stub(settings, catalog))
+    if settings.discovery_mode == "databricks":
+        try:
+            return SchemaListResponse(
+                catalog=catalog,
+                schemas=_list_schemas_databricks(settings, catalog),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Unity Catalog REST schema listing failed: {exc}",
+            ) from exc
     try:
         return SchemaListResponse(catalog=catalog, schemas=_list_schemas_spark(catalog))
     except Exception as exc:
@@ -286,6 +363,18 @@ def list_tables(
     if settings.discovery_mode == "stub":
         tables = _list_tables_stub(catalog, schema, settings)
         return TableListResponse(catalog=catalog, schema_name=schema, tables=tables)
+    if settings.discovery_mode == "databricks":
+        try:
+            return TableListResponse(
+                catalog=catalog,
+                schema_name=schema,
+                tables=_list_tables_databricks(settings, catalog, schema),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Unity Catalog REST table listing failed: {exc}",
+            ) from exc
     try:
         return TableListResponse(
             catalog=catalog,
@@ -307,6 +396,14 @@ def snapshot(
 ) -> SnapshotResponse:
     if settings.discovery_mode == "stub":
         return _run_snapshot_stub(body, settings, service)
+    if settings.discovery_mode == "databricks":
+        try:
+            return _run_snapshot_databricks(body, settings, service)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Unity Catalog REST snapshot failed: {exc}",
+            ) from exc
     try:
         return _run_snapshot_spark(body, settings, service)
     except Exception as exc:

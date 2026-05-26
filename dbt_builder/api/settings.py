@@ -27,9 +27,13 @@ class ApiSettings(BaseSettings):
         extra="ignore",
     )
 
-    discovery_mode: Literal["stub", "spark"] = Field(
+    discovery_mode: Literal["stub", "spark", "databricks"] = Field(
         default="stub",
-        description="stub: in-memory fixtures; spark: Databricks SQL via get_spark().",
+        description=(
+            "stub: in-memory fixtures (no external deps); "
+            "spark: Databricks SQL via get_spark() (needs PySpark/Databricks Connect); "
+            "databricks: Unity Catalog REST API via databricks-sdk (no cluster)."
+        ),
     )
     stub_catalog_map_json: str = Field(
         default="",
@@ -55,6 +59,34 @@ class ApiSettings(BaseSettings):
     default_system_id: str = Field(default="iec_cim")
     default_system_name: str = Field(default="IEC CIM")
     default_record_source: str = Field(default="iec_cim")
+
+    # ── Databricks Unity Catalog REST (discovery_mode="databricks") ──────────
+    # The SDK also resolves these from the conventional DATABRICKS_HOST /
+    # DATABRICKS_TOKEN env vars when our prefixed forms are unset; we accept
+    # both so users can keep a single Databricks login working for both this
+    # API and the dbt CLI / Databricks Connect tooling.
+    databricks_host: str | None = Field(
+        default=None,
+        description=(
+            "Workspace URL, e.g. https://redacted-host.example.net. "
+            "Falls back to env DATABRICKS_HOST when unset."
+        ),
+    )
+    databricks_token: str | None = Field(
+        default=None,
+        description=(
+            "Personal Access Token. Optional — leave blank to use the auth "
+            "method selected by `databricks_auth_type` (e.g. Azure CLI OAuth)."
+        ),
+    )
+    databricks_auth_type: str | None = Field(
+        default=None,
+        description=(
+            "Databricks SDK auth_type. Common values: 'pat', 'azure-cli', "
+            "'databricks-cli', 'azure-msi'. When unset, the SDK picks "
+            "automatically based on which credentials it can find."
+        ),
+    )
 
     aad_tenant_id: str | None = Field(default=None)
     aad_api_client_id: str | None = Field(
