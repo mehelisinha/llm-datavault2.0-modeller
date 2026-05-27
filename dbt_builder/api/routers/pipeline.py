@@ -9,10 +9,16 @@ artifact.
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from dbt_builder.api.discovery_callables import (
+    resolve_snapshot_callables,
+    tables_to_include_patterns,
+)
+from dbt_builder.api.settings import ApiSettings, get_settings
 from dbt_builder.src.ai.contracts.payloads import SourceSystem
 from dbt_builder.src.ai.contracts.pipeline_run import PipelineRun
 from dbt_builder.src.ai.service import (
@@ -41,12 +47,15 @@ class PipelineRunRequest(BaseModel):
 
     catalog: str = Field(..., min_length=1)
     bronze_schema: str = Field(..., min_length=1)
-    vault_schema: str = Field(..., min_length=1)
+    # Optional: omit for greenfield builds (diff treats every bronze table as NEW).
+    vault_schema: str | None = Field(default=None, min_length=1)
     system_id: str = Field(..., min_length=1)
     system_name: str = Field(..., min_length=1)
     source_type: str = Field(..., min_length=1)
     record_source: str | None = None
 
+    # Explicit table allowlist (same semantics as /api/discovery/snapshot).
+    tables: tuple[str, ...] = ()
     include_patterns: tuple[str, ...] = ()
     exclude_patterns: tuple[str, ...] = ()
 
@@ -56,22 +65,24 @@ class PipelineRunRequest(BaseModel):
 # ── Catalog adapter ─────────────────────────────────────────────────────────
 
 
-def _build_pipeline_input(req: PipelineRunRequest) -> PipelineInput:
+def _build_pipeline_input(req: PipelineRunRequest, settings: ApiSettings) -> PipelineInput:
     """Translate the request into a :class:`PipelineInput`.
 
-    The catalog callables come from the stub catalog adapter in dev (and from
-    Databricks in production).  Looking them up here — rather than in the
-    orchestrator — keeps the orchestrator pure and the API the only place
-    that knows about request-time wiring.
+    Catalog callables are resolved from ``settings.discovery_mode`` so the
+    pipeline reads the same source as the discovery dropdowns (stub YAML,
+    Unity Catalog REST, or Spark).
     """
-    from dbt_builder.api.stub_catalog import make_stub_callables_for_catalog
-
     (
         list_vault_entities,
         describe_vault,
         list_bronze_tables,
         describe_bronze,
-    ) = make_stub_callables_for_catalog(req.catalog)
+    ) = resolve_snapshot_callables(
+        settings,
+        catalog=req.catalog,
+        bronze_schema=req.bronze_schema,
+        vault_schema=req.vault_schema,
+    )
 
     system = SourceSystem(
         system_id=req.system_id,
@@ -88,7 +99,7 @@ def _build_pipeline_input(req: PipelineRunRequest) -> PipelineInput:
         describe_vault=describe_vault,
         list_bronze_tables=list_bronze_tables,
         describe_bronze=describe_bronze,
-        include_patterns=req.include_patterns,
+        include_patterns=tables_to_include_patterns(req.tables, req.include_patterns),
         exclude_patterns=req.exclude_patterns,
     )
 
@@ -99,6 +110,7 @@ def _build_pipeline_input(req: PipelineRunRequest) -> PipelineInput:
 @router.post("/run", response_model=PipelineRun, status_code=status.HTTP_201_CREATED)
 def run_pipeline(
     req: PipelineRunRequest,
+    settings: Annotated[ApiSettings, Depends(get_settings)],
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> PipelineRun:
     """Execute the pipeline end-to-end and return the run artifact.
@@ -106,7 +118,7 @@ def run_pipeline(
     The run is persisted in the in-memory pipeline-run store; the UI re-fetches
     it via :func:`get_pipeline_run` to drive the live timeline.
     """
-    pipeline_input = _build_pipeline_input(req)
+    pipeline_input = _build_pipeline_input(req, settings)
     try:
         return service.run_pipeline(
             pipeline_input,

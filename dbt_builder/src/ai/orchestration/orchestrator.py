@@ -64,7 +64,7 @@ class PipelineInput:
 
     catalog: str
     bronze_schema: str
-    vault_schema: str
+    vault_schema: str | None
     system: object  # SourceSystem; typed as object to avoid an import cycle
     list_vault_entities: catalog_inspector.ListEntities
     describe_vault: catalog_inspector.DescribeTable
@@ -230,13 +230,18 @@ class PipelineOrchestrator:
     def _do_snapshot(self, run: PipelineRun, pi: PipelineInput) -> tuple[PipelineRun, bool]:
         t0 = time.perf_counter()
         try:
-            catalog_snapshot = catalog_inspector.inspect_catalog(
-                catalog=pi.catalog,
-                schema_name=pi.vault_schema,
-                list_entities=pi.list_vault_entities,
-                describe_table=pi.describe_vault,
-                metadata_yaml_path=pi.metadata_yaml_path,
-            )
+            from dbt_builder.src.ai.pipeline.snapshot_helpers import greenfield_catalog_snapshot
+
+            if pi.vault_schema:
+                catalog_snapshot = catalog_inspector.inspect_catalog(
+                    catalog=pi.catalog,
+                    schema_name=pi.vault_schema,
+                    list_entities=pi.list_vault_entities,
+                    describe_table=pi.describe_vault,
+                    metadata_yaml_path=pi.metadata_yaml_path,
+                )
+            else:
+                catalog_snapshot = greenfield_catalog_snapshot(pi.catalog, pi.bronze_schema)
             bronze_snapshot = bronze_reader.read_bronze(
                 catalog=pi.catalog,
                 schema_name=pi.bronze_schema,

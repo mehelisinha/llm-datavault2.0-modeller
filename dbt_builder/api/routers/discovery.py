@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-import re as _re
-from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from dbt_builder.api import databricks_uc
+from dbt_builder.api.discovery_callables import (
+    resolve_snapshot_callables,
+    tables_to_include_patterns,
+)
 from dbt_builder.api.settings import ApiSettings, get_settings
-from dbt_builder.api.stub_catalog import list_tables_for_catalog, make_stub_callables_for_catalog
+from dbt_builder.api.stub_catalog import list_tables_for_catalog
 from dbt_builder.src.ai.contracts.catalog import (
     BronzeSnapshot,
     CatalogSnapshot,
     ChangeSet,
 )
 from dbt_builder.src.ai.contracts.payloads import SourceSystem
+from dbt_builder.src.ai.pipeline.snapshot_helpers import greenfield_catalog_snapshot
 from dbt_builder.src.ai.service import DwaService, get_service
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
@@ -75,36 +78,8 @@ class SnapshotResponse(BaseModel):
     change_set: ChangeSet
 
 
-def _greenfield_catalog_snapshot(catalog: str, bronze_schema: str) -> CatalogSnapshot:
-    """Empty CatalogSnapshot for greenfield builds (no `vault_schema` provided).
-
-    The diff analyzer matches bronze tables against `catalog.entities`. With an
-    empty entity tuple every bronze table reports as category NEW, which is
-    the correct semantics for a first-time vault build where no `hub_` / `lnk_`
-    / `sat_` objects exist yet.
-
-    `schema_name` is required (`min_length=1`) by the contract, so we carry
-    `bronze_schema` as a placeholder — it is never read by the diff because
-    `entities=()` short-circuits every lookup.
-    """
-    return CatalogSnapshot(
-        catalog=catalog,
-        schema_name=bronze_schema,
-        captured_at=datetime.now(timezone.utc),
-        entities=(),
-        metadata_yaml_path=None,
-    )
-
-
 def _effective_include_patterns(body: SnapshotRequest) -> tuple[str, ...]:
-    """Convert the ``tables`` allowlist to regex include-patterns when provided.
-
-    Exact table names are escaped so special characters do not corrupt the
-    pattern. When ``tables`` is empty, ``include_patterns`` is used as-is.
-    """
-    if body.tables:
-        return tuple(_re.escape(t) for t in body.tables)
-    return body.include_patterns
+    return tables_to_include_patterns(body.tables, body.include_patterns)
 
 
 def _list_catalogs_stub(settings: ApiSettings) -> tuple[str, ...]:
@@ -170,7 +145,12 @@ def _run_snapshot_stub(
 ) -> SnapshotResponse:
     catalog = body.catalog
     list_vault_entities, describe_vault, list_bronze_tables, describe_bronze = (
-        make_stub_callables_for_catalog(catalog, settings.metadata_dir)
+        resolve_snapshot_callables(
+            settings,
+            catalog=catalog,
+            bronze_schema=body.bronze_schema,
+            vault_schema=body.vault_schema,
+        )
     )
     if body.vault_schema:
         catalog_snapshot = service.inspect_catalog(
@@ -181,7 +161,7 @@ def _run_snapshot_stub(
             metadata_yaml_path=body.metadata_yaml_path,
         )
     else:
-        catalog_snapshot = _greenfield_catalog_snapshot(catalog, body.bronze_schema)
+        catalog_snapshot = greenfield_catalog_snapshot(catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=catalog,
         schema_name=body.bronze_schema,
@@ -264,7 +244,7 @@ def _run_snapshot_spark(
             metadata_yaml_path=body.metadata_yaml_path,
         )
     else:
-        catalog_snapshot = _greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
+        catalog_snapshot = greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=body.catalog,
         schema_name=body.bronze_schema,
@@ -313,7 +293,7 @@ def _run_snapshot_databricks(
             metadata_yaml_path=body.metadata_yaml_path,
         )
     else:
-        catalog_snapshot = _greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
+        catalog_snapshot = greenfield_catalog_snapshot(body.catalog, body.bronze_schema)
     bronze_snapshot = service.read_bronze(
         catalog=body.catalog,
         schema_name=body.bronze_schema,
