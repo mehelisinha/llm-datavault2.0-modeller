@@ -21,24 +21,47 @@ export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
 /** Display label per route, kept next to the path so menus can iterate. */
 export const ROUTE_LABELS: Readonly<Record<RoutePath, string>> = Object.freeze({
   [ROUTES.root]: "Home",
-  [ROUTES.discovery]: "Discovery",
-  [ROUTES.diff]: "Diff",
+  [ROUTES.discovery]: "Generate Vault",
+  [ROUTES.diff]: "Diff (advanced)",
   [ROUTES.pipelineRun]: "Pipeline run",
   [ROUTES.planReview]: "Plan review",
-  [ROUTES.generatePreview]: "Generate preview",
+  [ROUTES.generatePreview]: "Generate YAML",
   [ROUTES.history]: "History",
 });
 
-/** Routes shown in the primary nav, in display order. */
+/** Default entry: pick catalog/schemas and run the full agentic pipeline. */
 export const PRIMARY_NAV: readonly RoutePath[] = Object.freeze([
   ROUTES.discovery,
-  ROUTES.pipelineRun,
   ROUTES.history,
 ]);
 
+/** Step-by-step workflow for debugging and manual review (no full pipeline). */
+export const ADVANCED_NAV: readonly RoutePath[] = Object.freeze([
+  ROUTES.diff,
+  ROUTES.planReview,
+  ROUTES.generatePreview,
+]);
+
+/** Copy for cross-page workflow hints in the advanced path. */
+export const WORKFLOW_LABELS = Object.freeze({
+  advancedNavGroup: "Advanced",
+  discoveryAdvancedSummary:
+    "Inspect the bronze diff step-by-step before spending on the LLM, or debug a single stage.",
+  discoveryAdvancedSteps:
+    "Run snapshot → Diff → Analyze → Validate → Plan review → Generate YAML",
+  continueToPlanReview: "Continue to plan review",
+  continueToGenerateYaml: "Continue to generate YAML",
+  diffWorkflowHint:
+    "Advanced workflow: review the change set, then analyze and validate the plan before generating YAML.",
+  planWorkflowHint: "Review hubs, links, and satellites, then run the BV architect if needed.",
+  generateWorkflowHint:
+    "Generate the metadata YAML, download it, and submit for approval when validation passes.",
+  backToGenerateVault: "Back to Generate Vault",
+} as const);
+
 export const GENERATE_LABELS = Object.freeze({
-  pageTitle: "YAML Preview",
-  pageDescription: "Preview the generated YAML before approval.",
+  pageTitle: "Generate YAML (advanced)",
+  pageDescription: "Step 3: render metadata YAML, download, and submit for approval.",
   button: "Generate YAML Preview",
   empty: 'Click "Generate YAML Preview" to see the output.',
   previewCardTitle: "Generated YAML",

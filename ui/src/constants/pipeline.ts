@@ -81,11 +81,14 @@ export type PipelineRun = {
 export type PipelineRunRequest = {
   catalog: string;
   bronze_schema: string;
-  vault_schema: string;
+  /** Omit for greenfield builds (diff classifies every bronze table as NEW). */
+  vault_schema?: string;
   system_id: string;
   system_name: string;
   source_type: string;
   record_source?: string;
+  /** Explicit table allowlist; empty means all tables in the bronze schema. */
+  tables?: string[];
   include_patterns?: string[];
   exclude_patterns?: string[];
   acknowledge_risks?: boolean;

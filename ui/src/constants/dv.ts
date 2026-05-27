@@ -24,8 +24,8 @@ export const DV_KIND_LABELS = Object.freeze({
 } as const);
 
 export const DIFF_LABELS = Object.freeze({
-  "pageTitle": "Plan Diff & Review",
-  "pageDescription": "Review the change set, run analysis, and approve or request changes.",
+  "pageTitle": "Diff (advanced)",
+  "pageDescription": "Step 1 of the manual workflow: review bronze vs vault, then analyze and validate.",
   "noChanges": "No changes in this category.",
   "validationSummary": "Validation Summary",
   "errors": "Errors:",
@@ -36,8 +36,8 @@ export const DIFF_LABELS = Object.freeze({
 } as const);
 
 export const PLAN_REVIEW_LABELS = Object.freeze({
-  "pageTitle": "Plan review",
-  "pageDescription": "Inspect hubs, satellites, links, and BV proposals before generation.",
+  "pageTitle": "Plan review (advanced)",
+  "pageDescription": "Step 2: inspect the modelling plan and optional BV proposal before YAML generation.",
   "runArchitect": "Run BV architect",
   "empty": "Run the schema analyzer on the Diff page first."
 } as const);

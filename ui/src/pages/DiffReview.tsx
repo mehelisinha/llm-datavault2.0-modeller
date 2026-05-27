@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 
 import { useAnalyzePlan, useValidatePlan } from "@/api/hooks";
 import type { TableChange } from "@/api/types";
@@ -20,6 +21,7 @@ import {
   DIFF_LABELS,
   type ChangeCategory,
 } from "@/constants/dv";
+import { ROUTES, WORKFLOW_LABELS } from "@/constants/routes";
 import { usePipeline } from "@/context/DwaPipelineContext";
 import { toast } from "@/lib/toast";
 
@@ -100,13 +102,26 @@ export default function DiffReviewPage() {
         </div>
       }
     >
+      <p className="mb-4 text-sm text-muted-foreground">
+        {WORKFLOW_LABELS.diffWorkflowHint}{" "}
+        <Link to={ROUTES.discovery} className="text-primary hover:underline">
+          {WORKFLOW_LABELS.backToGenerateVault}
+        </Link>
+      </p>
+
       <Card>
         <CardHeader>
           <CardTitle>{DIFF_LABELS.pageTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           {!changeSet ? (
-            <p className="text-muted-foreground">Run a discovery snapshot first.</p>
+            <p className="text-muted-foreground">
+              Run a discovery snapshot first from{" "}
+              <Link to={ROUTES.discovery} className="text-primary hover:underline">
+                Generate Vault
+              </Link>{" "}
+              (open <em>Advanced workflow</em> → Run snapshot only).
+            </p>
           ) : (
             <>
               <div className="mb-4 flex flex-wrap gap-2">
@@ -166,6 +181,14 @@ export default function DiffReviewPage() {
                   </table>
                 </div>
               )}
+              {plan && !validation ? (
+                <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">
+                  <Link to={ROUTES.planReview}>
+                    <Button intent="outline">{WORKFLOW_LABELS.continueToPlanReview}</Button>
+                  </Link>
+                </div>
+              ) : null}
+
               {validation ? (
                 <div className="mt-6 space-y-2">
                   <div className="font-semibold">{DIFF_LABELS.validationSummary}</div>
@@ -196,6 +219,14 @@ export default function DiffReviewPage() {
                       </li>
                     ))}
                   </ul>
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+                    <Link to={ROUTES.planReview}>
+                      <Button intent="outline">{WORKFLOW_LABELS.continueToPlanReview}</Button>
+                    </Link>
+                    <Link to={ROUTES.generatePreview}>
+                      <Button>{WORKFLOW_LABELS.continueToGenerateYaml}</Button>
+                    </Link>
+                  </div>
                 </div>
               ) : null}
             </>

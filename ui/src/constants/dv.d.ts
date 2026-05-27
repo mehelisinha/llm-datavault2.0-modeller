@@ -21,8 +21,8 @@ export declare const DV_KIND_LABELS: Readonly<{
     readonly bv_satellite: "BV Satellite";
 }>;
 export declare const DIFF_LABELS: Readonly<{
-    readonly pageTitle: "Plan Diff & Review";
-    readonly pageDescription: "Review the change set, run schema analysis, and validate the proposed plan.";
+    readonly pageTitle: "Diff (advanced)";
+    readonly pageDescription: "Step 1 of the manual workflow: review bronze vs vault, then analyze and validate.";
     readonly noChanges: "No changes in this category.";
     readonly validationSummary: "Validation Summary";
     readonly errors: "Errors:";
@@ -32,18 +32,29 @@ export declare const DIFF_LABELS: Readonly<{
     readonly validate: "Validate plan";
 }>;
 export declare const PLAN_REVIEW_LABELS: Readonly<{
-    readonly pageTitle: "Plan review";
-    readonly pageDescription: "Inspect hubs, satellites, links and Business Vault (BV) proposals before generation.";
-    readonly runArchitect: "Run Business Vault architect";
+    readonly pageTitle: "Plan review (advanced)";
+    readonly pageDescription: "Step 2: inspect the modelling plan and optional BV proposal before YAML generation.";
+    readonly runArchitect: "Run BV architect";
     readonly empty: "Run the schema analyzer on the Diff page first.";
 }>;
-/**
- * Labels for the approval / decision controls. Kept in one place so the
- * Submit-for-review screen, History page, and any future approval surface
- * never drift on copy.
- */
+export declare const CHANGE_CATEGORY_VALUES: readonly ["new", "drift", "unchanged", "orphaned"];
+export type ChangeCategory = (typeof CHANGE_CATEGORY_VALUES)[number];
+export declare const CHANGE_CATEGORY_LABELS: Readonly<{
+    readonly new: "New";
+    readonly drift: "Schema changed";
+    readonly unchanged: "Unchanged";
+    readonly orphaned: "Orphaned";
+}>;
+export declare const CHANGE_CATEGORY_INTENTS: Readonly<{
+    readonly new: "success";
+    readonly drift: "warning";
+    readonly unchanged: "neutral";
+    readonly orphaned: "destructive";
+}>;
+export type DvKind = keyof typeof DV_KIND_LABELS;
 export declare const APPROVAL_LABELS: Readonly<{
     readonly section: "Decision";
+    readonly submitLabel: "Submit for review";
     readonly commentLabel: "Review comment";
     readonly commentPlaceholder: "Optional for approve; required for reject and request-changes";
     readonly approve: "Approve";
@@ -66,18 +77,3 @@ export declare const APPROVAL_LABELS: Readonly<{
     readonly validateSuccess: "Validation complete";
     readonly validateError: "Validation failed";
 }>;
-export declare const CHANGE_CATEGORY_VALUES: readonly ["new", "drift", "unchanged", "orphaned"];
-export type ChangeCategory = (typeof CHANGE_CATEGORY_VALUES)[number];
-export declare const CHANGE_CATEGORY_LABELS: Readonly<{
-    readonly new: "New";
-    readonly drift: "Schema changed";
-    readonly unchanged: "Unchanged";
-    readonly orphaned: "Orphaned";
-}>;
-export declare const CHANGE_CATEGORY_INTENTS: Readonly<{
-    readonly new: "success";
-    readonly drift: "warning";
-    readonly unchanged: "neutral";
-    readonly orphaned: "destructive";
-}>;
-export type DvKind = keyof typeof DV_KIND_LABELS;

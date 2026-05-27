@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ADVANCED_NAV,
   PRIMARY_NAV,
   ROUTES,
   ROUTE_LABELS,
@@ -23,7 +24,16 @@ describe("ROUTES", () => {
     }
   });
 
-  it("primary nav surfaces the consolidated pipeline-run workflow", () => {
-    expect(PRIMARY_NAV).toContain(ROUTES.pipelineRun);
+  it("primary nav is Generate Vault + history only", () => {
+    expect(PRIMARY_NAV).toEqual([ROUTES.discovery, ROUTES.history]);
+    expect(PRIMARY_NAV).not.toContain(ROUTES.pipelineRun);
+  });
+
+  it("advanced nav lists the step-by-step workflow pages", () => {
+    expect(ADVANCED_NAV).toEqual([
+      ROUTES.diff,
+      ROUTES.planReview,
+      ROUTES.generatePreview,
+    ]);
   });
 });

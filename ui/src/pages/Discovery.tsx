@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 
 import { useCatalogs, useDiscoverySnapshot, useRunPipeline, useSchemas, useSchemaTables } from "@/api/hooks";
 import { PageShell } from "@/components/PageShell";
 import { Button, Card, CardContent, CardHeader, CardTitle, Spinner } from "@/components/ui";
 import { DISCOVERY_LABELS } from "@/constants/discovery";
-import { ROUTES } from "@/constants/routes";
+import { PIPELINE_LABELS } from "@/constants/pipeline";
+import { ROUTES, WORKFLOW_LABELS } from "@/constants/routes";
 import { usePipeline } from "@/context/DwaPipelineContext";
 import { env } from "@/env";
 import { toast } from "@/lib/toast";
@@ -74,11 +75,6 @@ export default function DiscoveryPage() {
     setSelectedTables(new Set());
   };
 
-  // Auto-select defaults once schemas arrive for the chosen catalog.
-  // useEffect (not useMemo) because we're producing a side effect — setState.
-  // Vault is only auto-filled when a schema name actually contains a vault
-  // hint; otherwise it stays blank so the user can decide between (a) picking
-  // an existing vault schema and (b) running a greenfield snapshot.
   const prevSchemasKey = schemas.join(",");
   useEffect(() => {
     if (!catalog || schemas.length === 0) return;
@@ -112,16 +108,26 @@ export default function DiscoveryPage() {
     setSelectedTables(new Set());
   };
 
+  const buildPipelineRequest = () => {
+    const systemId = env.defaults.systemId || catalog;
+    return {
+      catalog,
+      bronze_schema: bronzeSchema,
+      ...(vaultSchema ? { vault_schema: vaultSchema } : {}),
+      tables: selectedTables.size > 0 ? Array.from(selectedTables) : [],
+      system_id: systemId,
+      system_name: env.defaults.systemName || catalog,
+      source_type: systemId,
+      record_source: env.defaults.recordSource || systemId,
+    };
+  };
+
   const handleSnapshot = () => {
     if (!catalog || !bronzeSchema) return;
     snapshot.mutate({
       catalog,
       bronze_schema: bronzeSchema,
-      // Vault is optional: omit when blank so the backend treats the snapshot
-      // as greenfield (every bronze table → NEW). Sending an empty string
-      // would 422 (min_length=1).
       ...(vaultSchema ? { vault_schema: vaultSchema } : {}),
-      // Pass selected tables; empty means "all" (backend default).
       tables: selectedTables.size > 0 ? Array.from(selectedTables) : [],
       ...(env.defaults.systemId ? { system_id: env.defaults.systemId } : {}),
       ...(env.defaults.systemName ? { system_name: env.defaults.systemName } : {}),
@@ -129,24 +135,9 @@ export default function DiscoveryPage() {
     });
   };
 
-  // Snapshot: only needs catalog + bronze; vault is optional (greenfield).
-  // Pipeline ("Generate Vault"): still needs vault because the generator
-  // has to know where to materialize hubs/links/sats.
-  const canSnapshot = Boolean(catalog && bronzeSchema && !snapshot.isPending);
-  const canRunPipeline = Boolean(catalog && bronzeSchema && vaultSchema && !snapshot.isPending);
-
-  // ── Agentic run-pipeline action ────────────────────────────────────────
   const runPipeline = useRunPipeline({
     onSuccess: (run) => {
-      const req = {
-        catalog,
-        bronze_schema: bronzeSchema,
-        vault_schema: vaultSchema,
-        system_id: env.defaults.systemId || catalog,
-        system_name: env.defaults.systemName || catalog,
-        source_type: env.defaults.systemId || catalog,
-        record_source: env.defaults.recordSource || env.defaults.systemId || catalog,
-      };
+      const req = buildPipelineRequest();
       void navigate({
         to: ROUTES.pipelineRun,
         search: {
@@ -158,18 +149,13 @@ export default function DiscoveryPage() {
     onError: (err) => toast.error("Pipeline run failed", String(err.message)),
   });
 
+  const canSubmit = Boolean(
+    catalog && bronzeSchema && !snapshot.isPending && !runPipeline.isPending,
+  );
+
   const handleRunPipeline = () => {
-    if (!canRunPipeline) return;
-    const systemId = env.defaults.systemId || catalog;
-    runPipeline.mutate({
-      catalog,
-      bronze_schema: bronzeSchema,
-      vault_schema: vaultSchema,
-      system_id: systemId,
-      system_name: env.defaults.systemName || catalog,
-      source_type: systemId,
-      record_source: env.defaults.recordSource || systemId,
-    });
+    if (!canSubmit) return;
+    runPipeline.mutate(buildPipelineRequest());
   };
 
   return (
@@ -177,24 +163,10 @@ export default function DiscoveryPage() {
       title={DISCOVERY_LABELS.pageTitle}
       description={DISCOVERY_LABELS.pageDescription}
       actions={
-        <div className="flex gap-2">
-          <Button intent="outline" onClick={handleSnapshot} disabled={!canSnapshot}>
-            {snapshot.isPending ? <Spinner className="h-4 w-4" /> : null}
-            {DISCOVERY_LABELS.snapshot}
-          </Button>
-          <Button
-            onClick={handleRunPipeline}
-            disabled={!canRunPipeline || runPipeline.isPending}
-            title={
-              !vaultSchema
-                ? "Pick a vault schema to enable pipeline generation"
-                : undefined
-            }
-          >
-            {runPipeline.isPending ? <Spinner className="h-4 w-4" /> : null}
-            Generate Vault
-          </Button>
-        </div>
+        <Button onClick={handleRunPipeline} disabled={!canSubmit}>
+          {runPipeline.isPending ? <Spinner className="h-4 w-4" /> : null}
+          {PIPELINE_LABELS.runButton}
+        </Button>
       }
     >
       <Card>
@@ -206,10 +178,9 @@ export default function DiscoveryPage() {
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              handleSnapshot();
+              handleRunPipeline();
             }}
           >
-            {/* ── Catalog ────────────────────────────────────────────── */}
             <FieldRow label={DISCOVERY_LABELS.catalog} htmlFor="catalog">
               <select
                 id="catalog"
@@ -233,7 +204,6 @@ export default function DiscoveryPage() {
               )}
             </FieldRow>
 
-            {/* ── Bronze schema ───────────────────────────────────────── */}
             <FieldRow label={DISCOVERY_LABELS.bronzeSchema} htmlFor="bronzeSchema">
               <select
                 id="bronzeSchema"
@@ -253,7 +223,6 @@ export default function DiscoveryPage() {
               </select>
             </FieldRow>
 
-            {/* ── Vault schema (optional — greenfield when blank) ────── */}
             <FieldRow label={DISCOVERY_LABELS.vaultSchema} htmlFor="vaultSchema">
               <select
                 id="vaultSchema"
@@ -282,7 +251,6 @@ export default function DiscoveryPage() {
               )}
             </FieldRow>
 
-            {/* ── Table multi-select ──────────────────────────────────── */}
             {bronzeSchema && (
               <FieldRow label={DISCOVERY_LABELS.tables} htmlFor="tables">
                 <p className="mt-1 mb-2 text-xs text-muted-foreground">
@@ -295,7 +263,6 @@ export default function DiscoveryPage() {
                   <p className="text-xs text-muted-foreground">{DISCOVERY_LABELS.selectSchemasFirst}</p>
                 ) : (
                   <div className="rounded border border-input bg-background">
-                    {/* Select all / deselect all toolbar */}
                     <div className="flex gap-3 border-b border-input px-3 py-2">
                       <button
                         type="button"
@@ -320,7 +287,6 @@ export default function DiscoveryPage() {
                       </span>
                     </div>
 
-                    {/* Scrollable checkbox list */}
                     <ul
                       id="tables"
                       className="max-h-56 overflow-y-auto divide-y divide-input"
@@ -350,14 +316,41 @@ export default function DiscoveryPage() {
               </FieldRow>
             )}
 
-            {snapshot.error && (
-              <p className="text-sm text-destructive">
-                {DISCOVERY_LABELS.snapshotError} {String(snapshot.error)}
-              </p>
-            )}
+            <details className="rounded-md border border-dashed border-border bg-muted/30 px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium text-foreground">
+                {DISCOVERY_LABELS.advancedTitle}
+              </summary>
+              <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+                <p>{WORKFLOW_LABELS.discoveryAdvancedSummary}</p>
+                <p className="font-mono text-xs">{WORKFLOW_LABELS.discoveryAdvancedSteps}</p>
+                <Button
+                  type="button"
+                  intent="outline"
+                  size="sm"
+                  onClick={handleSnapshot}
+                  disabled={!catalog || !bronzeSchema || snapshot.isPending}
+                >
+                  {snapshot.isPending ? <Spinner className="h-4 w-4" /> : null}
+                  {DISCOVERY_LABELS.snapshot}
+                </Button>
+                {snapshot.error && (
+                  <p className="text-destructive">
+                    {DISCOVERY_LABELS.snapshotError} {String(snapshot.error)}
+                  </p>
+                )}
+              </div>
+            </details>
           </form>
         </CardContent>
       </Card>
+
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        <Link to={ROUTES.diff} className="text-primary hover:underline">
+          Open advanced workflow
+        </Link>
+        {" · "}
+        {WORKFLOW_LABELS.discoveryAdvancedSteps}
+      </p>
     </PageShell>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 
 import {
   useApprovePlan,
@@ -21,7 +22,7 @@ import {
   Spinner,
 } from "@/components/ui";
 import { APPROVAL_LABELS } from "@/constants/dv";
-import { GENERATE_LABELS } from "@/constants/routes";
+import { GENERATE_LABELS, ROUTES, WORKFLOW_LABELS } from "@/constants/routes";
 import { usePipeline } from "@/context/DwaPipelineContext";
 import { downloadTextFile, YAML_MIME } from "@/lib/download";
 import { toast } from "@/lib/toast";
@@ -227,6 +228,17 @@ export default function GeneratePreviewPage() {
         </div>
       }
     >
+      <p className="mb-4 text-sm text-muted-foreground">
+        {WORKFLOW_LABELS.generateWorkflowHint}{" "}
+        <Link to={ROUTES.discovery} className="text-primary hover:underline">
+          {WORKFLOW_LABELS.backToGenerateVault}
+        </Link>
+        {" · "}
+        <Link to={ROUTES.diff} className="text-primary hover:underline">
+          Diff
+        </Link>
+      </p>
+
       {/* ── YAML preview ─────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
@@ -240,7 +252,12 @@ export default function GeneratePreviewPage() {
             </p>
           ) : null}
           {!plan ? (
-            <p className="text-muted-foreground">{GENERATE_LABELS.noPlanHint}</p>
+            <p className="text-muted-foreground">
+              {GENERATE_LABELS.noPlanHint}{" "}
+              <Link to={ROUTES.diff} className="text-primary hover:underline">
+                Go to Diff
+              </Link>
+            </p>
           ) : generate.isPending ? (
             <div className="flex justify-center py-8">
               <Spinner />

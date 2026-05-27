@@ -2,7 +2,7 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { Database } from "lucide-react";
 
 import { Icon } from "@/components/ui";
-import { PRIMARY_NAV, ROUTE_LABELS } from "@/constants/routes";
+import { ADVANCED_NAV, PRIMARY_NAV, ROUTE_LABELS, WORKFLOW_LABELS } from "@/constants/routes";
 import { cn } from "@/lib/cn";
 
 const SHELL_MAX_WIDTH = "max-w-6xl";
@@ -28,25 +28,52 @@ export function RootLayout() {
             <Icon icon={Database} size="lg" className="text-primary" />
             DWA Metadata Generator
           </span>
-          <nav className="flex gap-1 text-sm" aria-label="Primary">
-            {PRIMARY_NAV.map((path) => (
-              <Link
-                key={path}
-                to={path}
-                activeProps={{
-                  className: "bg-secondary text-secondary-foreground",
-                }}
-                inactiveProps={{
-                  className: "text-muted-foreground hover:text-foreground",
-                }}
-                className={cn(
-                  "rounded-md px-3 py-1.5 transition-colors hover:bg-secondary",
-                )}
-              >
-                {ROUTE_LABELS[path]}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+            <nav className="flex gap-1 text-sm" aria-label="Primary">
+              {PRIMARY_NAV.map((path) => (
+                <Link
+                  key={path}
+                  to={path}
+                  activeProps={{
+                    className: "bg-secondary text-secondary-foreground",
+                  }}
+                  inactiveProps={{
+                    className: "text-muted-foreground hover:text-foreground",
+                  }}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 transition-colors hover:bg-secondary",
+                  )}
+                >
+                  {ROUTE_LABELS[path]}
+                </Link>
+              ))}
+            </nav>
+            <nav
+              className="flex items-center gap-1 text-sm"
+              aria-label={WORKFLOW_LABELS.advancedNavGroup}
+            >
+              <span className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {WORKFLOW_LABELS.advancedNavGroup}
+              </span>
+              {ADVANCED_NAV.map((path) => (
+                <Link
+                  key={path}
+                  to={path}
+                  activeProps={{
+                    className: "bg-muted text-foreground",
+                  }}
+                  inactiveProps={{
+                    className: "text-muted-foreground hover:text-foreground",
+                  }}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 transition-colors hover:bg-muted",
+                  )}
+                >
+                  {ROUTE_LABELS[path]}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </div>
       </header>
       <main

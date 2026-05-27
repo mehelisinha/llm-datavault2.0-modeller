@@ -1,7 +1,10 @@
+import { Link } from "@tanstack/react-router";
+
 import { useArchitectBv } from "@/api/hooks";
 import { PageShell } from "@/components/PageShell";
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, Spinner } from "@/components/ui";
 import { PLAN_REVIEW_LABELS } from "@/constants/dv";
+import { ROUTES, WORKFLOW_LABELS } from "@/constants/routes";
 import { usePipeline } from "@/context/DwaPipelineContext";
 
 export default function PlanReviewPage() {
@@ -23,13 +26,25 @@ export default function PlanReviewPage() {
         </Button>
       }
     >
+      <p className="mb-4 text-sm text-muted-foreground">
+        {WORKFLOW_LABELS.planWorkflowHint}{" "}
+        <Link to={ROUTES.discovery} className="text-primary hover:underline">
+          {WORKFLOW_LABELS.backToGenerateVault}
+        </Link>
+      </p>
+
       <Card>
         <CardHeader>
           <CardTitle>Modeling plan</CardTitle>
         </CardHeader>
         <CardContent>
           {!plan ? (
-            <p className="text-muted-foreground">{PLAN_REVIEW_LABELS.empty}</p>
+            <p className="text-muted-foreground">
+              {PLAN_REVIEW_LABELS.empty}{" "}
+              <Link to={ROUTES.diff} className="text-primary hover:underline">
+                Go to Diff
+              </Link>
+            </p>
           ) : architect.isPending ? (
             <div className="flex justify-center py-8">
               <Spinner />
@@ -67,6 +82,11 @@ export default function PlanReviewPage() {
               ) : (
                 <p className="text-muted-foreground">{PLAN_REVIEW_LABELS.runArchitect}</p>
               )}
+              <div className="mt-6 border-t border-border pt-4">
+                <Link to={ROUTES.generatePreview}>
+                  <Button>{WORKFLOW_LABELS.continueToGenerateYaml}</Button>
+                </Link>
+              </div>
             </div>
           )}
         </CardContent>

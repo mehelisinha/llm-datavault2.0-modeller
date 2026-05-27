@@ -1,15 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import { vi } from "vitest";
-
-vi.mock("@tanstack/react-router", async () => {
-  const actual = await vi.importActual<typeof import("@tanstack/react-router")>(
-    "@tanstack/react-router",
-  );
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-  };
-});
 
 import DiffReviewPage from "@/pages/DiffReview";
 import DiscoveryPage from "@/pages/Discovery";
@@ -18,6 +7,7 @@ import HistoryPage from "@/pages/History";
 import PlanReviewPage from "@/pages/PlanReview";
 import { DIFF_LABELS, PLAN_REVIEW_LABELS } from "@/constants/dv";
 import { DISCOVERY_LABELS } from "@/constants/discovery";
+import { PIPELINE_LABELS } from "@/constants/pipeline";
 import { GENERATE_LABELS, HISTORY_LABELS } from "@/constants/routes";
 import { createTestWrapper } from "../test-utils";
 
@@ -30,12 +20,15 @@ describe("Phase B UI pages", () => {
     expect(screen.getByText(/discovery snapshot first/i)).toBeInTheDocument();
   });
 
-  it("renders DiscoveryPage with catalog and schema fields", () => {
+  it("renders DiscoveryPage with primary Generate Vault action and advanced snapshot", () => {
     render(<DiscoveryPage />, { wrapper: Wrapper });
     expect(screen.getByRole("heading", { name: DISCOVERY_LABELS.pageTitle })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: PIPELINE_LABELS.runButton })).toBeInTheDocument();
     expect(screen.getByLabelText(DISCOVERY_LABELS.catalog)).toBeInTheDocument();
     expect(screen.getByLabelText(DISCOVERY_LABELS.bronzeSchema)).toBeInTheDocument();
     expect(screen.getByLabelText(DISCOVERY_LABELS.vaultSchema)).toBeInTheDocument();
+    expect(screen.getByText(DISCOVERY_LABELS.advancedTitle)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: DISCOVERY_LABELS.snapshot })).toBeInTheDocument();
   });
 
   it("renders GeneratePreviewPage", () => {
