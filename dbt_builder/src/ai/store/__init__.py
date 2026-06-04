@@ -205,6 +205,180 @@ def make_record(
 __all__ = [
     "ApprovalStore",
     "ApprovalStoreError",
+    "DeltaApprovalStore",
     "SqliteApprovalStore",
     "make_record",
 ]
+
+
+# ─── Delta implementation ────────────────────────────────────────────────────
+
+
+class DeltaApprovalStore:
+    """Unity-Catalog Delta-backed approval store.
+
+    Insert-only audit trail in ``{catalog}.{schema}.{table}``::
+
+        plan_id          STRING
+        version          INT
+        status           STRING       -- ApprovalStatus.value
+        actor            STRING
+        timestamp_utc    TIMESTAMP
+        comment          STRING
+        plan_json        STRING
+        validation_json  STRING
+        parent_plan_id   STRING
+        rendered_yaml    STRING
+        yaml_path        STRING
+
+    The primary key ``(plan_id, version)`` is enforced at the application
+    layer (Delta has no PK constraint); ``latest()`` uses ``ORDER BY version``.
+    """
+
+    def __init__(
+        self,
+        executor,  # type: ignore[no-untyped-def]  # DatabricksSqlExecutor
+        *,
+        catalog: str = "dwa_meta",
+        schema: str = "default",
+        table: str = "approvals",
+    ) -> None:
+        from dbt_builder.src.utils.databricks_sql import (
+            DatabricksSqlExecutor,
+        )
+
+        if not isinstance(executor, DatabricksSqlExecutor):
+            raise TypeError("executor must be a DatabricksSqlExecutor instance.")
+        import re as _re
+
+        for ident in (catalog, schema, table):
+            if not _re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", ident):
+                raise ValueError(f"Invalid Delta identifier: {ident!r}")
+        self._exec = executor
+        self._fqn = f"`{catalog}`.`{schema}`.`{table}`"
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        self._exec.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self._fqn} (
+                plan_id          STRING    NOT NULL,
+                version          INT       NOT NULL,
+                status           STRING    NOT NULL,
+                actor            STRING    NOT NULL,
+                timestamp_utc    TIMESTAMP NOT NULL,
+                comment          STRING,
+                plan_json        STRING    NOT NULL,
+                validation_json  STRING,
+                parent_plan_id   STRING,
+                rendered_yaml    STRING,
+                yaml_path        STRING
+            ) USING DELTA
+            """
+        )
+
+    def append(self, record: ApprovalRecord) -> None:
+        # Application-side uniqueness check — Delta has no PK constraint.
+        existing = self._exec.fetchone(
+            f"SELECT 1 FROM {self._fqn} WHERE plan_id = ? AND version = ? LIMIT 1",
+            (record.plan_id, record.version),
+        )
+        if existing is not None:
+            raise ApprovalStoreError(
+                f"Duplicate (plan_id={record.plan_id}, version={record.version})"
+            )
+        self._exec.execute(
+            f"""
+            INSERT INTO {self._fqn}
+                (plan_id, version, status, actor, timestamp_utc,
+                 comment, plan_json, validation_json, parent_plan_id,
+                 rendered_yaml, yaml_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record.plan_id,
+                int(record.version),
+                record.status.value,
+                record.actor,
+                record.timestamp.astimezone(timezone.utc),
+                record.comment,
+                record.plan_json,
+                record.validation_json,
+                record.parent_plan_id,
+                record.rendered_yaml,
+                record.yaml_path,
+            ),
+        )
+
+    def history(self, plan_id: str) -> tuple[ApprovalRecord, ...]:
+        rows = self._exec.fetchall(
+            f"""
+            SELECT plan_id, version, status, actor, timestamp_utc,
+                   comment, plan_json, validation_json, parent_plan_id,
+                   rendered_yaml, yaml_path
+            FROM {self._fqn}
+            WHERE plan_id = ?
+            ORDER BY version ASC
+            """,
+            (plan_id,),
+        )
+        return tuple(_tuple_to_record(r) for r in rows)
+
+    def latest(self, plan_id: str) -> ApprovalRecord | None:
+        row = self._exec.fetchone(
+            f"""
+            SELECT plan_id, version, status, actor, timestamp_utc,
+                   comment, plan_json, validation_json, parent_plan_id,
+                   rendered_yaml, yaml_path
+            FROM {self._fqn}
+            WHERE plan_id = ?
+            ORDER BY version DESC
+            LIMIT 1
+            """,
+            (plan_id,),
+        )
+        return _tuple_to_record(row) if row is not None else None
+
+    def list_recent(self, *, limit: int = 50) -> tuple[ApprovalRecord, ...]:
+        rows = self._exec.fetchall(
+            f"""
+            SELECT plan_id, version, status, actor, timestamp_utc,
+                   comment, plan_json, validation_json, parent_plan_id,
+                   rendered_yaml, yaml_path
+            FROM {self._fqn}
+            ORDER BY timestamp_utc DESC
+            LIMIT {int(limit)}
+            """,
+        )
+        return tuple(_tuple_to_record(r) for r in rows)
+
+
+def _tuple_to_record(row: tuple) -> ApprovalRecord:
+    (
+        plan_id,
+        version,
+        status,
+        actor,
+        ts,
+        comment,
+        plan_json,
+        validation_json,
+        parent_plan_id,
+        rendered_yaml,
+        yaml_path,
+    ) = row
+    if isinstance(ts, str):
+        ts = datetime.fromisoformat(ts)
+    return ApprovalRecord(
+        plan_id=plan_id,
+        version=int(version),
+        status=ApprovalStatus(status),
+        actor=actor,
+        timestamp=ts,
+        comment=comment,
+        plan_json=plan_json,
+        validation_json=validation_json,
+        parent_plan_id=parent_plan_id,
+        rendered_yaml=rendered_yaml,
+        yaml_path=yaml_path,
+    )

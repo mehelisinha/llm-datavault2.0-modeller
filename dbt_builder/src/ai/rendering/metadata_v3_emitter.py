@@ -127,8 +127,18 @@ def _hub_block(hub: HubDecision) -> dict[str, Any]:
 
 
 def _sat_block(sat: SatelliteDecision) -> dict[str, Any]:
-    return {
+    # Subgroup-aware default description so reviewers can instantly tell
+    # rate-of-change splits apart without opening the YAML diff.
+    if sat.subgroup is not None:
+        description = (
+            f"{sat.subgroup.title()} attributes for {sat.parent_hub} "
+            f"({sat.change_velocity} change velocity)."
+        )
+    else:
+        description = f"Descriptive attributes for {sat.parent_hub}."
+    block: dict[str, Any] = {
         "name": sat.name,
+        "description": description,
         "parent_hub": sat.parent_hub,
         "source_model": _staging_model_name(sat.source_table),
         "hash_key": sat.hash_key,
@@ -137,6 +147,10 @@ def _sat_block(sat: SatelliteDecision) -> dict[str, Any]:
         "payload": list(sat.payload),
         "databricks_config": db.satellite_config(sat.hash_key, sat.hashdiff),
     }
+    if sat.subgroup is not None:
+        block["subgroup"] = sat.subgroup
+    block["change_velocity"] = sat.change_velocity
+    return block
 
 
 def _link_block(link: LinkDecision) -> dict[str, Any]:
@@ -355,16 +369,37 @@ def _bv_sat_block(
     hub_hk = hub.hash_key if hub else "HK_UNKNOWN"
     hashdiff = _bv_hashdiff(bv_sat.name)
     source_model = bv_sat.source_models[0] if bv_sat.source_models else ""
-    return {
+
+    # Prefer the rich payload (with per-column derivation_sql) when set.
+    # Fall back to ``computed_columns`` for back-compat with callers that
+    # pre-date :class:`BvSatPayloadItem`.
+    effective = bv_sat.effective_payload
+    payload_cols = [item.name for item in effective]
+    derivation_rules = {
+        item.name: item.derivation_sql
+        for item in effective
+        if item.derivation_sql is not None
+    }
+
+    block: dict[str, Any] = {
         "name": bv_sat.name,
         "description": f"Business vault satellite for {bv_sat.parent_hub}.",
         "parent_hub": bv_sat.parent_hub,
         "source_model": source_model,
         "hash_key": hub_hk,
         "hashdiff": hashdiff,
-        "payload": list(bv_sat.computed_columns),
+        "payload": payload_cols,
         "databricks_config": db.bv_sat_config(hub_hk, hashdiff),
     }
+    if bv_sat.classification is not None:
+        block["classification"] = bv_sat.classification.value
+    if derivation_rules:
+        # Emitted as a sibling map so PyYAML can serialise cleanly
+        # (inline comments per list item are not possible with safe_dump).
+        block["derivation_rules"] = derivation_rules
+    if bv_sat.rationale:
+        block["rationale"] = bv_sat.rationale
+    return block
 
 
 # ── Document assembler ────────────────────────────────────────────────────────
@@ -468,3 +503,34 @@ def render_v3(
             f"SourceSystem.system_id '{system.system_id}'."
         )
     return _dump(_build_document(plan, system, bv, load_frequency=load_frequency))
+
+
+def build_document(
+    plan: ModelingPlan,
+    system: SourceSystem,
+    bv: BvProposal | None = None,
+    *,
+    load_frequency: str = "daily",
+) -> dict[str, Any]:
+    """Public dict-form of :func:`render_v3`.
+
+    Returned dict is the same shape :func:`render_v3` serialises. Used
+    by the orchestrator's DESCRIBE step to enrich descriptions before
+    final YAML dump, and by tests that prefer structural assertions
+    over string parsing.
+    """
+    if plan.system_id != system.system_id:
+        raise ValueError(
+            f"Plan system_id '{plan.system_id}' does not match "
+            f"SourceSystem.system_id '{system.system_id}'."
+        )
+    return _build_document(plan, system, bv, load_frequency=load_frequency)
+
+
+def dump_document(document: dict[str, Any]) -> str:
+    """Serialise a document dict to canonical YAML.
+
+    Exposed so the orchestrator can dump a (possibly enriched) document
+    without reaching into private helpers.
+    """
+    return _dump(document)

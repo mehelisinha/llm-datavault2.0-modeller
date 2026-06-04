@@ -9,6 +9,7 @@ artifact.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -119,17 +120,35 @@ def run_pipeline(
     it via :func:`get_pipeline_run` to drive the live timeline.
     """
     pipeline_input = _build_pipeline_input(req, settings)
+    _LOG.info(
+        "POST /api/pipeline/run start: catalog=%s bronze_schema=%s tables=%d ack_risks=%s",
+        req.catalog,
+        req.bronze_schema,
+        len(req.tables),
+        req.acknowledge_risks,
+    )
+    t0 = time.perf_counter()
     try:
-        return service.run_pipeline(
+        run = service.run_pipeline(
             pipeline_input,
             acknowledge_risks=req.acknowledge_risks,
         )
     except Exception as exc:  # noqa: BLE001 — surface internals as 500 with detail
-        _LOG.exception("Pipeline run failed before reaching the orchestrator")
+        _LOG.exception(
+            "Pipeline run failed before reaching the orchestrator after %.1fs",
+            time.perf_counter() - t0,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
+    _LOG.info(
+        "POST /api/pipeline/run done in %.1fs: run_id=%s status=%s",
+        time.perf_counter() - t0,
+        run.run_id,
+        getattr(run, "status", "?"),
+    )
+    return run
 
 
 @router.get("/runs/{run_id}", response_model=PipelineRun)

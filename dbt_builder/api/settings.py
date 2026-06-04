@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dbt_builder.api.stub_catalog import (
@@ -93,6 +93,57 @@ class ApiSettings(BaseSettings):
         default=None,
         description="Application (client) ID of the protected API — JWT audience.",
     )
+    aad_admin_app_role: str = Field(
+        default="Admin",
+        description=(
+            "App role value (case-insensitive) that grants admin privileges. "
+            "Must match the 'value' field of the role on the API app registration."
+        ),
+    )
+    admin_emails: str = Field(
+        default="",
+        description=(
+            "Comma-separated email/UPN allowlist used as an admin fallback when "
+            "the bearer token carries no 'roles' claim (e.g. during early rollout "
+            "before app roles are assigned). Also honoured in dev (X-Actor) mode."
+        ),
+    )
+    cors_allowed_origins: str = Field(
+        default="",
+        description=(
+            "Comma-separated list of origins allowed by CORS (e.g. "
+            "'http://localhost:5173,https://dwa.eon.com'). Empty disables CORS "
+            "— safe default for same-origin production deployments."
+        ),
+    )
+
+    # ── Hide DWA's own metadata Delta tables from UI discovery dropdowns. ──
+    # Read directly from the publisher-side env vars (DWA_AI_METADATA_DELTA_*)
+    # so the catalog/schema name is configured ONCE and stays in sync.
+    metadata_delta_catalog: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DWA_API_METADATA_DELTA_CATALOG",
+            "DWA_AI_METADATA_DELTA_CATALOG",
+        ),
+        description="Catalog hosting the DWA metadata Delta tables (hidden from discovery).",
+    )
+    metadata_delta_schema: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DWA_API_METADATA_DELTA_SCHEMA",
+            "DWA_AI_METADATA_DELTA_SCHEMA",
+        ),
+        description="Schema hosting the DWA metadata Delta tables (hidden from discovery).",
+    )
+    hide_metadata_from_discovery: bool = Field(
+        default=True,
+        description=(
+            "When True (default), filter the configured metadata catalog/schema "
+            "out of /api/discovery/* responses so users cannot accidentally point "
+            "vault generation at DWA's own audit tables."
+        ),
+    )
 
     ui_dist_path: str | None = Field(
         default=None,
@@ -154,6 +205,18 @@ class ApiSettings(BaseSettings):
         if not self.aad_tenant_id:
             return None
         return f"https://login.microsoftonline.com/{self.aad_tenant_id}/discovery/v2.0/keys"
+
+    @property
+    def admin_email_set(self) -> frozenset[str]:
+        """Lower-cased allowlist of admin emails (empty when unset)."""
+        return frozenset(
+            e.strip().lower() for e in self.admin_emails.split(",") if e.strip()
+        )
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Parsed CORS origins (empty list disables CORS)."""
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
 
 @lru_cache

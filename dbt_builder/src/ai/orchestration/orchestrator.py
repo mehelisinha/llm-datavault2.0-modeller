@@ -40,10 +40,14 @@ from dbt_builder.src.ai.contracts.supervision import (
     SupervisionRecommendation,
 )
 from dbt_builder.src.ai.pipeline import bronze_reader, catalog_inspector, diff_analyzer
-from dbt_builder.src.ai.rendering.metadata_v3_emitter import render_v3
+from dbt_builder.src.ai.rendering.metadata_v3_emitter import (
+    build_document,
+    dump_document,
+)
 
 if TYPE_CHECKING:
     from dbt_builder.src.ai.agents import BvArchitect, SchemaAnalyzer, YamlGenerator
+    from dbt_builder.src.ai.agents.descriptor import Descriptor
     from dbt_builder.src.ai.supervision import PipelineSupervisor
 
 _LOG = logging.getLogger(__name__)
@@ -87,6 +91,21 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _resolve_describe_parallelism() -> int:
+    """Read :attr:`AISettings.catalog_describe_parallelism` defensively.
+
+    The orchestrator runs in unit tests that don't configure Azure
+    credentials, so a settings-load failure must fall back to the
+    legacy serial behaviour rather than crashing the run.
+    """
+    try:
+        from dbt_builder.src.ai.settings import get_settings
+
+        return get_settings().catalog_describe_parallelism
+    except Exception:
+        return 1
+
+
 # ── Orchestrator ─────────────────────────────────────────────────────────────
 
 
@@ -115,6 +134,7 @@ class PipelineOrchestrator:
         bv_architect: BvArchitect | None = None,
         yaml_generator: YamlGenerator | None = None,
         supervisor: PipelineSupervisor | None = None,
+        descriptor: Descriptor | None = None,
     ) -> None:
         from dbt_builder.src.ai.agents import BvArchitect, YamlGenerator
         from dbt_builder.src.ai.supervision import PipelineSupervisor
@@ -123,6 +143,9 @@ class PipelineOrchestrator:
         self._bv_architect = bv_architect or BvArchitect()
         self._yaml_generator = yaml_generator or YamlGenerator()
         self._supervisor = supervisor if supervisor is not None else PipelineSupervisor()
+        # Optional: when None, the DESCRIBE step is skipped and the
+        # deterministic descriptions from the emitter are kept as-is.
+        self._descriptor = descriptor
 
     # ── Public entrypoint ────────────────────────────────────────────────────
 
@@ -186,6 +209,14 @@ class PipelineOrchestrator:
         if failed:
             return run
 
+        # ── DESCRIBE ─────────────────────────────────────────────────────────
+        # Optional LLM-driven description enrichment. Skipped when no
+        # Descriptor was injected (offline / test runs); falls back to the
+        # deterministic document on any failure inside the agent.
+        run, failed = self._do_describe(run)
+        if failed:
+            return run
+
         # ── VALIDATE ─────────────────────────────────────────────────────────
         run, failed = self._do_validate(run)
         if failed:
@@ -232,6 +263,7 @@ class PipelineOrchestrator:
         try:
             from dbt_builder.src.ai.pipeline.snapshot_helpers import greenfield_catalog_snapshot
 
+            describe_parallelism = _resolve_describe_parallelism()
             if pi.vault_schema:
                 catalog_snapshot = catalog_inspector.inspect_catalog(
                     catalog=pi.catalog,
@@ -239,6 +271,7 @@ class PipelineOrchestrator:
                     list_entities=pi.list_vault_entities,
                     describe_table=pi.describe_vault,
                     metadata_yaml_path=pi.metadata_yaml_path,
+                    describe_parallelism=describe_parallelism,
                 )
             else:
                 catalog_snapshot = greenfield_catalog_snapshot(pi.catalog, pi.bronze_schema)
@@ -249,6 +282,7 @@ class PipelineOrchestrator:
                 describe_table=pi.describe_bronze,
                 include_patterns=pi.include_patterns,
                 exclude_patterns=pi.exclude_patterns,
+                describe_parallelism=describe_parallelism,
             )
             change_set = diff_analyzer.diff(catalog_snapshot, bronze_snapshot)
         except Exception as exc:
@@ -256,6 +290,12 @@ class PipelineOrchestrator:
 
         step = PipelineStepResult(
             step=PipelineStepName.SNAPSHOT, status="ok", duration_ms=_elapsed_ms(t0)
+        )
+        _LOG.info(
+            "Pipeline step SNAPSHOT ok in %.1fs (bronze_tables=%d, describe_parallelism=%d)",
+            step.duration_ms / 1000,
+            len(bronze_snapshot.tables),
+            describe_parallelism,
         )
         return run.model_copy(
             update={
@@ -294,6 +334,7 @@ class PipelineOrchestrator:
         step = PipelineStepResult(
             step=PipelineStepName.ANALYZE, status="ok", duration_ms=_elapsed_ms(t0)
         )
+        _LOG.info("Pipeline step ANALYZE ok in %.1fs", step.duration_ms / 1000)
         return run.model_copy(
             update={"plan": plan, "steps": (*run.steps, step), "updated_at": _now()}
         ), False
@@ -309,6 +350,7 @@ class PipelineOrchestrator:
         step = PipelineStepResult(
             step=PipelineStepName.ARCHITECT_BV, status="ok", duration_ms=_elapsed_ms(t0)
         )
+        _LOG.info("Pipeline step ARCHITECT_BV ok in %.1fs", step.duration_ms / 1000)
         return run.model_copy(
             update={"bv": bv, "steps": (*run.steps, step), "updated_at": _now()}
         ), False
@@ -321,13 +363,60 @@ class PipelineOrchestrator:
             from dbt_builder.src.ai.contracts.payloads import SourceSystem
 
             system: SourceSystem = run.system  # type: ignore[assignment]
-            rendered_yaml = render_v3(plan=run.plan, system=system, bv=run.bv)
+            # Build the structured document; serialise it deterministically.
+            # The DESCRIBE step rebuilds the same dict (pure function) and
+            # enriches descriptions in place before re-serialising — we do
+            # not need to stash the dict on the run for that to work.
+            document = build_document(plan=run.plan, system=system, bv=run.bv)
+            rendered_yaml = dump_document(document)
         except Exception as exc:
             return self._fail(run, PipelineStepName.GENERATE, t0, exc)
 
         step = PipelineStepResult(
             step=PipelineStepName.GENERATE, status="ok", duration_ms=_elapsed_ms(t0)
         )
+        _LOG.info("Pipeline step GENERATE ok in %.1fs", step.duration_ms / 1000)
+        return run.model_copy(
+            update={
+                "rendered_yaml": rendered_yaml,
+                "steps": (*run.steps, step),
+                "updated_at": _now(),
+            }
+        ), False
+
+    def _do_describe(self, run: PipelineRun) -> tuple[PipelineRun, bool]:
+        """Optional LLM enrichment of description fields.
+
+        Skipped when no :class:`Descriptor` was injected. On any failure
+        inside the agent (LLM error, structural diff rejected, JSON
+        parse failure) we keep the deterministic YAML produced by
+        GENERATE so the pipeline degrades gracefully — generic
+        descriptions are still useful, a broken pipeline is not.
+        """
+        if self._descriptor is None:
+            return run, False
+        t0 = time.perf_counter()
+        try:
+            assert run.plan is not None, "plan missing before DESCRIBE"
+            assert run.system is not None, "system missing before DESCRIBE"
+            from dbt_builder.src.ai.contracts.payloads import SourceSystem
+
+            system: SourceSystem = run.system  # type: ignore[assignment]
+            document = build_document(plan=run.plan, system=system, bv=run.bv)
+            enriched = self._descriptor.enrich(
+                document,
+                plan=run.plan,
+                system=system,
+                bv=run.bv,
+            )
+            rendered_yaml = dump_document(enriched)
+        except Exception as exc:
+            return self._fail(run, PipelineStepName.DESCRIBE, t0, exc)
+
+        step = PipelineStepResult(
+            step=PipelineStepName.DESCRIBE, status="ok", duration_ms=_elapsed_ms(t0)
+        )
+        _LOG.info("Pipeline step DESCRIBE ok in %.1fs", step.duration_ms / 1000)
         return run.model_copy(
             update={
                 "rendered_yaml": rendered_yaml,
@@ -351,6 +440,7 @@ class PipelineOrchestrator:
         step = PipelineStepResult(
             step=PipelineStepName.VALIDATE, status="ok", duration_ms=_elapsed_ms(t0)
         )
+        _LOG.info("Pipeline step VALIDATE ok in %.1fs", step.duration_ms / 1000)
         return run.model_copy(
             update={
                 "validation": validation,

@@ -76,7 +76,12 @@ _DEFAULT_EFFECTIVE_FROM_COL = "EFFECTIVE_FROM"
 
 
 def _staging_model_name(source_table: str) -> str:
-    return f"stg_{source_table}"
+    # Strip any catalog/schema qualifier defensively. The decision contract
+    # already normalises this, but rendering must never produce names like
+    # `stg_catalog.schema.table` even if a caller supplies an unvalidated
+    # plan (e.g. from a fixture or a manual edit).
+    bare = source_table.rsplit(".", 1)[-1]
+    return f"stg_{bare}"
 
 
 # ── Bundle types ───────────────────────────────────────────────────────────
@@ -244,18 +249,32 @@ def _bridge_doc(bridge: BridgeTable) -> dict[str, Any]:
 
 
 def _bv_sat_doc(sat: BvSatellite) -> dict[str, Any]:
+    # Prefer the rich payload shape (column + optional derivation SQL) when
+    # set; fall back to legacy ``computed_columns`` otherwise. ``column_names``
+    # gives a uniform view regardless of which field the caller populated.
+    payload = sat.effective_payload
+    meta: dict[str, Any] = {
+        "dv_type": "bv_sat",
+        "parent_hub": sat.parent_hub,
+        "source_models": list(sat.source_models),
+        "computed_columns": list(sat.column_names),
+    }
+    derivation_rules = {
+        item.name: item.derivation_sql
+        for item in payload
+        if item.derivation_sql is not None
+    }
+    if derivation_rules:
+        meta["derivation_rules"] = derivation_rules
+    if sat.classification is not None:
+        meta["classification"] = sat.classification.value
     return {
         "version": 2,
         "models": [
             {
                 "name": sat.name,
                 "description": f"Business-vault satellite {sat.name}",
-                "meta": {
-                    "dv_type": "bv_sat",
-                    "parent_hub": sat.parent_hub,
-                    "source_models": list(sat.source_models),
-                    "computed_columns": list(sat.computed_columns),
-                },
+                "meta": meta,
             }
         ],
     }

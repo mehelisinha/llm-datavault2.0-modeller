@@ -21,6 +21,7 @@ Path convention (shared by both implementations)::
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from pathlib import Path
@@ -34,16 +35,20 @@ _log = logging.getLogger(__name__)
 
 
 def catalog_from_yaml(rendered_yaml: str) -> str:
-    """Extract ``system.catalog`` from a rendered metadata YAML string.
+    """Extract the catalog identifier from a rendered metadata YAML string.
 
-    Returns ``"unknown"`` when the field is absent or the YAML is malformed,
-    so a missing catalog never causes a hard failure at save time.
+    Looks at ``system.catalog`` first; falls back to ``system.system_id``
+    (which is what the metadata-v3 emitter populates by default). Returns
+    ``"unknown"`` only when both are absent or the YAML is malformed, so
+    a missing catalog never causes a hard failure at save time.
     """
     try:
         parsed = yaml.safe_load(rendered_yaml)
-        catalog = parsed.get("system", {}).get("catalog", "")
-        if catalog and re.match(r"^[a-z0-9_\-]+$", str(catalog), re.IGNORECASE):
-            return str(catalog).lower()
+        system = parsed.get("system", {}) if isinstance(parsed, dict) else {}
+        for key in ("catalog", "system_id"):
+            value = system.get(key, "")
+            if value and re.match(r"^[a-z0-9_\-]+$", str(value), re.IGNORECASE):
+                return str(value).lower()
     except Exception:
         pass
     return "unknown"
@@ -201,7 +206,107 @@ class AdlsYamlStore:
 
 __all__ = [
     "AdlsYamlStore",
+    "DeltaYamlStore",
     "LocalYamlStore",
     "YamlStore",
     "catalog_from_yaml",
 ]
+
+
+# ── Delta (Databricks SQL warehouse) implementation ──────────────────────────
+
+
+class DeltaYamlStore:
+    """Unity-Catalog Delta-backed YAML store.
+
+    Persists every approved YAML as an immutable row in
+    ``{catalog}.{schema}.{table}`` with columns::
+
+        catalog      STRING  (the source-system catalog, NOT the UC catalog)
+        plan_id      STRING
+        version      INT
+        yaml_text    STRING
+        yaml_sha256  STRING
+        created_at   TIMESTAMP
+
+    ``get_latest`` returns the most recent row per ``catalog``. The table
+    is created on first use (``CREATE TABLE IF NOT EXISTS``) so first
+    deploy is zero-touch beyond granting the warehouse principal MODIFY
+    on the schema.
+    """
+
+    def __init__(
+        self,
+        executor,  # type: ignore[no-untyped-def]  # DatabricksSqlExecutor (avoid cycle)
+        *,
+        catalog: str = "dwa_meta",
+        schema: str = "default",
+        table: str = "yaml_versions",
+    ) -> None:
+        from dbt_builder.src.utils.databricks_sql import DatabricksSqlExecutor
+
+        if not isinstance(executor, DatabricksSqlExecutor):  # defensive at boundary
+            raise TypeError("executor must be a DatabricksSqlExecutor instance.")
+        # Identifier whitelist — these go into raw SQL, never user-supplied at runtime.
+        for ident in (catalog, schema, table):
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", ident):
+                raise ValueError(f"Invalid Delta identifier: {ident!r}")
+        self._exec = executor
+        self._fqn = f"`{catalog}`.`{schema}`.`{table}`"
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        # USING DELTA is implicit on a Unity Catalog managed table but we make
+        # it explicit so external workspaces with a non-Delta default still
+        # land on Delta. PARTITIONED BY (catalog) keeps the common "latest per
+        # catalog" lookup cheap as the table grows.
+        self._exec.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self._fqn} (
+                catalog      STRING NOT NULL,
+                plan_id      STRING NOT NULL,
+                version      INT    NOT NULL,
+                yaml_text    STRING NOT NULL,
+                yaml_sha256  STRING NOT NULL,
+                created_at   TIMESTAMP NOT NULL
+            ) USING DELTA
+            PARTITIONED BY (catalog)
+            """
+        )
+
+    def save(
+        self,
+        *,
+        catalog_id: str,
+        plan_id: str,
+        version: int,
+        rendered_yaml: str,
+    ) -> str:
+        digest = hashlib.sha256(rendered_yaml.encode("utf-8")).hexdigest()
+        self._exec.execute(
+            f"""
+            INSERT INTO {self._fqn}
+                (catalog, plan_id, version, yaml_text, yaml_sha256, created_at)
+            VALUES (?, ?, ?, ?, ?, current_timestamp())
+            """,
+            (catalog_id, plan_id, int(version), rendered_yaml, digest),
+        )
+        url = f"delta://{self._fqn}#catalog={catalog_id};plan_id={plan_id};version={version}"
+        _log.info("DeltaYamlStore: saved %s (v%d) → %s", catalog_id, version, url)
+        return url
+
+    def get_latest(self, catalog_id: str) -> str:
+        row = self._exec.fetchone(
+            f"""
+            SELECT yaml_text FROM {self._fqn}
+            WHERE catalog = ?
+            ORDER BY created_at DESC, version DESC
+            LIMIT 1
+            """,
+            (catalog_id,),
+        )
+        if row is None:
+            raise FileNotFoundError(
+                f"No approved YAML found for catalog '{catalog_id}' in {self._fqn}"
+            )
+        return str(row[0])

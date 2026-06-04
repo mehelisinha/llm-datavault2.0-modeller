@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from dbt_builder.api.auth import get_actor
 from dbt_builder.src.ai.contracts.approval import ApprovalRecord
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 from dbt_builder.src.ai.contracts.validation import ValidationReport
@@ -37,20 +38,11 @@ class SubmitForReviewRequest(BaseModel):
     validation: ValidationReport
 
 
-def _require_actor(x_actor: str | None = Header(default=None)) -> str:
-    if not x_actor:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing X-Actor header. (Phase A: Entra integration pending.)",
-        )
-    return x_actor
-
-
 @router.post("/{plan_id}/submit-for-review", response_model=ApprovalRecord)
 def submit_for_review(
     plan_id: str,
     body: SubmitForReviewRequest,
-    actor: str = Depends(_require_actor),  # noqa: B008  FastAPI dependency
+    actor: str = Depends(get_actor),  # noqa: B008  FastAPI dependency
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> ApprovalRecord:
     """Persist the current plan as a DRAFT, unlocking the approval buttons."""
@@ -74,7 +66,7 @@ def submit_for_review(
 def approve(
     plan_id: str,
     body: CommentBody,
-    actor: str = Depends(_require_actor),  # noqa: B008  FastAPI dependency
+    actor: str = Depends(get_actor),  # noqa: B008  FastAPI dependency
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> ApprovalRecord:
     try:
@@ -87,7 +79,7 @@ def approve(
 def reject(
     plan_id: str,
     body: RejectBody,
-    actor: str = Depends(_require_actor),  # noqa: B008  FastAPI dependency
+    actor: str = Depends(get_actor),  # noqa: B008  FastAPI dependency
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> ApprovalRecord:
     try:
@@ -100,7 +92,7 @@ def reject(
 def request_changes(
     plan_id: str,
     body: RejectBody,
-    actor: str = Depends(_require_actor),  # noqa: B008  FastAPI dependency
+    actor: str = Depends(get_actor),  # noqa: B008  FastAPI dependency
     service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
 ) -> ApprovalRecord:
     try:

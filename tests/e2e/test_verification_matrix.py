@@ -109,7 +109,7 @@ def test_verification_matrix_row(
         body = scenario["json"]
 
     if method == "GET":
-        response = matrix_client.get(path)
+        response = matrix_client.get(path, headers=headers)
     else:
         response = matrix_client.request(method, path, json=body, headers=headers)
 

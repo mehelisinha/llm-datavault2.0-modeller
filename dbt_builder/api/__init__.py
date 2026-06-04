@@ -10,9 +10,14 @@ identity. Phase B7 adds Entra ID JWT validation.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import logging
+import os
 
-from dbt_builder.api.routers import approvals, discovery, history, pipeline, plans
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from dbt_builder.api.routers import approvals, discovery, history, me, pipeline, plans
+from dbt_builder.api.settings import get_settings
 
 _TITLE = "DWA Metadata Generator API"
 _VERSION = "0.2.0-phase-b"
@@ -22,6 +27,30 @@ _DESCRIPTION = (
 )
 
 
+def _configure_logging() -> None:
+    """Route app logs (orchestrator, agents, service) to the uvicorn handler.
+
+    Uvicorn only configures its own loggers; without this, INFO-level logs from
+    application modules are dropped because the root logger defaults to WARNING.
+    Honours ``DWA_API_LOG_LEVEL`` (default INFO).
+    """
+    level_name = os.getenv("DWA_API_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
+        root.addHandler(handler)
+    root.setLevel(level)
+    for name in ("dbt_builder", "uvicorn", "uvicorn.error"):
+        logging.getLogger(name).setLevel(level)
+
+
 def create_app() -> FastAPI:
     """Build a fresh FastAPI instance with all routers mounted.
 
@@ -29,12 +58,25 @@ def create_app() -> FastAPI:
     factory can be reused by ASGI servers, lifespan managers, and test
     fixtures without leaking module-level state.
     """
+    _configure_logging()
     app = FastAPI(title=_TITLE, version=_VERSION, description=_DESCRIPTION)
+
+    cors_origins = get_settings().cors_origin_list
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
     app.include_router(discovery.router)
     app.include_router(plans.router)
     app.include_router(approvals.router)
     app.include_router(history.router)
     app.include_router(pipeline.router)
+    app.include_router(me.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

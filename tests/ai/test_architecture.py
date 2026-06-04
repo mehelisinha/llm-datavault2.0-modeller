@@ -58,6 +58,12 @@ AI_ALLOWED_IMPORT_PREFIXES = (
     # Keeping the storage classes in `utils` avoids a forbidden non-AI →
     # AI import; the AI layer only wires them to `AISettings` here.
     "dbt_builder.src.utils.yaml_store",
+    # GitLab MR client + Databricks SQL executor live in utils for the same
+    # reason as yaml_store: they are pure infrastructure (no AI imports) and
+    # need to be reachable from non-AI callers (notebook tasks, CLI tools)
+    # without crossing the AI boundary. The AI layer wires them to AISettings.
+    "dbt_builder.src.utils.gitlab_mr",
+    "dbt_builder.src.utils.databricks_sql",
 )
 
 # First-party top-level packages whose import from the AI layer would be a

@@ -59,6 +59,7 @@ class PipelineStepName(str, Enum):
     ANALYZE = "analyze"  # Step 4:  SchemaAnalyzer (LLM)
     ARCHITECT_BV = "architect_bv"  # Step 4b: BvArchitect (deterministic)
     GENERATE = "generate"  # Step 5:  YamlGenerator (deterministic)
+    DESCRIBE = "describe"  # Step 5b: Descriptor (LLM, descriptions only)
     VALIDATE = "validate"  # Step 6:  Validator (deterministic)
 
 

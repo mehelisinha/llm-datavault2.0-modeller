@@ -69,13 +69,64 @@ class BridgeTable(BaseModel):
     rationale: str = Field(default="", max_length=2000)
 
 
+class BvSatPayloadItem(BaseModel):
+    """One derived column on a BV satellite, with optional inline SQL.
+
+    The ``derivation_sql`` string, when present, is emitted alongside the
+    column in the generated YAML so downstream consumers (and humans
+    reviewing the YAML) can see the rule that produces the value. It is
+    a structural hint — the actual SQL is realised by the dbt model the
+    YAML drives; this field is documentation embedded in metadata.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str = Field(min_length=1, description="Derived column name.")
+    derivation_sql: str | None = Field(
+        default=None,
+        max_length=2000,
+        description=(
+            "Optional inline SQL expression that produces the column. "
+            "Free-form; not parsed at contract time. The BV-sat validator "
+            "checks any column names referenced here exist on the source "
+            "raw-vault models."
+        ),
+    )
+
+
+class BvSatClassification(str, Enum):
+    """Coarse category of derivation a BV satellite performs.
+
+    Used by the pattern-gated proposer to keep BV-sat suggestions
+    auditable: every proposal carries the rule family it belongs to so
+    reviewers can spot mismatches between the rule and the columns.
+    """
+
+    NORMALISATION = "normalisation"
+    CLASSIFICATION = "classification"
+    ENRICHMENT = "enrichment"
+
+
 class BvSatellite(BaseModel):
     """Derived / business-rule satellite proposal.
 
     Unlike a raw-vault satellite, the payload columns here are *new*
-    expressions (``computed_columns``) the LLM proposes, not source
-    columns. The Validator and the YAML Generator will refuse a BvSatellite
-    whose computed columns collide with raw-vault payload columns.
+    expressions the LLM (or a deterministic pattern detector) proposes,
+    not source columns. The Validator and the YAML Generator will refuse
+    a BvSatellite whose derived columns collide with raw-vault payload
+    columns.
+
+    Two payload shapes are supported for back-compat:
+
+    * ``payload`` — preferred. A tuple of :class:`BvSatPayloadItem` with
+      optional ``derivation_sql`` per column. Renderers that understand
+      this field can emit the SQL hint alongside the column.
+    * ``computed_columns`` — legacy. A tuple of bare column names. Kept
+      so existing tests and external callers do not break.
+
+    At least one of the two MUST be non-empty. When both are populated,
+    ``payload`` takes precedence and ``computed_columns`` is treated as
+    a deprecated mirror.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -86,11 +137,55 @@ class BvSatellite(BaseModel):
         min_length=1,
         description="Raw-vault models this BV sat reads from.",
     )
+    payload: tuple[BvSatPayloadItem, ...] = Field(
+        default=(),
+        description=(
+            "Derived columns with optional inline derivation SQL. Preferred "
+            "over ``computed_columns`` for new code."
+        ),
+    )
     computed_columns: tuple[str, ...] = Field(
-        min_length=1,
-        description="Names of derived columns produced by the BV sat.",
+        default=(),
+        description=(
+            "Legacy: bare names of derived columns. Kept for back-compat "
+            "with callers that pre-date :class:`BvSatPayloadItem`. New "
+            "code should populate ``payload`` instead."
+        ),
+    )
+    classification: BvSatClassification | None = Field(
+        default=None,
+        description=(
+            "Rule family this BV sat applies. Set by the pattern-gated "
+            "proposer; ``None`` when the satellite was hand-crafted or "
+            "produced by a generator that does not classify."
+        ),
     )
     rationale: str = Field(default="", max_length=2000)
+
+    @model_validator(mode="after")
+    def _require_at_least_one_payload(self) -> BvSatellite:
+        if not self.payload and not self.computed_columns:
+            raise ValueError(
+                f"BvSatellite '{self.name}' must declare either 'payload' "
+                "or 'computed_columns' (at least one column)."
+            )
+        return self
+
+    @property
+    def effective_payload(self) -> tuple[BvSatPayloadItem, ...]:
+        """Return ``payload`` when present, else lift ``computed_columns``.
+
+        Use this in renderers and validators that need a uniform view of
+        the column set regardless of which field the caller populated.
+        """
+        if self.payload:
+            return self.payload
+        return tuple(BvSatPayloadItem(name=c) for c in self.computed_columns)
+
+    @property
+    def column_names(self) -> tuple[str, ...]:
+        """Names of all derived columns regardless of payload shape."""
+        return tuple(item.name for item in self.effective_payload)
 
 
 class BvProposal(BaseModel):

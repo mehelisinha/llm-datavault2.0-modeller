@@ -138,6 +138,39 @@ def _list_schemas_spark(catalog: str) -> tuple[str, ...]:
     return tuple(sorted(str(row[0]) for row in rows))
 
 
+def _hide_metadata_catalog(
+    settings: ApiSettings, catalogs: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Drop the DWA metadata catalog from a discovery listing.
+
+    Only applied when ``hide_metadata_from_discovery`` is on and a metadata
+    catalog is configured. Comparison is case-insensitive to match Unity
+    Catalog's identifier semantics.
+    """
+    if not settings.hide_metadata_from_discovery or not settings.metadata_delta_catalog:
+        return catalogs
+    hidden = settings.metadata_delta_catalog.lower()
+    return tuple(c for c in catalogs if c.lower() != hidden)
+
+
+def _hide_metadata_schema(
+    settings: ApiSettings, catalog: str, schemas: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Drop the DWA metadata schema from a discovery listing.
+
+    Only fires when we're listing schemas of the configured metadata catalog
+    (so unrelated catalogs keep all of their schemas).
+    """
+    if not settings.hide_metadata_from_discovery or not settings.metadata_delta_schema:
+        return schemas
+    if not settings.metadata_delta_catalog:
+        return schemas
+    if catalog.lower() != settings.metadata_delta_catalog.lower():
+        return schemas
+    hidden = settings.metadata_delta_schema.lower()
+    return tuple(s for s in schemas if s.lower() != hidden)
+
+
 def _run_snapshot_stub(
     body: SnapshotRequest,
     settings: ApiSettings,
@@ -324,17 +357,23 @@ def list_catalogs(
     settings: Annotated[ApiSettings, Depends(get_settings)],
 ) -> CatalogListResponse:
     if settings.discovery_mode == "stub":
-        return CatalogListResponse(catalogs=_list_catalogs_stub(settings))
+        return CatalogListResponse(
+            catalogs=_hide_metadata_catalog(settings, _list_catalogs_stub(settings))
+        )
     if settings.discovery_mode == "databricks":
         try:
-            return CatalogListResponse(catalogs=_list_catalogs_databricks(settings))
+            return CatalogListResponse(
+                catalogs=_hide_metadata_catalog(settings, _list_catalogs_databricks(settings))
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Unity Catalog REST listing failed: {exc}",
             ) from exc
     try:
-        return CatalogListResponse(catalogs=_list_catalogs_spark())
+        return CatalogListResponse(
+            catalogs=_hide_metadata_catalog(settings, _list_catalogs_spark())
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -348,12 +387,17 @@ def list_schemas(
     settings: Annotated[ApiSettings, Depends(get_settings)],
 ) -> SchemaListResponse:
     if settings.discovery_mode == "stub":
-        return SchemaListResponse(catalog=catalog, schemas=_list_schemas_stub(settings, catalog))
+        return SchemaListResponse(
+            catalog=catalog,
+            schemas=_hide_metadata_schema(settings, catalog, _list_schemas_stub(settings, catalog)),
+        )
     if settings.discovery_mode == "databricks":
         try:
             return SchemaListResponse(
                 catalog=catalog,
-                schemas=_list_schemas_databricks(settings, catalog),
+                schemas=_hide_metadata_schema(
+                    settings, catalog, _list_schemas_databricks(settings, catalog)
+                ),
             )
         except Exception as exc:
             raise HTTPException(
@@ -361,7 +405,10 @@ def list_schemas(
                 detail=f"Unity Catalog REST schema listing failed: {exc}",
             ) from exc
     try:
-        return SchemaListResponse(catalog=catalog, schemas=_list_schemas_spark(catalog))
+        return SchemaListResponse(
+            catalog=catalog,
+            schemas=_hide_metadata_schema(settings, catalog, _list_schemas_spark(catalog)),
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
