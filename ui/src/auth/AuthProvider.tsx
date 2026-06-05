@@ -22,6 +22,7 @@ import { setAccessTokenResolver } from "@/lib/authToken";
 type AuthContextValue = {
   account: AccountInfo | null;
   isAuthenticated: boolean;
+  isMsalConfigured: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
   getDisplayName: () => string;
@@ -30,7 +31,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function buildMsalInstance(): PublicClientApplication | null {
-  if (!env.msal.clientId) {
+  if (!env.msal.clientId || !env.msal.authority) {
     return null;
   }
   return new PublicClientApplication({
@@ -44,10 +45,14 @@ function buildMsalInstance(): PublicClientApplication | null {
 }
 
 const msalInstance = buildMsalInstance();
+const isMsalConfigured = msalInstance !== null;
 
 function AuthContextProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<AccountInfo | null>(
     () => msalInstance?.getAllAccounts()[0] ?? null,
+  );
+  const [devSimulatedLogin, setDevSimulatedLogin] = useState(
+    () => sessionStorage.getItem("dev_auth") === "1"
   );
 
   useEffect(() => {
@@ -98,6 +103,8 @@ function AuthContextProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async () => {
     if (!msalInstance) {
+      sessionStorage.setItem("dev_auth", "1");
+      setDevSimulatedLogin(true);
       return;
     }
     const scopes = env.msal.apiScope ? [env.msal.apiScope] : ["openid", "profile"];
@@ -107,6 +114,8 @@ function AuthContextProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if (!msalInstance) {
+      sessionStorage.removeItem("dev_auth");
+      setDevSimulatedLogin(false);
       return;
     }
     const active = msalInstance.getActiveAccount() ?? account;
@@ -126,12 +135,13 @@ function AuthContextProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       account,
-      isAuthenticated: Boolean(account),
+      isAuthenticated: isMsalConfigured ? Boolean(account) : devSimulatedLogin,
+      isMsalConfigured,
       login,
       logout,
       getDisplayName,
     }),
-    [account, login, logout, getDisplayName],
+    [account, devSimulatedLogin, login, logout, getDisplayName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

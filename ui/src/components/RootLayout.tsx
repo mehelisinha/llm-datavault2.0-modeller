@@ -1,7 +1,8 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Database } from "lucide-react";
+import { Database, LogOut, UserCircle2 } from "lucide-react";
 
-import { Icon } from "@/components/ui";
+import { useAuth } from "@/auth/AuthProvider";
+import { Button, Icon } from "@/components/ui";
 import { ADVANCED_NAV, PRIMARY_NAV, ROUTE_LABELS, WORKFLOW_LABELS } from "@/constants/routes";
 import { cn } from "@/lib/cn";
 
@@ -10,11 +11,20 @@ const SHELL_MAX_WIDTH = "max-w-6xl";
 /**
  * App shell: top navigation + outlet.
  *
- * The header consumes only semantic theme tokens so dark-mode and rebrands
- * land via CSS variables alone. `SHELL_MAX_WIDTH` is the single source of
- * truth for content width.
+ * When the user is unauthenticated the chrome is suppressed and the route
+ * (the login page) renders full-bleed so it can own the entire viewport.
  */
 export function RootLayout() {
+  const { isAuthenticated, isMsalConfigured, getDisplayName, logout } = useAuth();
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-full bg-background text-foreground">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
       <header className="border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
@@ -73,6 +83,24 @@ export function RootLayout() {
                 </Link>
               ))}
             </nav>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5" title={getDisplayName()}>
+              <Icon icon={UserCircle2} size="sm" />
+              <span className="max-w-[12rem] truncate">{getDisplayName()}</span>
+            </span>
+            {isMsalConfigured ? (
+              <Button
+                intent="ghost"
+                size="sm"
+                onClick={() => {
+                  void logout();
+                }}
+                leftIcon={<Icon icon={LogOut} size="sm" />}
+              >
+                Sign out
+              </Button>
+            ) : null}
           </div>
         </div>
       </header>

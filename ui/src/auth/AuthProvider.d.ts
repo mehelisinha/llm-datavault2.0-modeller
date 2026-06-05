@@ -3,6 +3,7 @@ import { type AccountInfo } from "@azure/msal-browser";
 type AuthContextValue = {
     account: AccountInfo | null;
     isAuthenticated: boolean;
+    isMsalConfigured: boolean;
     login: () => Promise<void>;
     logout: () => Promise<void>;
     getDisplayName: () => string;

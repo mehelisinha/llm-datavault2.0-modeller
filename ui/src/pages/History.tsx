@@ -1,20 +1,56 @@
+import { useState } from "react";
+
 import { PageShell } from "@/components/PageShell";
-import { Card, CardContent, CardHeader, CardTitle, Separator, Spinner } from "@/components/ui";
-import { useHistory } from "@/api/hooks";
+import { Button, Card, CardContent, CardHeader, CardTitle, Separator, Spinner } from "@/components/ui";
+import { useHistory, useMe } from "@/api/hooks";
 import { HISTORY_LABELS } from "@/constants/routes";
+import { cn } from "@/lib/cn";
+
+type Scope = "mine" | "all";
 
 export default function HistoryPage() {
-  const { data, isPending, error } = useHistory();
+  const me = useMe();
+  const isAdmin = me.data?.is_admin ?? false;
+  const [scope, setScope] = useState<Scope>("mine");
+  const effectiveScope: Scope = isAdmin ? scope : "mine";
+  const { data, isPending, error } = useHistory(effectiveScope);
   const records = data ?? [];
 
   return (
     <PageShell
       title={HISTORY_LABELS.pageTitle}
       description={HISTORY_LABELS.pageDescription}
+      actions={
+        isAdmin ? (
+          <div
+            role="group"
+            aria-label="History scope"
+            className="inline-flex rounded-md border border-border p-0.5"
+          >
+            {(["mine", "all"] as const).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                intent={effectiveScope === value ? "primary" : "ghost"}
+                onClick={() => setScope(value)}
+                className={cn("min-w-[7rem]")}
+              >
+                {value === "mine"
+                  ? HISTORY_LABELS.scopeMineLabel
+                  : HISTORY_LABELS.scopeAllLabel}
+              </Button>
+            ))}
+          </div>
+        ) : null
+      }
     >
       <Card>
         <CardHeader>
-          <CardTitle>Plan History</CardTitle>
+          <CardTitle>
+            {effectiveScope === "all"
+              ? HISTORY_LABELS.scopeAllLabel
+              : HISTORY_LABELS.scopeMineLabel}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Separator className="mb-4" />

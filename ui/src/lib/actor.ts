@@ -1,14 +1,26 @@
 /**
  * Reviewer identity source.
  *
- * Phase B6 stub: returns a string from env. Phase B7 will replace this
- * with a function that pulls the verified Entra ID claim from the MSAL
- * account object. Callers should depend on `getActor()`, never on the
- * underlying source — that keeps the swap to MSAL a one-file change.
+ * The display-name resolver is wired by `ActorBridge` once `AuthProvider`
+ * has mounted. While MSAL is unconfigured (dev mode) the resolver remains
+ * `null` and we fall back to `VITE_DEV_ACTOR`. Callers always depend on
+ * `getActor()` so the swap is invisible to them.
  */
 import { env } from "@/env";
 
+let displayNameResolver: (() => string) | null = null;
+
+export function setDisplayNameResolver(resolver: () => string): void {
+  displayNameResolver = resolver;
+}
+
 export function getActor(): string {
+  if (displayNameResolver) {
+    const resolved = displayNameResolver();
+    if (resolved && resolved.trim()) {
+      return resolved.trim();
+    }
+  }
   return env.devActor;
 }
 

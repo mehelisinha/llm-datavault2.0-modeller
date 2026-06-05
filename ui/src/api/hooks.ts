@@ -227,17 +227,40 @@ export function useRequestChanges(
 }
 
 export function useHistory(
+  scope: "mine" | "all" = "mine",
   options?: UseQueryOptions<
     operations["list_recent_api_history_get"]["responses"]["200"]["content"]["application/json"],
     Error
   >,
 ) {
   return useQuery({
-    queryKey: ["history"],
+    queryKey: ["history", scope],
     queryFn: async () => {
-      const res = await api.GET("/api/history", {});
+      const res = await api.GET("/api/history", {
+        params: { query: { scope } } as any,
+      });
       return unwrapApiResult(res);
     },
+    ...options,
+  });
+}
+
+export type MeResponse = {
+  authenticated: boolean;
+  auth_enabled: boolean;
+  email: string | null;
+  roles: string[];
+  is_admin: boolean;
+};
+
+export function useMe(options?: UseQueryOptions<MeResponse, Error>) {
+  return useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await api.GET("/api/me" as any);
+      return unwrapApiResult(res) as MeResponse;
+    },
+    staleTime: 60_000,
     ...options,
   });
 }

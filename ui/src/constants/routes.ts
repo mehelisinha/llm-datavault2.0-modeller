@@ -8,6 +8,7 @@
  */
 export const ROUTES = Object.freeze({
   root: "/",
+  login: "/login",
   discovery: "/discovery",
   diff: "/diff",
   pipelineRun: "/pipeline-run",
@@ -21,6 +22,7 @@ export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES];
 /** Display label per route, kept next to the path so menus can iterate. */
 export const ROUTE_LABELS: Readonly<Record<RoutePath, string>> = Object.freeze({
   [ROUTES.root]: "Home",
+  [ROUTES.login]: "Sign in",
   [ROUTES.discovery]: "Generate Vault",
   [ROUTES.diff]: "Diff (advanced)",
   [ROUTES.pipelineRun]: "Pipeline run",
@@ -77,4 +79,18 @@ export const HISTORY_LABELS = Object.freeze({
   pageTitle: "Plan History",
   pageDescription: "View the audit trail of all plan transitions.",
   noRecords: "No history records found.",
+  scopeMineLabel: "My history",
+  scopeAllLabel: "All users",
+  adminOnlyHint: "Visible to admins only.",
+} as const);
+
+export const LOGIN_LABELS = Object.freeze({
+  pageTitle: "Sign in",
+  signInButton: "Sign in with Microsoft",
+  signingIn: "Signing in…",
+  disabledHint:
+    "Microsoft sign-in is not configured for this deployment. Ask an admin to set the VITE_MSAL_* environment variables.",
+  devModeHint: "Running in development mode — using VITE_DEV_ACTOR for identity.",
+  continueDev: "Continue in development mode",
+  legal: "By signing in you agree to your organisation's acceptable-use policy.",
 } as const);
