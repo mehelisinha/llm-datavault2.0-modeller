@@ -82,16 +82,6 @@ class AISettings(BaseSettings):
     modeller_max_tokens_default: int = Field(default=4096)
     modeller_max_tokens_gpt5: int = Field(default=16384)
 
-    # Hard ceiling on completion tokens enforced when the modelling agent
-    # retries a truncated JSON response with a doubled budget. Without this
-    # cap the doubled value can exceed the deployment's documented maximum
-    # (e.g. gpt-4o-mini caps `max_completion_tokens` at 16,384), which the
-    # API rejects with HTTP 400 — the retry then yields nothing and the
-    # whole sample is wasted. Default 16,384 matches the gpt-4 / gpt-4o
-    # family ceiling and is env-overridable for future deployments with
-    # larger output windows.
-    modeller_max_tokens_ceiling: int = Field(default=16384)
-
     # Concurrency for the modelling-agent voting loop. The agent draws
     # ``samples`` independent completions and votes on the majority plan;
     # those completions are independent HTTP calls and can be issued in

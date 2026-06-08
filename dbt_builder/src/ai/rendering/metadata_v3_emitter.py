@@ -98,6 +98,10 @@ def _sats_by_hub(plan: ModelingPlan) -> dict[str, list[SatelliteDecision]]:
     index: dict[str, list[SatelliteDecision]] = {}
     for sat in plan.satellites:
         index.setdefault(sat.parent_hub, []).append(sat)
+    # Sort each hub's satellite list by name so dim_block.satellites and
+    # any other consumer iterating these lists is byte-stable across runs.
+    for hub_name, sats in index.items():
+        index[hub_name] = sorted(sats, key=lambda s: s.name.lower())
     return index
 
 
@@ -231,24 +235,25 @@ def _staging_block(
 
 
 def _staging_blocks(plan: ModelingPlan) -> list[dict[str, Any]]:
-    """One staging entry per source table, preserving first-seen order."""
-    table_order: list[str] = []
+    """One staging entry per source table, ordered alphabetically.
+
+    Sorting by table name (instead of first-seen order) keeps the YAML
+    byte-stable across runs even when the modeller returns hubs/links/
+    satellites in a different order due to parallel batch merging.
+    """
     hubs_by_table: dict[str, list[HubDecision]] = {}
     sats_by_table: dict[str, list[SatelliteDecision]] = {}
     links_by_table: dict[str, list[LinkDecision]] = {}
-
-    def _track(table: str) -> None:
-        if table not in table_order:
-            table_order.append(table)
+    tables: set[str] = set()
 
     for hub in plan.hubs:
-        _track(hub.source_table)
+        tables.add(hub.source_table)
         hubs_by_table.setdefault(hub.source_table, []).append(hub)
     for sat in plan.satellites:
-        _track(sat.source_table)
+        tables.add(sat.source_table)
         sats_by_table.setdefault(sat.source_table, []).append(sat)
     for link in plan.links:
-        _track(link.source_table)
+        tables.add(link.source_table)
         links_by_table.setdefault(link.source_table, []).append(link)
 
     return [
@@ -258,7 +263,7 @@ def _staging_blocks(plan: ModelingPlan) -> list[dict[str, Any]]:
             sats_by_table.get(table, []),
             links_by_table.get(table, []),
         )
-        for table in table_order
+        for table in sorted(tables, key=str.lower)
     ]
 
 
@@ -417,29 +422,46 @@ def _build_document(
     link_idx = _link_index(plan)
     pit_idx = _pit_index(bv)
 
+    # Sort every top-level list by name (case-insensitive). The modeller
+    # and the parallel batch-merge step may return entities in different
+    # orders across runs even when the SET is identical; sorting here is
+    # what guarantees byte-stable YAML output regardless of upstream
+    # ordering. Inner column lists (payload, business_keys, fk_columns)
+    # are intentionally NOT sorted because dbtvault uses their order in
+    # hashdiff computation — changing it would invalidate downstream hashes.
+    _by_name = lambda obj: obj.name.lower()  # noqa: E731
+
+    sorted_hubs = sorted(plan.hubs, key=_by_name)
+    sorted_sats = sorted(plan.satellites, key=_by_name)
+    sorted_links = sorted(plan.links, key=_by_name)
+
     doc: dict[str, Any] = {
         "system": _system_block(system, load_frequency=load_frequency),
         "packages": list(_DEFAULT_PACKAGES),
         "macros": list(_DEFAULT_MACROS),
-        "hubs": [_hub_block(h) for h in plan.hubs],
-        "satellites": [_sat_block(s) for s in plan.satellites],
-        "links": [_link_block(ln) for ln in plan.links],
-        "eff_sats": [_eff_sat_block(ln) for ln in plan.links],
+        "hubs": [_hub_block(h) for h in sorted_hubs],
+        "satellites": [_sat_block(s) for s in sorted_sats],
+        "links": [_link_block(ln) for ln in sorted_links],
+        "eff_sats": [_eff_sat_block(ln) for ln in sorted_links],
         "staging": _staging_blocks(plan),
     }
 
     if bv is not None:
         if bv.pit_tables:
-            doc["pit_tables"] = [_pit_block(p, hub_idx) for p in bv.pit_tables]
+            doc["pit_tables"] = [
+                _pit_block(p, hub_idx)
+                for p in sorted(bv.pit_tables, key=_by_name)
+            ]
         if bv.bridge_tables:
             doc["bridge_tables"] = [
-                _bridge_block(b, hub_idx, link_idx) for b in bv.bridge_tables
+                _bridge_block(b, hub_idx, link_idx)
+                for b in sorted(bv.bridge_tables, key=_by_name)
             ]
 
     # dim_tables: one per hub (requires at least one satellite for usefulness).
     dim_blocks = [
         _dim_block(hub, sats_by_hub_map.get(hub.name, []), pit_idx)
-        for hub in plan.hubs
+        for hub in sorted_hubs
         if sats_by_hub_map.get(hub.name)
     ]
     if dim_blocks:
@@ -448,11 +470,15 @@ def _build_document(
     # fact_tables: one per bridge.
     if bv is not None and bv.bridge_tables:
         doc["fact_tables"] = [
-            _fact_block(b, hub_idx, link_idx) for b in bv.bridge_tables
+            _fact_block(b, hub_idx, link_idx)
+            for b in sorted(bv.bridge_tables, key=_by_name)
         ]
 
     if bv is not None and bv.bv_satellites:
-        doc["bv_sats"] = [_bv_sat_block(s, hub_idx) for s in bv.bv_satellites]
+        doc["bv_sats"] = [
+            _bv_sat_block(s, hub_idx)
+            for s in sorted(bv.bv_satellites, key=_by_name)
+        ]
 
     doc["databricks_optimization"] = db.global_optimization()
     return doc

@@ -14,10 +14,8 @@ import logging
 import os
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
-from dbt_builder.api.routers import approvals, discovery, history, me, pipeline, plans
-from dbt_builder.api.settings import get_settings
+from dbt_builder.api.routers import approvals, discovery, history, pipeline, plans
 
 _TITLE = "DWA Metadata Generator API"
 _VERSION = "0.2.0-phase-b"
@@ -60,23 +58,11 @@ def create_app() -> FastAPI:
     """
     _configure_logging()
     app = FastAPI(title=_TITLE, version=_VERSION, description=_DESCRIPTION)
-
-    cors_origins = get_settings().cors_origin_list
-    if cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=cors_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
     app.include_router(discovery.router)
     app.include_router(plans.router)
     app.include_router(approvals.router)
     app.include_router(history.router)
     app.include_router(pipeline.router)
-    app.include_router(me.router)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

@@ -54,10 +54,6 @@ from dbt_builder.src.ai.contracts.supervision import (
     SupervisionRecommendation,
 )
 from dbt_builder.src.ai.contracts.validation import ValidationReport
-from dbt_builder.src.ai.integrations.gitlab import (
-    GitLabPublisher,
-    make_gitlab_publisher,
-)
 from dbt_builder.src.ai.orchestration import PipelineInput, PipelineOrchestrator
 from dbt_builder.src.ai.pipeline import bronze_reader, catalog_inspector, diff_analyzer
 from dbt_builder.src.ai.store import (
@@ -65,7 +61,6 @@ from dbt_builder.src.ai.store import (
     SqliteApprovalStore,
     make_record,
 )
-from dbt_builder.src.ai.store.approval_store import make_approval_store
 from dbt_builder.src.ai.store.pipeline_run_store import (
     InMemoryPipelineRunStore,
     PipelineRunStore,
@@ -109,27 +104,14 @@ class DwaService:
         pipeline_run_store: PipelineRunStore | None = None,
         supervisor: PipelineSupervisor | None = None,
         yaml_store: YamlStore | None = None,
-        descriptor: Any | None = None,
-        gitlab_publisher: GitLabPublisher | None = None,
     ) -> None:
-        if approval_store is not None:
-            self._store: ApprovalStore = approval_store
-        else:
-            try:
-                from dbt_builder.src.ai.settings import get_settings
-
-                self._store = make_approval_store(get_settings())
-            except Exception:
-                self._store = SqliteApprovalStore(Path(".cache") / "approvals.sqlite")
+        self._store: ApprovalStore = approval_store or SqliteApprovalStore(
+            Path(".cache") / "approvals.sqlite"
+        )
         # Optional — analyze() raises LlmAgentNotConfiguredError if missing.
         self._schema_analyzer = schema_analyzer
-        # When a BvArchitect was not provided, try to build one with an
-        # LLM-backed BV-sat proposer. If Azure OpenAI is unreachable we
-        # silently fall back to the deterministic default (no BV sats).
-        if bv_architect is not None:
-            self._bv_architect = bv_architect
-        else:
-            self._bv_architect = _try_build_default_bv_architect()
+        # Deterministic agents always have safe defaults.
+        self._bv_architect = bv_architect or BvArchitect()
         self._yaml_generator = yaml_generator or YamlGenerator()
         # Pipeline run history (in-memory by default).
         self._pipeline_run_store: PipelineRunStore = pipeline_run_store or get_pipeline_run_store()
@@ -145,24 +127,6 @@ class DwaService:
                 self._yaml_store = make_yaml_store(get_settings())
             except Exception:
                 self._yaml_store = LocalYamlStore()
-        # Optional descriptor for description-enrichment of the rendered
-        # YAML document. Falls back to the deterministic descriptions when
-        # not configured or when Azure OpenAI is unreachable.
-        if descriptor is not None:
-            self._descriptor = descriptor
-        else:
-            self._descriptor = _try_build_default_descriptor()
-        # Optional post-approve side-effect: open a GitLab MR carrying the
-        # approved YAML. Disabled unless gitlab_* settings are configured.
-        if gitlab_publisher is not None:
-            self._gitlab_publisher: GitLabPublisher | None = gitlab_publisher
-        else:
-            try:
-                from dbt_builder.src.ai.settings import get_settings
-
-                self._gitlab_publisher = make_gitlab_publisher(get_settings())
-            except Exception:
-                self._gitlab_publisher = None
 
     # ── Step 1 ──────────────────────────────────────────────────────────────
     def inspect_catalog(
@@ -315,8 +279,6 @@ class DwaService:
 
         # Persist the approved YAML to the configured store (ADLS Gen2 or local).
         yaml_path: str | None = None
-        catalog_id: str | None = None
-        next_version: int | None = None
         if latest.rendered_yaml:
             catalog_id = catalog_from_yaml(latest.rendered_yaml)
             next_version = (latest.version or 0) + 1
@@ -333,30 +295,6 @@ class DwaService:
 
                 logging.getLogger(__name__).error(
                     "Failed to persist YAML for plan_id=%s: %s", plan_id, exc
-                )
-
-        # Optional GitLab MR publication. Same fail-soft contract as the YAML
-        # store: the audit row is the source of truth; a publishing failure
-        # is logged and surfaced via observability, never raised to the caller.
-        if (
-            self._gitlab_publisher is not None
-            and latest.rendered_yaml
-            and catalog_id is not None
-            and next_version is not None
-        ):
-            try:
-                self._gitlab_publisher.publish(
-                    catalog=catalog_id,
-                    plan_id=plan_id,
-                    version=next_version,
-                    rendered_yaml=latest.rendered_yaml,
-                    actor=actor,
-                )
-            except Exception as exc:  # pragma: no cover
-                import logging
-
-                logging.getLogger(__name__).error(
-                    "Failed to open GitLab MR for plan_id=%s: %s", plan_id, exc
                 )
 
         record = make_record(
@@ -447,7 +385,6 @@ class DwaService:
             bv_architect=self._bv_architect,
             yaml_generator=self._yaml_generator,
             supervisor=self._supervisor,
-            descriptor=self._descriptor,
         )
         run = orchestrator.run(
             pipeline_input,
@@ -493,91 +430,6 @@ def _try_build_default_schema_analyzer() -> SchemaAnalyzer | None:
     except Exception:  # noqa: BLE001 — env not configured is an expected dev case
         return None
     return SchemaAnalyzer.from_modeller(agent)
-
-
-def _build_azure_client_and_settings() -> tuple[Any, Any] | None:
-    """Construct an Azure OpenAI client + settings, or return ``None``.
-
-    Centralised so the BV-sat proposer and Descriptor factories don't
-    duplicate the credential-load + error-swallow boilerplate. Returns
-    ``None`` whenever Azure OpenAI configuration is incomplete — callers
-    treat that as "skip this agent, keep the deterministic path".
-    """
-    try:
-        from openai import AzureOpenAI
-
-        from dbt_builder.src.ai.settings import get_settings
-
-        cfg = get_settings()
-        client = AzureOpenAI(
-            azure_endpoint=cfg.azure_openai_endpoint,
-            api_key=cfg.azure_openai_api_key.get_secret_value(),
-            api_version=cfg.azure_openai_api_version,
-            max_retries=cfg.llm_max_retries,
-        )
-    except Exception:  # noqa: BLE001 — missing env is an expected dev case
-        return None
-    return client, cfg
-
-
-def _try_build_default_bv_architect() -> BvArchitect:
-    """Build a :class:`BvArchitect` with a pattern-gated LLM proposer.
-
-    Falls back to the deterministic-only ``BvArchitect()`` (zero BV sats)
-    when Azure OpenAI is not configured or when ``bv_sats_enabled`` is
-    explicitly turned off. This keeps offline runs and unit tests
-    importable without surprise side-effects.
-    """
-    bundle = _build_azure_client_and_settings()
-    if bundle is None:
-        return BvArchitect()
-    client, cfg = bundle
-    if not getattr(cfg, "bv_sats_enabled", True):
-        return BvArchitect()
-    try:
-        from dbt_builder.src.ai.agents.bv_sat_proposer import LlmBvSatProposer
-
-        deployment = (
-            getattr(cfg, "bv_sat_chat_deployment", None)
-            or cfg.modeller_chat_deployment
-        )
-        proposer = LlmBvSatProposer(
-            client=client,
-            deployment=deployment,
-            settings=cfg,
-        )
-    except Exception:  # noqa: BLE001 — fall through to deterministic
-        return BvArchitect()
-    return BvArchitect(propose_bv_sats_fn=proposer.propose)
-
-
-def _try_build_default_descriptor() -> Any | None:
-    """Build a :class:`Descriptor` for description enrichment, or ``None``.
-
-    Returns ``None`` when Azure OpenAI is unreachable or when
-    ``descriptor_enabled`` is off in settings, in which case the
-    orchestrator skips the DESCRIBE step entirely.
-    """
-    bundle = _build_azure_client_and_settings()
-    if bundle is None:
-        return None
-    client, cfg = bundle
-    if not getattr(cfg, "descriptor_enabled", True):
-        return None
-    try:
-        from dbt_builder.src.ai.agents.descriptor import Descriptor
-
-        deployment = (
-            getattr(cfg, "descriptor_chat_deployment", None)
-            or cfg.modeller_chat_deployment
-        )
-        return Descriptor(
-            client=client,
-            deployment=deployment,
-            settings=cfg,
-        )
-    except Exception:  # noqa: BLE001 — fall through; descriptor is optional
-        return None
 
 
 def get_service() -> DwaService:
