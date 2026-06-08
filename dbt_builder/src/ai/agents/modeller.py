@@ -408,6 +408,7 @@ class ModellingAgent:
         batch_samples: int = 1,
         max_prompt_tokens: int = 0,
         large_catalog_threshold: int = 0,
+        seed: int | None = None,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
@@ -442,6 +443,10 @@ class ModellingAgent:
         self._batch_samples = batch_samples
         self._max_prompt_tokens = max_prompt_tokens
         self._large_catalog_threshold = large_catalog_threshold
+        # ``None`` disables seeding (legacy non-deterministic sampling).
+        # An integer is used as the base; each sample adds its index to
+        # keep voting samples distinct yet individually reproducible.
+        self._seed = seed
         _LOG.info(
             "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
             "max_tokens=%d batch_size=%d batch_parallelism=%d batch_samples=%d "
@@ -652,7 +657,7 @@ class ModellingAgent:
         import time as _time
 
         _t0 = _time.perf_counter()
-        raw = self._one_completion(user_prompt)
+        raw = self._one_completion(user_prompt, sample_idx=sample_idx)
         _LOG.info(
             "ModellingAgent sample %d completed in %.1fs (%d chars)",
             sample_idx,
@@ -678,7 +683,7 @@ class ModellingAgent:
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
                 ],
-                self._build_kwargs(self._max_tokens * 2),
+                self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
             )
             if not retry_raw:
                 return None, f"sample {sample_idx}: invalid JSON ({exc}); retry empty"
@@ -699,9 +704,9 @@ class ModellingAgent:
             _LOG.debug("Modelling sample %d failed validation: %s", sample_idx, exc)
             return None, f"sample {sample_idx}: schema invalid ({exc.error_count()} errors)"
 
-    def _one_completion(self, user_prompt: str) -> str:
+    def _one_completion(self, user_prompt: str, *, sample_idx: int = 0) -> str:
         """One chat call with model-specific kwargs and one empty-response retry."""
-        kwargs = self._build_kwargs(self._max_tokens)
+        kwargs = self._build_kwargs(self._max_tokens, sample_idx=sample_idx)
         content = self._call(user_prompt, kwargs)
         if content or not self._is_gpt5:
             return content
@@ -714,21 +719,28 @@ class ModellingAgent:
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            self._build_kwargs(self._max_tokens * 2),
+            self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
         )
 
-    def _build_kwargs(self, token_budget: int) -> dict[str, Any]:
+    def _build_kwargs(self, token_budget: int, *, sample_idx: int = 0) -> dict[str, Any]:
+        kwargs: dict[str, Any]
         if self._is_gpt5:
-            return {
+            kwargs = {
                 "temperature": 1.0,
                 "max_completion_tokens": token_budget,
                 "response_format": {"type": "json_object"},
             }
-        return {
-            "temperature": 0.0,
-            "max_tokens": token_budget,
-            "response_format": {"type": "json_object"},
-        }
+        else:
+            kwargs = {
+                "temperature": 0.0,
+                "max_tokens": token_budget,
+                "response_format": {"type": "json_object"},
+            }
+        # Per-sample seed: base + sample_idx keeps each vote independent
+        # while making the same (input, sample_idx) pair reproducible.
+        if self._seed is not None:
+            kwargs["seed"] = self._seed + sample_idx
+        return kwargs
 
     def _call(self, user_prompt: str, kwargs: dict[str, Any]) -> str:
         messages: list[dict[str, Any]] = [
@@ -1102,4 +1114,5 @@ def get_modelling_agent(
         batch_samples=batch_samples,
         max_prompt_tokens=max_prompt_tokens,
         large_catalog_threshold=large_catalog_threshold,
+        seed=None if cfg.llm_seed < 0 else cfg.llm_seed,
     )

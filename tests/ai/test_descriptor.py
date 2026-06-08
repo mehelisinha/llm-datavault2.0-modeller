@@ -60,7 +60,7 @@ class _StubClient:
 
 
 class _StubSettings:
-    pass
+    llm_seed: int = -1
 
 
 # ── fixtures ────────────────────────────────────────────────────────────────

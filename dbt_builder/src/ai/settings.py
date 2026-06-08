@@ -166,6 +166,16 @@ class AISettings(BaseSettings):
     # (3) so a quota outage surfaces fast instead of hammering Azure for
     # minutes with exponential backoff.
     llm_max_retries: int = Field(default=3, ge=0)
+    # Deterministic-sampling seed passed as ``seed`` on every chat-completion
+    # call (Azure OpenAI honours it for most models post-2024-05). Combined
+    # with ``temperature=0`` for non-gpt5 deployments, this makes the
+    # modeller, descriptor, and BV-sat proposer reproducible run-to-run on
+    # an identical input — the single largest determinism lever.
+    # ``-1`` disables seeding (legacy behaviour); any non-negative integer
+    # turns it on. Voting samples are kept independent by adding the
+    # sample index as an offset, so each sample is still distinct yet
+    # individually reproducible.
+    llm_seed: int = Field(default=42, ge=-1)
 
     # Concurrency for per-table ``DESCRIBE TABLE`` calls during bronze /
     # vault snapshotting. Each call is an independent Databricks REST or

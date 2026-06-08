@@ -64,6 +64,8 @@ class _StubClient:
 class _StubSettings:
     """Minimal AISettings-compatible shim — proposer only reads the gpt-5 flag via deployment name."""
 
+    llm_seed: int = -1
+
 
 # ── fixtures ────────────────────────────────────────────────────────────────
 
