@@ -177,6 +177,14 @@ class AISettings(BaseSettings):
     # individually reproducible.
     llm_seed: int = Field(default=42, ge=-1)
 
+    # Opt-in flag for the DV2 Planning Agent (a richer pre-step that emits
+    # hub/link/satellite-split decisions, BV proposals, PIT volume
+    # estimates, and human-review flags as one structured JSON document).
+    # Default off so the existing pipeline path is byte-identical until
+    # the orchestrator wiring lands in a follow-up. When enabled, the
+    # agent is invoked at the start of ANALYZE.
+    planning_agent_enabled: bool = Field(default=False)
+
     # Concurrency for per-table ``DESCRIBE TABLE`` calls during bronze /
     # vault snapshotting. Each call is an independent Databricks REST or
     # Spark SQL round-trip; running them serially produces an N+1 latency
