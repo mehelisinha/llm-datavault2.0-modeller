@@ -493,7 +493,9 @@ class ModellingAgent:
         if self._batch_size > 0 and n_tables > self._batch_size:
             return self._propose_batched(payload)
         effective_samples = self._effective_samples(n_tables)
-        return self._propose_voted(payload, samples=effective_samples)
+        # Adaptive path so a small-but-wide catalogue whose output overflows
+        # the model's completion ceiling is split-and-retried rather than failed.
+        return self._propose_voted_adaptive(payload, samples=effective_samples)
 
     # ------------------------------------------------------------------ batching
 
@@ -539,10 +541,26 @@ class ModellingAgent:
         )
         t0 = _time.perf_counter()
 
-        def _one_batch(idx_and_payload: tuple[int, DiscoveryPayload]) -> ModelingPlan:
+        def _one_batch(idx_and_payload: tuple[int, DiscoveryPayload]) -> ModelingPlan | None:
             idx, sub_payload = idx_and_payload
             t_batch = _time.perf_counter()
-            plan = self._propose_voted(sub_payload, samples=per_batch_samples)
+            try:
+                plan = self._propose_voted_adaptive(sub_payload, samples=per_batch_samples)
+            except ModellingAgentError as exc:
+                # One batch failing (even after adaptive splitting) must not
+                # discard the whole catalogue — skip it and keep the rest so a
+                # long large-catalogue run still yields a reviewable plan. The
+                # dropped tables are named so the operator can re-run them.
+                _LOG.warning(
+                    "ModellingAgent batch %d/%d produced no valid plan after "
+                    "adaptive splitting; SKIPPING its %d table(s): %s. Cause: %s",
+                    idx + 1,
+                    len(batch_payloads),
+                    len(sub_payload.tables),
+                    ", ".join(t.name for t in sub_payload.tables),
+                    exc,
+                )
+                return None
             _LOG.info(
                 "ModellingAgent batch %d/%d ok in %.1fs (tables=%d, hubs=%d, links=%d, sats=%d)",
                 idx + 1,
@@ -556,11 +574,26 @@ class ModellingAgent:
             return plan
 
         if max_workers <= 1 or len(batch_payloads) == 1:
-            plans = [_one_batch((i, p)) for i, p in enumerate(batch_payloads)]
+            results = [_one_batch((i, p)) for i, p in enumerate(batch_payloads)]
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                plans = list(pool.map(_one_batch, enumerate(batch_payloads)))
+                results = list(pool.map(_one_batch, enumerate(batch_payloads)))
 
+        plans = [p for p in results if p is not None]
+        if not plans:
+            raise ModellingAgentError(
+                f"All {len(batch_payloads)} batch(es) failed to produce a valid "
+                "plan. See per-batch warnings above for the failing tables."
+            )
+        skipped = len(results) - len(plans)
+        if skipped:
+            _LOG.warning(
+                "ModellingAgent: %d of %d batch(es) skipped; merged plan covers "
+                "the remaining %d batch(es).",
+                skipped,
+                len(batch_payloads),
+                len(plans),
+            )
         merged = _merge_plans(plans, system_id=payload.system.system_id)
         _LOG.info(
             "ModellingAgent.propose: %d batch(es) merged in %.1fs wall clock "
@@ -574,6 +607,53 @@ class ModellingAgent:
         return merged
 
     # ------------------------------------------------------------------ voting
+
+    def _propose_voted_adaptive(
+        self, payload: DiscoveryPayload, *, samples: int, _depth: int = 0
+    ) -> ModelingPlan:
+        """Vote on ``payload``; if every sample fails, split the tables and retry.
+
+        The dominant failure on wide catalogues is *output truncation*: the
+        JSON plan a batch must emit exceeds the model's completion-token
+        ceiling, so every sample returns unterminated JSON and is dropped,
+        leaving no valid plan. Halving the table set halves the required
+        output; recursing until each piece fits (down to a single table)
+        makes the modeller self-tune to any table width without a guessed
+        ``batch_size``. The per-piece plans are merged by name-union, exactly
+        like cross-batch merging — the only cost is losing links between
+        tables that land on opposite sides of a split (rare, and far better
+        than failing the whole run).
+        """
+        tables = tuple(payload.tables)
+        try:
+            return self._propose_voted(payload, samples=samples)
+        except ModellingAgentError:
+            if len(tables) <= 1:
+                # A single table whose output still overflows cannot be split
+                # further — surface the failure so the operator sees which
+                # table needs a wider deployment or column pruning.
+                raise
+            mid = len(tables) // 2
+            _LOG.warning(
+                "ModellingAgent: batch of %d tables produced no valid plan "
+                "(likely output truncation); splitting into %d + %d and retrying "
+                "(depth=%d).",
+                len(tables),
+                mid,
+                len(tables) - mid,
+                _depth + 1,
+            )
+            left = payload.model_copy(update={"tables": tables[:mid]})
+            right = payload.model_copy(update={"tables": tables[mid:]})
+            left_plan = self._propose_voted_adaptive(
+                left, samples=samples, _depth=_depth + 1
+            )
+            right_plan = self._propose_voted_adaptive(
+                right, samples=samples, _depth=_depth + 1
+            )
+            return _merge_plans(
+                [left_plan, right_plan], system_id=payload.system.system_id
+            )
 
     def _propose_voted(self, payload: DiscoveryPayload, *, samples: int) -> ModelingPlan:
         """Draw ``samples`` completions for ``payload``, vote, return winner.
