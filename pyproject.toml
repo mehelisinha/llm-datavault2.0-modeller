@@ -78,6 +78,13 @@ ai = [
     "azure-storage-file-datalake>=12.0",
 ]
 
+# ── Package data ────────────────────────────────────
+# Ship the agent rule-prompt files (*.md) inside the wheel so the prompt loader
+# resolves them after an installed (non-source) deploy. Source runs (pnpm dev)
+# read them straight from the tree regardless.
+[tool.setuptools.package-data]
+"dbt_builder.src.ai.prompts" = ["*.md"]
+
 # ── Foramt and Linting ─────────────────────────────
 [tool.ruff]
 line-length = 100

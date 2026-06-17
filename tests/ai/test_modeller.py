@@ -247,3 +247,172 @@ def test_non_gpt5_empty_response_does_not_retry() -> None:
         agent.propose(_payload())
     # Only one call: empty-content retry is gpt-5 specific.
     assert len(calls.calls) == 1
+
+
+def _agent_with_cap(
+    responses: list[str | None],
+    *,
+    deployment: str,
+    max_tokens: int,
+    max_completion_tokens: int,
+    samples: int = 1,
+) -> tuple[ModellingAgent, _FakeChatCompletions]:
+    client = _FakeClient(responses)
+    agent = ModellingAgent(
+        client=client,  # type: ignore[arg-type]
+        deployment=deployment,
+        samples=samples,
+        max_tokens=max_tokens,
+        max_completion_tokens=max_completion_tokens,
+    )
+    return agent, client.chat.completions
+
+
+def test_completion_budget_is_clamped_to_model_ceiling_on_retry() -> None:
+    # gpt-5 empty-response retry would double 16384 -> 32768; the clamp must
+    # hold it at the 16384 model ceiling so Azure never returns HTTP 400.
+    agent, calls = _agent_with_cap(
+        ["", _valid_plan_json()],
+        deployment="gpt-5",
+        max_tokens=16384,
+        max_completion_tokens=16384,
+    )
+    plan = agent.propose(_payload())
+    assert plan.entity_count == 2
+    assert calls.calls[0]["max_completion_tokens"] == 16384
+    # Doubled budget (32768) clamped back to the ceiling, not sent raw.
+    assert calls.calls[1]["max_completion_tokens"] == 16384
+
+
+def test_truncated_json_at_ceiling_skips_retry() -> None:
+    # Budget already at the ceiling: a truncated-JSON retry would re-truncate
+    # identically, so the sample is dropped without a second (wasted) call.
+    agent, calls = _agent_with_cap(
+        ['{"system_id": "iec_cim", "hubs": ['],  # truncated JSON
+        deployment="gpt-4o",
+        max_tokens=16384,
+        max_completion_tokens=16384,
+    )
+    with pytest.raises(ModellingAgentError, match="no retry headroom"):
+        agent.propose(_payload())
+    assert len(calls.calls) == 1
+
+
+def _two_table_payload() -> DiscoveryPayload:
+    def _tbl(name: str) -> SourceTable:
+        return SourceTable(
+            name=name,
+            columns=(
+                SourceColumn(
+                    name="mrid",
+                    raw_dtype="varchar(64)",
+                    inferred_type=InferredType.STRING,
+                    nullable=False,
+                ),
+            ),
+        )
+
+    return DiscoveryPayload(
+        system=SourceSystem(system_id="iec_cim", system_name="IEC CIM", source_type="delta"),
+        tables=(_tbl("conducting_equipment"), _tbl("terminal")),
+    )
+
+
+def test_adaptive_split_recovers_when_full_batch_truncates() -> None:
+    # Full 2-table batch truncates (no headroom -> dropped, no valid plan);
+    # the adaptive split retries each half, both succeed, and merge.
+    agent, calls = _agent_with_cap(
+        ['{"system_id": "iec_cim", "hubs": [', _valid_plan_json(), _valid_plan_json()],
+        deployment="gpt-4o",
+        max_tokens=16384,
+        max_completion_tokens=16384,
+    )
+    plan = agent.propose(_two_table_payload())
+    assert plan.entity_count == 2  # merged (deduped) result is valid
+    # 1 failed full-batch call + 2 half-batch calls.
+    assert len(calls.calls) == 3
+
+
+def test_chunk_tables_balances_instead_of_leaving_singleton() -> None:
+    from dbt_builder.src.ai.agents.modeller import _chunk_tables
+
+    def _tbl(i: int) -> SourceTable:
+        return SourceTable(
+            name=f"t{i}",
+            columns=(
+                SourceColumn(
+                    name="mrid",
+                    raw_dtype="varchar(64)",
+                    inferred_type=InferredType.STRING,
+                    nullable=False,
+                ),
+            ),
+        )
+
+    tables = tuple(_tbl(i) for i in range(9))
+    batches = _chunk_tables(tables, max_tables=8, max_prompt_tokens=0)
+    sizes = [len(b) for b in batches]
+    # Greedy would give [8, 1]; balanced spreads to [5, 4] — no fragile singleton.
+    assert sizes == [5, 4]
+
+
+def test_failed_batch_is_skipped_not_fatal() -> None:
+    # Two single-table batches: the first truncates with no headroom (cannot
+    # split, cannot recover -> skipped); the second is valid. The run must
+    # still succeed on the survivor instead of failing the whole catalogue.
+    client = _FakeClient(['{"system_id": "iec_cim", "hubs": [', _valid_plan_json()])
+    agent = ModellingAgent(
+        client=client,  # type: ignore[arg-type]
+        deployment="gpt-4o",
+        samples=1,
+        max_tokens=16384,
+        max_completion_tokens=16384,
+        batch_size=1,
+        batch_parallelism=1,
+        batch_samples=1,
+        sample_parallelism=1,
+    )
+    plan = agent.propose(_two_table_payload())
+    assert plan.entity_count == 2  # only the surviving batch's plan
+    assert len(client.chat.completions.calls) == 2
+
+
+def test_adaptive_split_reraises_for_single_table_truncation() -> None:
+    # A single table that still truncates cannot be split further -> surface it.
+    agent, _ = _agent_with_cap(
+        ['{"system_id": "iec_cim", "hubs": ['],
+        deployment="gpt-4o",
+        max_tokens=16384,
+        max_completion_tokens=16384,
+    )
+    with pytest.raises(ModellingAgentError, match="no retry headroom"):
+        agent.propose(_payload())  # single-table payload
+
+
+def test_system_prompt_loads_from_rule_file_and_keeps_output_contract() -> None:
+    from dbt_builder.src.ai.agents import modeller as m
+
+    sp = m._system_prompt()
+    # Rules come from prompts/rv_modelling_rules.md; the JSON output contract is
+    # appended in code. Default assembly must equal the built-in fallback so
+    # behaviour is unchanged when the file is present.
+    assert sp.startswith("You are a senior Data Vault")
+    assert sp.rstrip().endswith("outside the JSON object.")
+    assert "sys_user_grmember" in sp  # ServiceNow rules present
+    assert "mRID" in sp  # CIM rules present
+    assert sp == f"{m._BUILTIN_RV_RULES}\n\n{m._OUTPUT_CONTRACT}"
+
+
+def test_truncated_json_below_ceiling_still_retries() -> None:
+    # Headroom remains (budget < ceiling) -> the doubled-budget retry runs and
+    # can rescue the sample.
+    agent, calls = _agent_with_cap(
+        ['{"system_id": "iec_cim", "hubs": [', _valid_plan_json()],
+        deployment="gpt-4o",
+        max_tokens=4096,
+        max_completion_tokens=16384,
+    )
+    plan = agent.propose(_payload())
+    assert plan.entity_count == 2
+    assert len(calls.calls) == 2
+    assert calls.calls[1]["max_tokens"] == 8192

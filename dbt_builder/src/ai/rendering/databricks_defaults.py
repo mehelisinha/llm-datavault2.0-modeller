@@ -22,8 +22,14 @@ TARGET_FILE_SIZE: int = 134_217_728  # 128 MB
 LOG_RETENTION: str = "interval 30 days"
 FILE_RETENTION: str = "interval 7 days"
 SKIPPING_INDEXED_COLS: int = 8
+# Hubs index fewer columns than other entities (only HK + LOAD_DATE matter for
+# pruning). Per the DV2 Raw Vault skill: Hub = 4, Satellite/Link/Eff_sat = 8.
+HUB_SKIPPING_INDEXED_COLS: int = 4
 LOAD_DATE_COL: str = "LOAD_DATE"
-SNAPSHOT_DATE_COL: str = "SNAPSHOT_DATE"
+# The DV2 Business Vault skill mandates AS_OF_DATE (NEVER SNAPSHOT_DATE) as the
+# PIT snapshot-date column name, used identically in as_of_dates, every PIT's
+# as_of_dates_table.date_column, PIT cluster_by, and PIT dataSkippingStatsColumns.
+AS_OF_DATE_COL: str = "AS_OF_DATE"
 END_DATE_COL: str = "END_DATE"
 
 # Properties shared by every incremental append-only entity.
@@ -51,8 +57,13 @@ def _incremental_append(
     cluster_by: list[str],
     skipping_stats_cols: str,
     on_schema_change: str = "append_new_columns",
+    indexed_cols: int = SKIPPING_INDEXED_COLS,
 ) -> dict[str, Any]:
-    """Return an incremental/append databricks_config block."""
+    """Return an incremental/append databricks_config block.
+
+    ``indexed_cols`` overrides ``delta.dataSkippingNumIndexedCols`` for entity
+    kinds that index fewer columns (hubs use 4, everything else 8).
+    """
     return {
         "materialized": "incremental",
         "incremental_strategy": "append",
@@ -61,6 +72,7 @@ def _incremental_append(
         "table_properties": {
             **_DELTA_BASE,
             **_APPEND_ONLY,
+            "delta.dataSkippingNumIndexedCols": indexed_cols,
             "delta.dataSkippingStatsColumns": skipping_stats_cols,
         },
     }
@@ -74,6 +86,7 @@ def hub_config(hash_key: str) -> dict[str, Any]:
     return _incremental_append(
         cluster_by=[hash_key],
         skipping_stats_cols=f"{hash_key},{LOAD_DATE_COL}",
+        indexed_cols=HUB_SKIPPING_INDEXED_COLS,
     )
 
 
@@ -127,10 +140,10 @@ def pit_config(hub_hk: str) -> dict[str, Any]:
         "materialized": "incremental",
         "incremental_strategy": "insert_overwrite",
         "on_schema_change": "append_new_columns",
-        "cluster_by": [hub_hk, SNAPSHOT_DATE_COL],
+        "cluster_by": [hub_hk, AS_OF_DATE_COL],
         "table_properties": {
             **_DELTA_BASE,
-            "delta.dataSkippingStatsColumns": f"{hub_hk},{SNAPSHOT_DATE_COL}",
+            "delta.dataSkippingStatsColumns": f"{hub_hk},{AS_OF_DATE_COL}",
         },
     }
 
@@ -189,6 +202,7 @@ def global_optimization() -> dict[str, Any]:
             "pit": "insert_overwrite",
             "bridge": "table",
             "staging": "view",
+            "as_of_dates": "view",
             "dim": "view",
             "fact": "view",
         },

@@ -168,17 +168,23 @@ class Descriptor:
         return json.dumps(context, indent=2, sort_keys=False, default=str)
 
     def _build_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any]
         if self._is_gpt5:
-            return {
+            kwargs = {
                 "temperature": 1.0,
                 "max_completion_tokens": self._max_tokens,
                 "response_format": {"type": "json_object"},
             }
-        return {
-            "temperature": 0.0,
-            "max_tokens": self._max_tokens,
-            "response_format": {"type": "json_object"},
-        }
+        else:
+            kwargs = {
+                "temperature": 0.0,
+                "max_tokens": self._max_tokens,
+                "response_format": {"type": "json_object"},
+            }
+        seed = self._settings.llm_seed
+        if seed >= 0:
+            kwargs["seed"] = seed
+        return kwargs
 
     def _call(self, user_prompt: str) -> str:
         response = self._client.chat.completions.create(

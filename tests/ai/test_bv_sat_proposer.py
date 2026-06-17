@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-
 from dbt_builder.src.ai.agents.bv_sat_proposer import LlmBvSatProposer
 from dbt_builder.src.ai.contracts.decisions import (
     DecisionConfidence,
@@ -19,6 +17,18 @@ from dbt_builder.src.ai.contracts.decisions import (
     ModelingPlan,
     SatelliteDecision,
 )
+
+
+def test_system_prompt_loads_rules_from_file_and_keeps_decisions_contract() -> None:
+    from dbt_builder.src.ai.agents import bv_sat_proposer as m
+
+    sp = m._system_prompt()
+    # Domain rules loaded from bv_sat_proposer_rules.md (incl. skill patterns).
+    assert sp.startswith("You are a senior")
+    assert "voltage_tier" in sp  # CIM BV pattern from the skill
+    # Strict-JSON response contract kept in code.
+    assert '"decisions"' in sp
+    assert "pattern_key" in sp
 
 
 # ── stub OpenAI client ──────────────────────────────────────────────────────
@@ -63,6 +73,8 @@ class _StubClient:
 
 class _StubSettings:
     """Minimal AISettings-compatible shim — proposer only reads the gpt-5 flag via deployment name."""
+
+    llm_seed: int = -1
 
 
 # ── fixtures ────────────────────────────────────────────────────────────────

@@ -82,15 +82,17 @@ class AISettings(BaseSettings):
     modeller_max_tokens_default: int = Field(default=4096)
     modeller_max_tokens_gpt5: int = Field(default=16384)
 
-    # Hard ceiling on completion tokens enforced when the modelling agent
-    # retries a truncated JSON response with a doubled budget. Without this
-    # cap the doubled value can exceed the deployment's documented maximum
-    # (e.g. gpt-4o-mini caps `max_completion_tokens` at 16,384), which the
-    # API rejects with HTTP 400 — the retry then yields nothing and the
-    # whole sample is wasted. Default 16,384 matches the gpt-4 / gpt-4o
-    # family ceiling and is env-overridable for future deployments with
-    # larger output windows.
-    modeller_max_tokens_ceiling: int = Field(default=16384)
+    # Hard per-request ceiling on completion tokens, enforced AFTER any
+    # internal budget growth (the empty-response / truncated-JSON retries
+    # double the budget once). Azure rejects the call with HTTP 400
+    # ``max_tokens is too large`` when the requested completion budget
+    # exceeds the deployment's model limit — e.g. gpt-4o / gpt-4o-mini cap
+    # completion at 16384 tokens. Doubling a 16384 budget to 32768 is what
+    # crashes large-catalogue runs. This ceiling clamps every request so the
+    # retry can never exceed the model maximum. Override per environment when
+    # a deployment supports a higher completion limit. ``0`` disables the
+    # clamp (legacy behaviour — not recommended).
+    modeller_max_completion_tokens: int = Field(default=16384, ge=0)
 
     # Concurrency for the modelling-agent voting loop. The agent draws
     # ``samples`` independent completions and votes on the majority plan;
@@ -176,6 +178,33 @@ class AISettings(BaseSettings):
     # (3) so a quota outage surfaces fast instead of hammering Azure for
     # minutes with exponential backoff.
     llm_max_retries: int = Field(default=3, ge=0)
+    # Deterministic-sampling seed passed as ``seed`` on every chat-completion
+    # call (Azure OpenAI honours it for most models post-2024-05). Combined
+    # with ``temperature=0`` for non-gpt5 deployments, this makes the
+    # modeller, descriptor, and BV-sat proposer reproducible run-to-run on
+    # an identical input — the single largest determinism lever.
+    # ``-1`` disables seeding (legacy behaviour); any non-negative integer
+    # turns it on. Voting samples are kept independent by adding the
+    # sample index as an offset, so each sample is still distinct yet
+    # individually reproducible.
+    llm_seed: int = Field(default=42, ge=-1)
+
+    # Directory holding the agent rule-prompt files (``*.md``) shared between
+    # the automated pipeline agents and the manual Claude-Code agents. Empty
+    # (the default) uses the in-package ``dbt_builder/src/ai/prompts`` folder
+    # that ships with the wheel. Point this at an external folder (e.g. the
+    # repo's loose ``dv-metadata-*.md`` skills) to override the modelling
+    # rules without a code change. Missing files fall back to the built-in
+    # defaults so a bad path can never crash a run.
+    ai_prompts_dir: str = Field(default="")
+
+    # Opt-in flag for the DV2 Planning Agent (a richer pre-step that emits
+    # hub/link/satellite-split decisions, BV proposals, PIT volume
+    # estimates, and human-review flags as one structured JSON document).
+    # Default off so the existing pipeline path is byte-identical until
+    # the orchestrator wiring lands in a follow-up. When enabled, the
+    # agent is invoked at the start of ANALYZE.
+    planning_agent_enabled: bool = Field(default=False)
 
     # Concurrency for per-table ``DESCRIBE TABLE`` calls during bronze /
     # vault snapshotting. Each call is an independent Databricks REST or
@@ -238,6 +267,15 @@ class AISettings(BaseSettings):
         if deployment.startswith("gpt-5"):
             return self.modeller_max_tokens_gpt5
         return self.modeller_max_tokens_default
+
+    def modeller_completion_cap(self) -> int:
+        """Return the hard ceiling on per-request completion tokens.
+
+        Used by the modelling agent to clamp the (possibly doubled) token
+        budget so a retry can never exceed the deployment's model limit and
+        trigger an Azure HTTP 400. ``0`` means "no clamp".
+        """
+        return self.modeller_max_completion_tokens
 
 
 @lru_cache(maxsize=1)
