@@ -26,7 +26,7 @@ Deterministic outputs
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import re
 from io import StringIO
 from typing import Any
 
@@ -60,6 +60,22 @@ _END_DATE = "END_DATE"
 _LOAD_DATE = "LOAD_DATE"
 _DBTVAULT_RANK_COL = "DBTVAULT_RANK"
 _RANK_ORDER_BY = "load_dts"
+# AS_OF_DATE is the single snapshot-date column name mandated by the DV2
+# Business Vault skill — used identically in the as_of_dates entity and in
+# every PIT that references it. Sourced from databricks_defaults so the column
+# name lives in exactly one place.
+_AS_OF_DATE = db.AS_OF_DATE_COL
+_AS_OF_DATES_PREFIX = "as_of_dates_"
+
+
+def _slug(value: str) -> str:
+    """Lowercase + underscore-collapse a system name for use in an entity name."""
+    return re.sub(r"[^0-9a-z]+", "_", value.lower()).strip("_")
+
+
+def _as_of_dates_name(system: SourceSystem) -> str:
+    """Deterministic ``as_of_dates_<system>`` entity name (DV2 BV skill convention)."""
+    return f"{_AS_OF_DATES_PREFIX}{_slug(system.system_name)}"
 
 
 def _eff_sat_name(link_name: str) -> str:
@@ -270,6 +286,7 @@ def _staging_blocks(plan: ModelingPlan) -> list[dict[str, Any]]:
 def _pit_block(
     pit: PitTable,
     hub_idx: dict[str, HubDecision],
+    as_of_dates_name: str,
 ) -> dict[str, Any]:
     hub = hub_idx.get(pit.parent_hub)
     hub_hk = hub.hash_key if hub else "HK_UNKNOWN"
@@ -279,11 +296,41 @@ def _pit_block(
         "hub": pit.parent_hub,
         "src_pk": hub_hk,
         "src_ldts": _LOAD_DATE,
+        # PIT tables require an as_of_dates entity; reference it by name and use
+        # the AS_OF_DATE column consistently (DV2 Business Vault skill).
+        "as_of_dates_table": {
+            "name": as_of_dates_name,
+            "date_column": _AS_OF_DATE,
+        },
         "satellites": [
             {"name": sat_name, "pk": hub_hk, "ldts": _LOAD_DATE}
             for sat_name in pit.satellites
         ],
         "databricks_config": db.pit_config(hub_hk),
+    }
+
+
+def _as_of_dates_block(
+    system: SourceSystem,
+    plan: ModelingPlan,
+) -> dict[str, Any]:
+    """One ``as_of_dates`` entity defining PIT snapshot granularity.
+
+    Required by every PIT table. Granularity defaults follow the DV2 Business
+    Vault skill (daily, 24/7 operational: ``business_days_only: false``). The
+    primary hub is the first hub alphabetically so the choice is deterministic.
+    """
+    primary_hub = min((h.name for h in plan.hubs), default="")
+    return {
+        "name": _as_of_dates_name(system),
+        "materialized": "view",
+        "granularity": "day",
+        "start_date": "dynamic",
+        "end_date": "current_date",
+        "primary_hub": primary_hub,
+        "date_column": _AS_OF_DATE,
+        "business_days_only": False,
+        "databricks_config": {"materialized": "view"},
     }
 
 
@@ -448,8 +495,12 @@ def _build_document(
 
     if bv is not None:
         if bv.pit_tables:
+            # PIT tables require an as_of_dates entity; emit it directly before
+            # the pit_tables section and reference it from every PIT.
+            as_of_dates_name = _as_of_dates_name(system)
+            doc["as_of_dates"] = [_as_of_dates_block(system, plan)]
             doc["pit_tables"] = [
-                _pit_block(p, hub_idx)
+                _pit_block(p, hub_idx, as_of_dates_name)
                 for p in sorted(bv.pit_tables, key=_by_name)
             ]
         if bv.bridge_tables:
