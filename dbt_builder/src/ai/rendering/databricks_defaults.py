@@ -202,6 +202,7 @@ def global_optimization() -> dict[str, Any]:
             "pit": "insert_overwrite",
             "bridge": "table",
             "staging": "view",
+            "as_of_dates": "view",
             "dim": "view",
             "fact": "view",
         },
