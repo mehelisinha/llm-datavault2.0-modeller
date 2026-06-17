@@ -189,6 +189,15 @@ class AISettings(BaseSettings):
     # individually reproducible.
     llm_seed: int = Field(default=42, ge=-1)
 
+    # Directory holding the agent rule-prompt files (``*.md``) shared between
+    # the automated pipeline agents and the manual Claude-Code agents. Empty
+    # (the default) uses the in-package ``dbt_builder/src/ai/prompts`` folder
+    # that ships with the wheel. Point this at an external folder (e.g. the
+    # repo's loose ``dv-metadata-*.md`` skills) to override the modelling
+    # rules without a code change. Missing files fall back to the built-in
+    # defaults so a bad path can never crash a run.
+    ai_prompts_dir: str = Field(default="")
+
     # Opt-in flag for the DV2 Planning Agent (a richer pre-step that emits
     # hub/link/satellite-split decisions, BV proposals, PIT volume
     # estimates, and human-review flags as one structured JSON document).
