@@ -865,18 +865,33 @@ def _chunk_tables(
 ) -> list[tuple[SourceTable, ...]]:
     """Size-balanced batching: respect both per-batch table count and token budget.
 
-    A batch is flushed when adding the next table would exceed *either*
-    ``max_tables`` or ``max_prompt_tokens`` (when > 0). Single tables that
-    exceed the token cap on their own are emitted as a one-table batch
-    so we never silently drop input. Preserves input order so related
-    tables that are adjacent in the catalog stay in the same batch.
+    A batch is flushed when adding the next table would exceed *either* the
+    balanced table count or ``max_prompt_tokens`` (when > 0). Single tables
+    that exceed the token cap on their own are emitted as a one-table batch
+    so we never silently drop input. Preserves input order so related tables
+    that are adjacent in the catalog stay in the same batch.
+
+    The per-batch table count is *balanced* rather than greedy: instead of
+    packing ``max_tables`` into every batch and leaving a tiny remainder
+    (e.g. 9 tables, cap 8 → ``[8, 1]``), it spreads tables evenly across the
+    minimum number of batches (→ ``[5, 4]``). A lone trailing table is the
+    worst case for plan quality — with no siblings the model often emits a
+    degenerate plan that fails validation, and a single-table batch cannot be
+    split further to recover. Balancing removes that failure mode.
     """
+    n = len(tables)
+    if max_tables > 0 and n > max_tables:
+        n_batches = math.ceil(n / max_tables)
+        balanced_max = math.ceil(n / n_batches)
+    else:
+        balanced_max = max_tables
+
     out: list[tuple[SourceTable, ...]] = []
     cur: list[SourceTable] = []
     cur_tokens = 0
     for t in tables:
         t_tokens = _estimate_table_tokens(t) if max_prompt_tokens > 0 else 0
-        too_many = max_tables > 0 and len(cur) >= max_tables
+        too_many = balanced_max > 0 and len(cur) >= balanced_max
         too_big = (
             max_prompt_tokens > 0
             and cur
