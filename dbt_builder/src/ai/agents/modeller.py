@@ -39,6 +39,7 @@ import time
 from collections import Counter
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from threading import BoundedSemaphore, Condition, Lock
 from typing import TYPE_CHECKING, Any
 
@@ -66,7 +67,26 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
+# Name of the rule file loaded from the prompts package (or the directory in
+# ``AISettings.ai_prompts_dir``). The file holds ONLY the modelling rules; the
+# strict-JSON output contract below is appended in code so the transport
+# contract can never be edited away from the rule file.
+_RV_RULES_NAME = "rv_modelling_rules"
+
+# Output contract — kept in code, NOT in the editable rule file. Azure
+# response_format=json_object guarantees JSON syntax but not field shape, so we
+# still spell out the expected schema in the user prompt; this line forbids any
+# surrounding prose.
+_OUTPUT_CONTRACT = (
+    "OUTPUT FORMAT: Return STRICT JSON matching the provided schema. No prose, "
+    "no markdown, no commentary outside the JSON object."
+)
+
+# Built-in fallback rules — byte-identical to ``prompts/rv_modelling_rules.md``.
+# Used only when that file (and any ``ai_prompts_dir`` override) is missing or
+# unreadable, so the agent degrades gracefully instead of sending an empty
+# system prompt. The file is the canonical, ops-editable source.
+_BUILTIN_RV_RULES = (
     "You are a senior Data Vault 2.0 modelling expert applying Dan Linstedt's "
     "classical conventions. You receive a JSON description of a source system "
     "(tables and their columns, including descriptions, samples, cardinality, "
@@ -146,10 +166,23 @@ _SYSTEM_PROMPT = (
     "sorted alphabetically by `name` (case-insensitive). Within each entry, "
     "emit `business_keys`, `fk_columns`, and `payload` in the SAME ORDER you "
     "see them in the input columns — do not re-sort columns. This ordering "
-    "is structural; downstream tools depend on it being run-stable.\n\n"
-    "OUTPUT FORMAT: Return STRICT JSON matching the provided schema. No prose, "
-    "no markdown, no commentary outside the JSON object."
+    "is structural; downstream tools depend on it being run-stable."
 )
+
+
+@lru_cache(maxsize=1)
+def _system_prompt() -> str:
+    """Assemble the modeller system prompt: file rules + code output contract.
+
+    Rules come from ``prompts/rv_modelling_rules.md`` (overridable via
+    ``AISettings.ai_prompts_dir``); the strict-JSON ``_OUTPUT_CONTRACT`` is
+    always appended in code. Falls back to ``_BUILTIN_RV_RULES`` when the rule
+    file is absent. Cached because it is read on every completion.
+    """
+    from dbt_builder.src.ai.prompts import load_rules
+
+    rules = load_rules(_RV_RULES_NAME) or _BUILTIN_RV_RULES
+    return f"{rules}\n\n{_OUTPUT_CONTRACT}"
 
 # Confidence string -> ordinal weight for tie-breaking.
 _CONFIDENCE_WEIGHT = {
@@ -408,12 +441,15 @@ class ModellingAgent:
         batch_samples: int = 1,
         max_prompt_tokens: int = 0,
         large_catalog_threshold: int = 0,
+        max_completion_tokens: int = 0,
         seed: int | None = None,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
+        if max_completion_tokens < 0:
+            raise ValueError("max_completion_tokens must be >= 0")
         if max_tool_rounds <= 0:
             raise ValueError("max_tool_rounds must be positive")
         if sample_parallelism <= 0:
@@ -443,18 +479,24 @@ class ModellingAgent:
         self._batch_samples = batch_samples
         self._max_prompt_tokens = max_prompt_tokens
         self._large_catalog_threshold = large_catalog_threshold
+        # Hard ceiling on completion tokens per request. ``0`` disables the
+        # clamp. Enforced in :meth:`_build_kwargs` so EVERY budget — including
+        # the doubled retry budget — stays at or below the model's limit and
+        # never triggers an Azure ``max_tokens is too large`` HTTP 400.
+        self._max_completion_tokens = max_completion_tokens
         # ``None`` disables seeding (legacy non-deterministic sampling).
         # An integer is used as the base; each sample adds its index to
         # keep voting samples distinct yet individually reproducible.
         self._seed = seed
         _LOG.info(
             "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
-            "max_tokens=%d batch_size=%d batch_parallelism=%d batch_samples=%d "
-            "max_prompt_tokens=%d large_catalog_threshold=%d",
+            "max_tokens=%d max_completion_tokens=%d batch_size=%d batch_parallelism=%d "
+            "batch_samples=%d max_prompt_tokens=%d large_catalog_threshold=%d",
             deployment,
             samples,
             self._sample_parallelism,
             max_tokens,
+            max_completion_tokens,
             batch_size,
             batch_parallelism,
             batch_samples,
@@ -753,6 +795,22 @@ class ModellingAgent:
             # the model hitting ``max_tokens`` mid-string. Retry once with a
             # doubled budget before giving up — this rescues batches that
             # would otherwise force the whole pipeline to fail after minutes.
+            # Skip the retry when the budget is already at the model ceiling:
+            # doubling would clamp back to the same value and re-truncate
+            # identically, wasting a call and TPM. The caller drops this
+            # sample and votes on the survivors instead.
+            if not self._has_retry_headroom(self._max_tokens):
+                _LOG.warning(
+                    "Modelling sample %d: invalid JSON (%s); completion budget %d already "
+                    "at model ceiling %d — dropping sample (no retry headroom). "
+                    "Lower modeller_batch_size / modeller_max_prompt_tokens so each batch's "
+                    "output fits, or raise modeller_max_completion_tokens if the deployment allows.",
+                    sample_idx,
+                    exc,
+                    self._max_tokens,
+                    self._max_completion_tokens,
+                )
+                return None, f"sample {sample_idx}: invalid JSON ({exc}); no retry headroom"
             _LOG.warning(
                 "Modelling sample %d: invalid JSON (%s); retrying with doubled token budget",
                 sample_idx,
@@ -760,7 +818,7 @@ class ModellingAgent:
             )
             retry_raw = self._call_single(
                 [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": _system_prompt()},
                     {"role": "user", "content": user_prompt},
                 ],
                 self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
@@ -796,13 +854,43 @@ class ModellingAgent:
         _LOG.warning("gpt-5 returned empty content; retrying with doubled budget")
         return self._call_single(
             [
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": user_prompt},
             ],
             self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
         )
 
+    def _clamp_budget(self, token_budget: int) -> int:
+        """Clamp a requested completion budget to the model's hard ceiling.
+
+        The empty-response / truncated-JSON retries double the budget; without
+        this clamp a 16384 budget becomes 32768 and Azure rejects the request
+        with ``max_tokens is too large`` (HTTP 400), failing the whole run.
+        ``self._max_completion_tokens == 0`` disables the clamp.
+        """
+        if self._max_completion_tokens > 0 and token_budget > self._max_completion_tokens:
+            _LOG.debug(
+                "Clamping completion budget %d -> %d (model ceiling)",
+                token_budget,
+                self._max_completion_tokens,
+            )
+            return self._max_completion_tokens
+        return token_budget
+
+    def _has_retry_headroom(self, token_budget: int) -> bool:
+        """True when doubling ``token_budget`` would actually raise the cap.
+
+        When the budget is already at (or above) the model ceiling, a
+        "retry with doubled budget" would clamp back to the same value and
+        re-truncate identically — a wasted call that also burns TPM. Used to
+        skip the truncated-JSON retry in that case.
+        """
+        if self._max_completion_tokens <= 0:
+            return True
+        return token_budget < self._max_completion_tokens
+
     def _build_kwargs(self, token_budget: int, *, sample_idx: int = 0) -> dict[str, Any]:
+        token_budget = self._clamp_budget(token_budget)
         kwargs: dict[str, Any]
         if self._is_gpt5:
             kwargs = {
@@ -824,7 +912,7 @@ class ModellingAgent:
 
     def _call(self, user_prompt: str, kwargs: dict[str, Any]) -> str:
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": _system_prompt()},
             {"role": "user", "content": user_prompt},
         ]
         if self._tool_specs:
@@ -1145,6 +1233,7 @@ def get_modelling_agent(
     batch_samples: int | None = None,
     max_prompt_tokens: int | None = None,
     large_catalog_threshold: int | None = None,
+    max_completion_tokens: int | None = None,
 ) -> ModellingAgent:
     """Build a :class:`ModellingAgent` from settings.
 
@@ -1189,6 +1278,8 @@ def get_modelling_agent(
         max_prompt_tokens = cfg.modeller_max_prompt_tokens
     if large_catalog_threshold is None:
         large_catalog_threshold = cfg.modeller_large_catalog_threshold
+    if max_completion_tokens is None:
+        max_completion_tokens = cfg.modeller_completion_cap()
     client = AzureOpenAI(
         azure_endpoint=cfg.azure_openai_endpoint,
         api_key=cfg.azure_openai_api_key.get_secret_value(),
@@ -1209,5 +1300,6 @@ def get_modelling_agent(
         batch_samples=batch_samples,
         max_prompt_tokens=max_prompt_tokens,
         large_catalog_threshold=large_catalog_threshold,
+        max_completion_tokens=max_completion_tokens,
         seed=None if cfg.llm_seed < 0 else cfg.llm_seed,
     )
