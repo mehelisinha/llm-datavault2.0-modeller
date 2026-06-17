@@ -8,14 +8,26 @@ import pytest
 
 pytestmark = pytest.mark.ai
 
-from dbt_builder.src.ai.agents.dv2_planning_agent import (
+from dbt_builder.src.ai.agents.dv2_planning_agent import (  # noqa: E402
     Dv2Plan,
     Dv2PlanningAgent,
     Dv2PlanningAgentError,
 )
-from dbt_builder.src.ai.settings import AISettings
+from dbt_builder.src.ai.settings import AISettings  # noqa: E402
 
-from .test_modeller import _FakeClient, _payload
+from .test_modeller import _FakeClient, _payload  # noqa: E402
+
+
+def test_system_prompt_loads_rules_from_file_and_keeps_schema_contract() -> None:
+    from dbt_builder.src.ai.agents import dv2_planning_agent as m
+
+    sp = m._system_prompt()
+    # Schema contract (fixed in code) must be present and match Dv2Plan fields.
+    assert "hub_decisions" in sp
+    assert "pit_volume_estimates" in sp
+    # Decision rules loaded from planning_rules.md.
+    assert "rate-of-change" in sp
+    assert "HUB / LINK / REFERENCE / SKIP" in sp
 
 
 def _settings(*, seed: int = 42) -> AISettings:
