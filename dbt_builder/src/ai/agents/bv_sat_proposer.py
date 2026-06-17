@@ -36,6 +36,7 @@ import json
 import logging
 import re
 from collections.abc import Sequence
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -58,13 +59,14 @@ if TYPE_CHECKING:
 
 _LOG = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-    "You are a senior Data Vault 2.0 business-vault designer. "
-    "You receive a list of CANDIDATE business-vault satellite proposals "
-    "that a deterministic pattern detector found in the raw vault. Your "
-    "task is to CONFIRM, REFINE, or REJECT each candidate. You MAY NOT "
-    "invent additional satellites beyond the candidates supplied — "
-    "respond only about what is in the input. "
+# Rule file loaded from the prompts package (overridable via
+# AISettings.ai_prompts_dir). Holds the BV-designer domain rules shared with
+# the DV2 Business Vault skill. The strict-JSON response contract is appended
+# in code so it can never be edited away from the rule file.
+_BV_RULES_NAME = "bv_sat_proposer_rules"
+
+# Response contract — kept in code, NOT in the editable rule file.
+_OUTPUT_CONTRACT = (
     "For each candidate, return a JSON object with: \n"
     "- pattern_key: copy verbatim from input\n"
     "- decision: one of 'accept', 'reject'\n"
@@ -80,6 +82,27 @@ _SYSTEM_PROMPT = (
     "Return STRICT JSON of shape {\"decisions\": [<one object per "
     "candidate>]}. No prose outside the JSON object."
 )
+
+# Built-in fallback rules — byte-identical to ``prompts/bv_sat_proposer_rules.md``
+# minus the trailing source-specific patterns. Used only when that file is
+# missing/unreadable so the agent degrades gracefully. The file is canonical.
+_BUILTIN_BV_RULES = (
+    "You are a senior Data Vault 2.0 business-vault designer. "
+    "You receive a list of CANDIDATE business-vault satellite proposals "
+    "that a deterministic pattern detector found in the raw vault. Your "
+    "task is to CONFIRM, REFINE, or REJECT each candidate. You MAY NOT "
+    "invent additional satellites beyond the candidates supplied — "
+    "respond only about what is in the input."
+)
+
+
+@lru_cache(maxsize=1)
+def _system_prompt() -> str:
+    """Assemble the BV proposer system prompt: file rules + code contract."""
+    from dbt_builder.src.ai.prompts import load_rules
+
+    rules = load_rules(_BV_RULES_NAME) or _BUILTIN_BV_RULES
+    return f"{rules}\n\n{_OUTPUT_CONTRACT}"
 
 
 # ── LLM response schema ─────────────────────────────────────────────────────
@@ -385,7 +408,7 @@ class LlmBvSatProposer:
         response = self._client.chat.completions.create(
             model=self._deployment,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": user_prompt},
             ],
             **self._build_kwargs(),
