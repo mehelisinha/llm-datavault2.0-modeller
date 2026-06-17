@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from dbt_builder.src.ai.contracts.payloads import DiscoveryPayload
 
@@ -120,7 +121,10 @@ class Dv2PlanningAgentError(RuntimeError):
 # ── prompts ────────────────────────────────────────────────────────────────
 
 
-_SYSTEM_PROMPT = (
+# Output-schema contract — kept in code because it must match the Dv2Plan
+# pydantic model exactly (which forbids unknown fields). The decision RULES are
+# loaded from the editable rule file and appended after this block.
+_SCHEMA_CONTRACT = (
     "You are a senior Data Vault 2.0 architect. Given a discovery payload "
     "describing source tables and columns, emit a STRICT JSON object that "
     "matches the schema below. Return ONLY the JSON object — no commentary, "
@@ -142,7 +146,17 @@ _SYSTEM_PROMPT = (
     '  "edge_cases":           [{ "table": str, "issue": str, '
     '"suggested_action": str }],\n'
     '  "review_flags":         [{ "target": str, "reason": str }]\n'
-    "}\n\n"
+    "}\n"
+)
+
+# Rule file loaded from the prompts package (overridable via
+# AISettings.ai_prompts_dir). Holds the planning decision rules shared with the
+# manual DV2 Planning Agent skill. Must NOT instruct the model to emit fields
+# absent from the schema above (Dv2Plan forbids unknown fields).
+_PLANNING_RULES_NAME = "planning_rules"
+
+# Built-in fallback rules — used only when the rule file is missing/unreadable.
+_BUILTIN_PLANNING_RULES = (
     "Rules:\n"
     "1. Prefer stable surrogate IDs (mrid, sys_id, uuid) over mutable codes.\n"
     "2. Split satellites by rate-of-change OR semantic domain — never both.\n"
@@ -151,6 +165,15 @@ _SYSTEM_PROMPT = (
     "4. Flag tables you cannot confidently classify under review_flags "
     "rather than guessing.\n"
 )
+
+
+@lru_cache(maxsize=1)
+def _system_prompt() -> str:
+    """Assemble the planner system prompt: code schema contract + file rules."""
+    from dbt_builder.src.ai.prompts import load_rules
+
+    rules = load_rules(_PLANNING_RULES_NAME) or _BUILTIN_PLANNING_RULES
+    return f"{_SCHEMA_CONTRACT}\n{rules}"
 
 
 # ── agent ──────────────────────────────────────────────────────────────────
@@ -258,7 +281,7 @@ class Dv2PlanningAgent:
         response = self._client.chat.completions.create(
             model=self._deployment,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt()},
                 {"role": "user", "content": user_prompt},
             ],
             **self._build_kwargs(),
