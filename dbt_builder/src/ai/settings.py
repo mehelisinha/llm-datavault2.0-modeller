@@ -82,6 +82,18 @@ class AISettings(BaseSettings):
     modeller_max_tokens_default: int = Field(default=4096)
     modeller_max_tokens_gpt5: int = Field(default=16384)
 
+    # Hard per-request ceiling on completion tokens, enforced AFTER any
+    # internal budget growth (the empty-response / truncated-JSON retries
+    # double the budget once). Azure rejects the call with HTTP 400
+    # ``max_tokens is too large`` when the requested completion budget
+    # exceeds the deployment's model limit — e.g. gpt-4o / gpt-4o-mini cap
+    # completion at 16384 tokens. Doubling a 16384 budget to 32768 is what
+    # crashes large-catalogue runs. This ceiling clamps every request so the
+    # retry can never exceed the model maximum. Override per environment when
+    # a deployment supports a higher completion limit. ``0`` disables the
+    # clamp (legacy behaviour — not recommended).
+    modeller_max_completion_tokens: int = Field(default=16384, ge=0)
+
     # Concurrency for the modelling-agent voting loop. The agent draws
     # ``samples`` independent completions and votes on the majority plan;
     # those completions are independent HTTP calls and can be issued in
@@ -246,6 +258,15 @@ class AISettings(BaseSettings):
         if deployment.startswith("gpt-5"):
             return self.modeller_max_tokens_gpt5
         return self.modeller_max_tokens_default
+
+    def modeller_completion_cap(self) -> int:
+        """Return the hard ceiling on per-request completion tokens.
+
+        Used by the modelling agent to clamp the (possibly doubled) token
+        budget so a retry can never exceed the deployment's model limit and
+        trigger an Azure HTTP 400. ``0`` means "no clamp".
+        """
+        return self.modeller_max_completion_tokens
 
 
 @lru_cache(maxsize=1)
