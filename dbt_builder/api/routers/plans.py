@@ -42,7 +42,10 @@ GenerateFormat = Literal["metadata_v3", "dbt_per_file"]
 class ValidateRequest(BaseModel):
     plan: ModelingPlan | None = None
     rendered_yaml: str | None = Field(default=None)
-    dbt_project_path: str | None = None
+    # Business-vault proposal, so the dbt compile gate can materialise the full
+    # model set. The gate's project path / enablement come from server settings
+    # (not the request) so clients can't redirect the build target.
+    bv: BvProposal | None = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -119,7 +122,7 @@ def validate(
     return service.validate(
         plan=body.plan,
         rendered_yaml=body.rendered_yaml,
-        dbt_project_path=body.dbt_project_path,
+        bv=body.bv,
     )
 
 
