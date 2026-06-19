@@ -45,6 +45,7 @@ from dbt_builder.src.ai.rendering.metadata_v3_emitter import render_v3
 if TYPE_CHECKING:
     from dbt_builder.src.ai.agents import BvArchitect, SchemaAnalyzer, YamlGenerator
     from dbt_builder.src.ai.supervision import PipelineSupervisor
+    from dbt_builder.src.ai.validation.dbt_gate import DbtGateConfig
 
 _LOG = logging.getLogger(__name__)
 
@@ -85,6 +86,22 @@ def _elapsed_ms(t0: float) -> int:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _dbt_gate_config() -> "DbtGateConfig":
+    """Build the dbt compile-gate config from settings, disabled on any error.
+
+    Settings may be unconfigured (no Azure creds in unit tests); fall back to a
+    disabled gate rather than crashing the VALIDATE step.
+    """
+    from dbt_builder.src.ai.validation.dbt_gate import DbtGateConfig
+
+    try:
+        from dbt_builder.src.ai.settings import get_settings
+
+        return DbtGateConfig.from_settings(get_settings())
+    except Exception:  # noqa: BLE001 — settings not configured is an expected dev case
+        return DbtGateConfig()
 
 
 def _resolve_describe_parallelism() -> int:
@@ -371,6 +388,8 @@ class PipelineOrchestrator:
             validation = run_validation(
                 plan=run.plan,
                 rendered_yaml=run.rendered_yaml,
+                bv=run.bv,
+                dbt_config=_dbt_gate_config(),
             )
         except Exception as exc:
             return self._fail(run, PipelineStepName.VALIDATE, t0, exc)

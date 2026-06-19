@@ -228,12 +228,27 @@ class DwaService:
         *,
         plan: ModelingPlan | None = None,
         rendered_yaml: str | None = None,
-        dbt_project_path: str | None = None,
+        bv: BvProposal | None = None,
     ) -> ValidationReport:
+        """Validate a plan/YAML, including the dbt compile gate when enabled.
+
+        The dbt gate config is read from settings (disabled by default), so the
+        same call both unit-tests offline and enforces compilation in a
+        configured environment — nothing approvable unless dbt parse/compile pass.
+        """
+        from dbt_builder.src.ai.validation.dbt_gate import DbtGateConfig
+
+        try:
+            from dbt_builder.src.ai.settings import get_settings
+
+            dbt_config = DbtGateConfig.from_settings(get_settings())
+        except Exception:  # noqa: BLE001 — settings unconfigured (offline/tests)
+            dbt_config = DbtGateConfig()
         return run_validation(
             plan=plan,
             rendered_yaml=rendered_yaml,
-            dbt_project_path=dbt_project_path,
+            bv=bv,
+            dbt_config=dbt_config,
         )
 
     # ── Approval gate ───────────────────────────────────────────────────────
@@ -425,11 +440,43 @@ def _try_build_default_schema_analyzer() -> SchemaAnalyzer | None:
     """
     try:
         from dbt_builder.src.ai.agents.modeller import get_modelling_agent
+        from dbt_builder.src.ai.agents.plan_reviewer import get_plan_reviewer
 
         agent = get_modelling_agent()
+        reviewer = get_plan_reviewer()  # None unless plan review is enabled + configured
     except Exception:  # noqa: BLE001 — env not configured is an expected dev case
         return None
-    return SchemaAnalyzer.from_modeller(agent)
+
+    if reviewer is None:
+        # Single-model path (unchanged behaviour).
+        return SchemaAnalyzer.from_modeller(agent)
+
+    # Two-model path: the fast generator drafts the plan, the stronger reviewer
+    # critiques and patches it before rendering. Review is fail-safe (returns the
+    # original plan on any error), so this never weakens the single-model path.
+    def _propose_and_review(payload: object) -> object:
+        plan = agent.propose(payload)  # type: ignore[arg-type]
+        return reviewer.review(plan, payload)  # type: ignore[arg-type]
+
+    return SchemaAnalyzer(propose_fn=_propose_and_review)  # type: ignore[arg-type]
+
+
+def _try_build_default_bv_architect() -> BvArchitect:
+    """BvArchitect wired with the LLM BV-sat proposer when enabled.
+
+    Falls back to a purely deterministic ``BvArchitect()`` (PITs + bridges only,
+    no BV satellites) when the proposer is disabled or Azure OpenAI is not
+    configured — so the default pipeline and all offline tests are unchanged.
+    """
+    try:
+        from dbt_builder.src.ai.agents.bv_sat_proposer import get_bv_sat_proposer
+
+        proposer = get_bv_sat_proposer()
+    except Exception:  # noqa: BLE001 — env not configured is an expected dev case
+        proposer = None
+    if proposer is None:
+        return BvArchitect()
+    return BvArchitect(propose_bv_sats_fn=proposer.propose)
 
 
 def get_service() -> DwaService:
@@ -437,6 +484,7 @@ def get_service() -> DwaService:
     if _default_service is None:
         _default_service = DwaService(
             schema_analyzer=_try_build_default_schema_analyzer(),
+            bv_architect=_try_build_default_bv_architect(),
         )
     return _default_service
 
