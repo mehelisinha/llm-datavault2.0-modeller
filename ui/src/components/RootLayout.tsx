@@ -27,15 +27,17 @@ export function RootLayout() {
 
   return (
     <div className="flex min-h-full flex-col bg-background text-foreground">
-      <header className="border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/80 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div
           className={cn(
             "mx-auto flex items-center gap-6 px-6 py-3",
             SHELL_MAX_WIDTH,
           )}
         >
-          <span className="flex items-center gap-2 text-base font-semibold tracking-tight">
-            <Icon icon={Database} size="lg" className="text-primary" />
+          <span className="flex items-center gap-2.5 text-base font-semibold tracking-tight">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-brand text-primary-foreground shadow-glow">
+              <Icon icon={Database} size="md" />
+            </span>
             DWA Metadata Generator
           </span>
           <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
@@ -45,7 +47,7 @@ export function RootLayout() {
                   key={path}
                   to={path}
                   activeProps={{
-                    className: "bg-secondary text-secondary-foreground",
+                    className: "bg-primary/10 text-primary font-medium",
                   }}
                   inactiveProps={{
                     className: "text-muted-foreground hover:text-foreground",
