@@ -33,6 +33,12 @@ const envSchema = z.object({
   /** Branding shown on the login page. */
   VITE_APP_NAME: z.string().default("DWA Metadata Generator"),
   VITE_APP_TENANT_NAME: z.string().default("ExampleCorp"),
+  /**
+   * Table count above which the backend switches the modeller to batched,
+   * single-sample analysis (mirrors `DWA_AI_..._LARGE_CATALOG_THRESHOLD`).
+   * The UI uses it only to set expectations on the run-progress panel.
+   */
+  VITE_LARGE_CATALOG_THRESHOLD: z.coerce.number().int().positive().default(15),
 });
 
 const parsed = envSchema.safeParse(import.meta.env);
@@ -56,6 +62,7 @@ export const env = Object.freeze({
   devActor: parsed.data.VITE_DEV_ACTOR,
   appName: parsed.data.VITE_APP_NAME,
   tenantName: parsed.data.VITE_APP_TENANT_NAME,
+  largeCatalogThreshold: parsed.data.VITE_LARGE_CATALOG_THRESHOLD,
   defaults: Object.freeze({
     systemId: parsed.data.VITE_DEFAULT_SYSTEM_ID,
     systemName: parsed.data.VITE_DEFAULT_SYSTEM_NAME,

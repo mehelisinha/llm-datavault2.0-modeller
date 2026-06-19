@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 
 import { useCatalogs, useDiscoverySnapshot, useRunPipeline, useSchemas, useSchemaTables } from "@/api/hooks";
 import { PageShell } from "@/components/PageShell";
+import { RunProgress } from "@/components/RunProgress";
 import { Button, Card, CardContent, CardHeader, CardTitle, Spinner } from "@/components/ui";
 import { DISCOVERY_LABELS } from "@/constants/discovery";
 import { PIPELINE_LABELS } from "@/constants/pipeline";
@@ -158,6 +159,11 @@ export default function DiscoveryPage() {
     runPipeline.mutate(buildPipelineRequest());
   };
 
+  // Tables the run will cover: the explicit selection, or every table when none
+  // are picked (empty selection = "all tables in the schema").
+  const runTableCount =
+    selectedTables.size > 0 ? selectedTables.size : availableTables.length;
+
   return (
     <PageShell
       title={DISCOVERY_LABELS.pageTitle}
@@ -169,6 +175,12 @@ export default function DiscoveryPage() {
         </Button>
       }
     >
+      {runPipeline.isPending ? (
+        <div className="mb-6">
+          <RunProgress tableCount={runTableCount} />
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>{DISCOVERY_LABELS.cardTitle}</CardTitle>

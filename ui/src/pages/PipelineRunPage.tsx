@@ -19,6 +19,7 @@ import { useSearch } from "@tanstack/react-router";
 
 import { usePipelineRun, useRunPipeline } from "@/api/hooks";
 import { PageShell } from "@/components/PageShell";
+import { RunProgress } from "@/components/RunProgress";
 import { Spinner } from "@/components/ui";
 import {
   PIPELINE_LABELS,
@@ -72,6 +73,7 @@ export default function PipelineRunPage() {
   });
 
   const run = runQuery.data ?? null;
+  const runTableCount = lastRequest?.tables?.length ?? 0;
 
   const handleAcknowledge = () => {
     if (!lastRequest) {
@@ -92,6 +94,12 @@ export default function PipelineRunPage() {
         <Spinner className="h-5 w-5" />
       ) : run ? (
         <div className="space-y-4">
+          {rerun.isPending ? (
+            <RunProgress
+              tableCount={runTableCount}
+              title="Building vault after risk acknowledgement"
+            />
+          ) : null}
           <StatusCard run={run} />
           {run.risk_assessment?.recommendation === "pause" && (
             <RiskCard
