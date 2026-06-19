@@ -6,6 +6,7 @@
  */
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 import { PIPELINE_LABELS, STEP_LABELS, type PipelineRun } from "@/constants/pipeline";
+import { formatDuration } from "@/lib/formatDuration";
 
 export function TimelineCard({ run }: { run: PipelineRun }) {
   return (
@@ -30,7 +31,7 @@ export function TimelineCard({ run }: { run: PipelineRun }) {
                 {step.status === "ok" ? "✓" : step.status === "failed" ? "✕" : "·"}
               </span>
               <span className="font-medium">{STEP_LABELS[step.step]}</span>
-              <span className="text-muted-foreground">({step.duration_ms} ms)</span>
+              <span className="text-muted-foreground">({formatDuration(step.duration_ms)})</span>
               {step.error && <span className="text-destructive">{step.error}</span>}
             </li>
           ))}

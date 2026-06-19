@@ -104,6 +104,28 @@ export const STEP_LABELS: Readonly<Record<PipelineStepName, string>> = Object.fr
   validate: "Validate output",
 });
 
+/**
+ * Canonical execution order of the pipeline steps — the order the orchestrator
+ * runs them. Single source of truth so progress UIs never re-list the sequence
+ * (and never depend on object key ordering).
+ */
+export const PIPELINE_STEP_ORDER: readonly PipelineStepName[] = Object.freeze([
+  "snapshot",
+  "analyze",
+  "architect_bv",
+  "generate",
+  "validate",
+] as const);
+
+/** Short, action-oriented sub-labels describing the agent behind each step. */
+export const STEP_AGENT_LABELS: Readonly<Record<PipelineStepName, string>> = Object.freeze({
+  snapshot: "Snapshotting catalog & bronze tables",
+  analyze: "Modeller drafting plan, reviewer refining it",
+  architect_bv: "Architecting PITs, bridges & business vault",
+  generate: "Emitting deterministic Data Vault YAML",
+  validate: "Validating the generated metadata",
+});
+
 export const STATUS_LABELS: Readonly<Record<PipelineRunStatus, string>> = Object.freeze({
   running: "Running",
   paused: "Paused for review",
