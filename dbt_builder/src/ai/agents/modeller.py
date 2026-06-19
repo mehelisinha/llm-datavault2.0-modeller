@@ -41,7 +41,7 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from threading import BoundedSemaphore, Condition, Lock
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_args
 
 from pydantic import ValidationError
 
@@ -51,8 +51,12 @@ from dbt_builder.src.ai.agents.tool_loop import (
     run_tool_loop,
 )
 from dbt_builder.src.ai.contracts.decisions import (
+    SAT_CAP_PER_HUB,
     DecisionConfidence,
+    HubDecision,
+    LinkDecision,
     ModelingPlan,
+    SatelliteDecision,
 )
 from dbt_builder.src.ai.contracts.payloads import (
     DiscoveryPayload,
@@ -122,12 +126,27 @@ _BUILTIN_RV_RULES = (
     "5. EFFECTIVITY SATELLITES. For EVERY link you create, also create an "
     "`eff_sat_<link_name>` with `driving_fk` set to the primary side and "
     "`secondary_fk` listing the other side(s).\n"
-    "6. DESCRIPTIVE SATELLITES. Each hub gets ONE satellite carrying every "
-    "non-key descriptive column from its source table (timestamps, names, "
-    "flags, free-text, audit fields). Do not drop columns to save tokens — "
-    "include every payload attribute you see. When a deterministic split "
-    "hint is supplied in the user prompt (`satellite_split_hints`), copy the "
-    "blueprints verbatim — do NOT invent extra subgroups or reorder them.\n"
+    "6. DESCRIPTIVE SATELLITES — SPLIT BY RATE OF CHANGE. A hub carries its "
+    "descriptive (non-key) columns in satellites split by how fast those "
+    "columns change, so a volatile column never forces a rewrite of stable "
+    "history: `_details` (subgroup `details`, change_velocity `static`) for "
+    "quasi-static attributes (name, type, category, manufacturer, model, "
+    "serial, descriptions); `_operational` (subgroup `operational`, "
+    "change_velocity `dynamic`) for frequently changing status/state/flag "
+    "columns; `_measurements` (subgroup `measurements`, change_velocity "
+    "`dynamic`) for continuous numeric readings/amounts. A hub whose columns "
+    "span more than one velocity MUST emit more than one satellite (at least "
+    "`_details` + `_operational` when it has both); a hub whose columns are "
+    "all one velocity emits a single satellite (omit `subgroup`, set the "
+    "honest `change_velocity`). Maximum 3 satellites per hub. Set `subgroup` "
+    "and `change_velocity` on every satellite. PAYLOAD HYGIENE: a satellite "
+    "payload contains ONLY descriptive columns — NEVER business keys, NEVER "
+    "foreign-key columns (those drive links), and NEVER technical/CDC/audit/"
+    "system columns (load/record-source, change-data-capture flags, audit "
+    "timestamps). Do "
+    "not drop genuine descriptive columns to save tokens. When a deterministic "
+    "split hint is supplied in the user prompt (`satellite_split_hints`), copy "
+    "the blueprints verbatim — do NOT invent extra subgroups or reorder them.\n"
     "7. NAMING. snake_case with prefixes `hub_`, `link_`, `sat_`, `eff_sat_`. "
     "Hash keys UPPER_SNAKE prefixed `HK_`. Hash-diffs prefixed `HD_`.\n"
     "8. CROSS-BATCH AWARENESS. You may be processing only a subset of the "
@@ -204,8 +223,8 @@ _MAX_TABLES_IN_PROMPT = 50
 # worse than spending a few extra tokens.
 _WIDE_TABLE_COLUMN_THRESHOLD = 40
 # Per-column maximum length for free-text fields (description, individual
-# sample value) sent to the model in wide-table mode. Long ServiceNow /
-# SAP description blobs are summarised at this length; column names,
+# sample value) sent to the model in wide-table mode. Long free-text
+# description blobs are summarised at this length; column names,
 # types, and key signals are always preserved in full.
 _WIDE_TABLE_TEXT_TRUNCATE = 80
 
@@ -370,6 +389,307 @@ def _estimate_call_tokens(messages: Sequence[dict[str, Any]], kwargs: dict[str, 
     return prompt_tokens + completion_budget
 
 
+# ── Tolerant plan-dict coercion ───────────────────────────────────────────────
+# The ModelingPlan contract is intentionally strict (``extra="forbid"``). More
+# capable / verbose models (e.g. gpt-4.1) tend to add descriptive keys the
+# contract rejects, which makes every otherwise-good plan fail validation. We
+# reshape the raw LLM dict at the boundary — dropping unknown keys, normalising
+# common field-name variants, coercing scalars to lists, lowercasing enum-ish
+# values, capping satellites per hub, and dropping individually schema-invalid
+# satellites (so one bad entity can't fail an otherwise-good plan) — so the
+# strict contract still holds without forcing every model to emit a byte-perfect
+# schema. This NEVER invents data; it only reshapes/prunes what the model
+# already produced.
+def _literal_str_values(model: type, field: str) -> frozenset[str]:
+    """Return the string members of a (possibly Optional) ``Literal`` field.
+
+    Derived from the pydantic model so the accepted values track the contract
+    instead of being re-listed here.
+    """
+    out: set[str] = set()
+    stack: list[Any] = [model.model_fields[field].annotation]
+    while stack:
+        for arg in get_args(stack.pop()):
+            if isinstance(arg, str):
+                out.add(arg)
+            else:
+                stack.append(arg)  # descend into Union / Optional members
+    return frozenset(out)
+
+
+def _field_min_items(model: type, field: str) -> int:
+    """Minimum item count required on a (list/tuple) contract field, or 0.
+
+    Read from the pydantic field metadata so coercion tracks the contract's
+    ``min_length`` instead of repeating the literal.
+    """
+    for constraint in model.model_fields[field].metadata:
+        min_length = getattr(constraint, "min_length", None)
+        if isinstance(min_length, int):
+            return min_length
+    return 0
+
+
+# Accepted fields / enum values are derived from the contracts (single source of
+# truth) — not re-listed — so coercion never drifts from ModelingPlan. ``kind``
+# is excluded so the model's discriminator default always applies.
+_HUB_FIELDS = frozenset(HubDecision.model_fields) - {"kind"}
+_LINK_FIELDS = frozenset(LinkDecision.model_fields) - {"kind"}
+_SAT_FIELDS = frozenset(SatelliteDecision.model_fields) - {"kind"}
+_CONFIDENCE_VALUES = frozenset(c.value for c in DecisionConfidence)
+_SUBGROUP_VALUES = _literal_str_values(SatelliteDecision, "subgroup")
+_VELOCITY_VALUES = _literal_str_values(SatelliteDecision, "change_velocity")
+_PLAN_SAT_CAP = SAT_CAP_PER_HUB  # the contract's per-hub satellite cap
+_LINK_MIN_FK = _field_min_items(LinkDecision, "fk_columns")  # a link relates >= this many hubs
+
+# Rate-of-change velocity implied by a satellite's split subgroup (DV2
+# semantics): ``details`` is quasi-static history; operational flags and
+# continuous measurements both change frequently. The asserts tie this to the
+# contract vocabulary so it can never silently drift from ModelingPlan.
+_VELOCITY_BY_SUBGROUP = {
+    "details": "static",
+    "operational": "dynamic",
+    "measurements": "dynamic",
+}
+assert set(_VELOCITY_BY_SUBGROUP) == set(_SUBGROUP_VALUES), "subgroup vocabulary drift"
+assert set(_VELOCITY_BY_SUBGROUP.values()) <= set(_VELOCITY_VALUES), "velocity vocabulary drift"
+
+
+def _coerce_entity(raw: Any, allowed: frozenset[str], aliases: dict[str, str]) -> dict[str, Any]:
+    """Keep only ``allowed`` keys (after applying ``aliases``); drop the rest."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        target = aliases.get(key, key)
+        if target in allowed and target not in out:
+            out[target] = value
+    return out
+
+
+def _union_preserving_order(*lists: Any) -> list[Any]:
+    """Concatenate list/tuple inputs into one list, first-occurrence order, no repeats.
+
+    Used to merge the business keys of hubs the model proposed more than once
+    under the same name — keeping every distinct key without re-introducing the
+    duplicates the hub contract forbids.
+    """
+    out: list[Any] = []
+    for lst in lists:
+        if not isinstance(lst, (list, tuple)):
+            continue
+        for item in lst:
+            if item not in out:
+                out.append(item)
+    return out
+
+
+def _drop_invalid_enum(entity: dict[str, Any], key: str, allowed: frozenset[str]) -> None:
+    """Lowercase ``entity[key]`` and drop it (so the model default applies) if invalid."""
+    value = entity.get(key)
+    if isinstance(value, str):
+        value = value.lower()
+        if value in allowed:
+            entity[key] = value
+        else:
+            entity.pop(key, None)
+
+
+def _clean_payload(payload: Any, *, excluded: frozenset[str] | set[str]) -> list[Any]:
+    """Drop ``excluded`` columns from a satellite payload, order-preserving.
+
+    ``excluded`` is a pre-built, lower-cased set of columns that must never sit
+    in a descriptive hashdiff — the satellite's own business key, foreign-key
+    columns, and technical/system columns. Comparison is case-insensitive so
+    ``KOSTL`` and ``kostl`` match. Nothing is invented; columns are only removed.
+    """
+    if not isinstance(payload, (list, tuple)):
+        return []
+    return [
+        col for col in payload if not (isinstance(col, str) and col.lower() in excluded)
+    ]
+
+
+def _subgroup_from_name(name: Any) -> str | None:
+    """The split subgroup a satellite name encodes (``..._details`` → details), or None."""
+    if not isinstance(name, str):
+        return None
+    return next((sg for sg in _SUBGROUP_VALUES if name.endswith(f"_{sg}")), None)
+
+
+def _apply_split_metadata(sat: dict[str, Any]) -> None:
+    """Fill ``subgroup`` / ``change_velocity`` for a rate-of-change-split satellite.
+
+    Splits are encoded in the satellite name (``..._details`` / ``..._operational``
+    / ``..._measurements``). When the model performs the split but omits the audit
+    metadata, derive it: the subgroup is the name's split suffix (or whatever the
+    model already set), and a split satellite's velocity follows its subgroup
+    (:data:`_VELOCITY_BY_SUBGROUP`). Single (unsplit) satellites are left as-is, so
+    their honest model-supplied velocity (often ``mixed``) is preserved.
+    """
+    subgroup = sat.get("subgroup") or _subgroup_from_name(sat.get("name"))
+    if not subgroup:
+        return
+    sat["subgroup"] = subgroup
+    sat["change_velocity"] = _VELOCITY_BY_SUBGROUP.get(subgroup, sat.get("change_velocity"))
+
+
+def _merge_named(items: list[dict[str, Any]], *, union_key: str) -> list[dict[str, Any]]:
+    """Collapse same-named entity dicts, unioning their ``union_key`` list field.
+
+    The ModelingPlan contract requires entity names unique within their kind;
+    batched generation over PII / non-PII source pairs routinely proposes the
+    same entity twice. Merging (rather than dropping a duplicate) preserves every
+    distinct member of the unioned field — business keys for hubs, fk columns for
+    links, payload columns for satellites — in first-occurrence order, keeping the
+    first occurrence's other fields. Entities without a string ``name`` cannot
+    satisfy the contract and are dropped so one malformed entity can't fail the
+    whole batch. Scales linearly with the entity count.
+    """
+    by_name: dict[str, dict[str, Any]] = {}
+    for item in items:
+        name = item.get("name")
+        if not isinstance(name, str):
+            continue
+        existing = by_name.get(name)
+        if existing is None:
+            by_name[name] = item
+        else:
+            existing[union_key] = _union_preserving_order(
+                existing.get(union_key), item.get(union_key)
+            )
+    return list(by_name.values())
+
+
+def _coerce_plan_dict(
+    data: Any, *, technical_columns: frozenset[str] = frozenset()
+) -> Any:
+    """Best-effort reshape of LLM plan JSON to fit the strict ModelingPlan schema.
+
+    Enforces every cross-entity invariant the ModelingPlan contract checks, so a
+    single malformed entity never fails an entire batch: names are made unique
+    within each kind by merging same-named entities (see :func:`_merge_named`),
+    then unique *across* kinds by precedence (hub > link > satellite), and
+    satellites that the contract would reject (no payload, unknown parent) are
+    dropped. No data is invented; duplicates are merged, not renamed.
+
+    Satellite payloads are also cleaned for Data Vault correctness: a satellite
+    never carries its own hub's business key, nor a foreign-key column (the
+    business key of another hub that a link on the SAME source table joins) —
+    keys belong in hubs / links, not in a descriptive hashdiff — nor any
+    caller-supplied ``technical_columns`` (CDC / audit / system columns). The
+    foreign-key removal is scoped to columns the plan's links actually establish
+    on that table, so a generic descriptive column (e.g. ``name``) is never
+    stripped just because some unrelated hub happens to key on it. A satellite
+    left with no descriptive columns is dropped.
+    """
+    if not isinstance(data, dict):
+        return data
+    out: dict[str, Any] = {"system_id": data.get("system_id", "")}
+
+    # Hubs — merge same-named (union business keys). Hubs anchor everything else,
+    # so their names take precedence in the cross-kind uniqueness checks below.
+    coerced_hubs: list[dict[str, Any]] = []
+    for raw in data.get("hubs") or []:
+        hub = _coerce_entity(raw, _HUB_FIELDS, {"business_key": "business_keys"})
+        bk = hub.get("business_keys")
+        if isinstance(bk, str):
+            hub["business_keys"] = [bk]
+        _drop_invalid_enum(hub, "confidence", _CONFIDENCE_VALUES)
+        coerced_hubs.append(hub)
+    hubs = _merge_named(coerced_hubs, union_key="business_keys")
+    out["hubs"] = hubs
+    hub_names = {h["name"] for h in hubs}
+
+    # Per-hub business keys, case-folded, indexed by hub name and by hash key.
+    # ``by_name`` strips a satellite's OWN business key; ``by_hash_key`` resolves
+    # a link's fk hash keys back to the source columns (= referenced hubs' BKs).
+    def _bks(hub: dict[str, Any]) -> frozenset[str]:
+        return frozenset(
+            bk.lower() for bk in (hub.get("business_keys") or []) if isinstance(bk, str)
+        )
+
+    bk_by_hub_name = {h["name"]: _bks(h) for h in hubs}
+    bk_by_hash_key = {
+        h["hash_key"]: _bks(h) for h in hubs if isinstance(h.get("hash_key"), str)
+    }
+
+    # Links — merge same-named (union fk columns), then drop those the contract
+    # would reject: a name colliding with a hub (names must be unique across
+    # hubs / links / sats), or fewer than the minimum FK columns (a link relates
+    # two-plus hubs — a one-FK link is malformed and would fail the whole batch).
+    coerced_links: list[dict[str, Any]] = []
+    for raw in data.get("links") or []:
+        link = _coerce_entity(raw, _LINK_FIELDS, {})
+        _drop_invalid_enum(link, "confidence", _CONFIDENCE_VALUES)
+        coerced_links.append(link)
+
+    def _link_ok(ln: dict[str, Any]) -> bool:
+        if ln["name"] in hub_names:
+            return False
+        fks = ln.get("fk_columns")
+        return isinstance(fks, (list, tuple)) and len(fks) >= _LINK_MIN_FK
+
+    links = [ln for ln in _merge_named(coerced_links, union_key="fk_columns") if _link_ok(ln)]
+    out["links"] = links
+    reserved_names = hub_names | {ln["name"] for ln in links}
+
+    # Foreign-key source columns per source table: the business keys of the hubs
+    # each link joins, attributed to the table that hosts the link. Used to strip
+    # FK columns from that table's satellites without touching unrelated tables.
+    fk_columns_by_table: dict[str, set[str]] = {}
+    for ln in links:
+        table = ln.get("source_table")
+        if not isinstance(table, str):
+            continue
+        bucket = fk_columns_by_table.setdefault(table, set())
+        for fk in ln.get("fk_columns") or []:
+            bucket |= bk_by_hash_key.get(fk, frozenset())
+
+    # Satellites — merge same-named (union payload), then drop the ones the
+    # contract would reject: empty payload, non-string / unknown parent hub
+    # (also catches an eff_sat the model invented pointing at a link_*), a name
+    # already used by a hub or link, or any beyond the per-hub split cap.
+    coerced_sats: list[dict[str, Any]] = []
+    for raw in data.get("satellites") or []:
+        sat = _coerce_entity(raw, _SAT_FIELDS, {"columns": "payload"})
+        payload = sat.get("payload")
+        if isinstance(payload, str):
+            sat["payload"] = [payload]
+        _drop_invalid_enum(sat, "confidence", _CONFIDENCE_VALUES)
+        _drop_invalid_enum(sat, "subgroup", _SUBGROUP_VALUES)
+        _drop_invalid_enum(sat, "change_velocity", _VELOCITY_VALUES)
+        _apply_split_metadata(sat)
+        coerced_sats.append(sat)
+
+    sats: list[dict[str, Any]] = []
+    per_hub: dict[str, int] = {}
+    for sat in _merge_named(coerced_sats, union_key="payload"):
+        parent = sat.get("parent_hub")
+        table = sat.get("source_table")
+        # Excluded = this hub's own BK + FK columns established on this table +
+        # technical. ``parent`` / ``table`` may be malformed (non-string) on a
+        # bad entity; fall back to empty so cleaning never raises.
+        own_bk = bk_by_hub_name.get(parent, frozenset()) if isinstance(parent, str) else frozenset()
+        fk_cols = fk_columns_by_table.get(table, set()) if isinstance(table, str) else set()
+        excluded = frozenset(own_bk | fk_cols | technical_columns)
+        payload = _clean_payload(sat.get("payload"), excluded=excluded)
+        sat["payload"] = payload
+        if not payload:
+            continue  # only keys/technical columns — nothing descriptive to track
+        if not isinstance(parent, str) or parent not in hub_names:
+            continue
+        if sat["name"] in reserved_names:
+            continue  # name already claimed by a hub or link — would collide
+        seen = per_hub.get(parent, 0)
+        if seen >= _PLAN_SAT_CAP:
+            continue  # keep the first 3 satellites per hub; drop over-cap extras
+        per_hub[parent] = seen + 1
+        sats.append(sat)
+    out["satellites"] = sats
+    return out
+
+
 class ModellingAgentError(RuntimeError):
     """Raised when the agent cannot produce a single valid modelling plan."""
 
@@ -443,6 +763,7 @@ class ModellingAgent:
         large_catalog_threshold: int = 0,
         max_completion_tokens: int = 0,
         seed: int | None = None,
+        technical_payload_columns: frozenset[str] = frozenset(),
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
@@ -488,6 +809,10 @@ class ModellingAgent:
         # An integer is used as the base; each sample adds its index to
         # keep voting samples distinct yet individually reproducible.
         self._seed = seed
+        # Non-key technical columns stripped from every satellite payload during
+        # coercion (see :func:`_clean_payload`). Lower-cased for case-insensitive
+        # matching; keys/FKs are stripped automatically and need not be listed.
+        self._technical_payload_columns = frozenset(c.lower() for c in technical_payload_columns)
         _LOG.info(
             "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
             "max_tokens=%d max_completion_tokens=%d batch_size=%d batch_parallelism=%d "
@@ -669,11 +994,13 @@ class ModellingAgent:
         tables = tuple(payload.tables)
         try:
             return self._propose_voted(payload, samples=samples)
-        except ModellingAgentError:
-            if len(tables) <= 1:
-                # A single table whose output still overflows cannot be split
-                # further — surface the failure so the operator sees which
-                # table needs a wider deployment or column pruning.
+        except ModellingAgentError as exc:
+            # Splitting only helps OUTPUT TRUNCATION (the JSON came back
+            # unterminated because the plan exceeded the completion budget).
+            # A schema-invalid failure means the model returned a full but
+            # malformed plan — halving the tables won't fix that, it just
+            # wastes calls and time. Re-raise so the real cause surfaces fast.
+            if len(tables) <= 1 or "invalid JSON" not in str(exc):
                 raise
             mid = len(tables) // 2
             _LOG.warning(
@@ -834,13 +1161,30 @@ class ModellingAgent:
                 None,
                 f"sample {sample_idx}: top-level JSON is {type(data).__name__}, expected object",
             )
-        # Force the system_id on the way in so the model can't drift.
-        data["system_id"] = system_id
+        # Reshape verbose/variant model output to the strict contract, then
+        # force the system_id so the model can't drift it.
+        data = _coerce_plan_dict(data, technical_columns=self._technical_payload_columns)
+        if isinstance(data, dict):
+            data["system_id"] = system_id
         try:
             return ModelingPlan.model_validate(data), None
         except ValidationError as exc:
-            _LOG.debug("Modelling sample %d failed validation: %s", sample_idx, exc)
-            return None, f"sample {sample_idx}: schema invalid ({exc.error_count()} errors)"
+            errs = exc.errors()
+            first = errs[0] if errs else {}
+            loc = ".".join(str(p) for p in first.get("loc", ()))
+            msg = first.get("msg", "")
+            _LOG.warning(
+                "Modelling sample %d failed validation (%d errors); first: %s @ %s",
+                sample_idx,
+                exc.error_count(),
+                msg,
+                loc,
+            )
+            return (
+                None,
+                f"sample {sample_idx}: schema invalid ({exc.error_count()} errors; "
+                f"first: {msg} @ {loc})",
+            )
 
     def _one_completion(self, user_prompt: str, *, sample_idx: int = 0) -> str:
         """One chat call with model-specific kwargs and one empty-response retry."""
@@ -1302,4 +1646,5 @@ def get_modelling_agent(
         large_catalog_threshold=large_catalog_threshold,
         max_completion_tokens=max_completion_tokens,
         seed=None if cfg.llm_seed < 0 else cfg.llm_seed,
+        technical_payload_columns=cfg.technical_payload_column_set(),
     )
