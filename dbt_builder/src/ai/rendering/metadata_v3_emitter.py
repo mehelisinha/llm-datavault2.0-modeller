@@ -44,13 +44,13 @@ from dbt_builder.src.ai.rendering import databricks_defaults as db
 from dbt_builder.src.ai.rendering.yaml_emitter import (
     _DEFAULT_MACROS,
     _DEFAULT_PACKAGES,
-    _hashed_columns,
     _staging_model_name,
     _system_block,
 )
 
 # ── Naming helpers ────────────────────────────────────────────────────────────
 
+_HUB_PREFIX = "hub_"
 _LNK_PREFIX = "lnk_"
 _BRG_PREFIXES = ("brg_", "br_")
 _BV_SAT_PREFIX = "bv_sat_"
@@ -84,7 +84,13 @@ def _eff_sat_name(link_name: str) -> str:
 
 
 def _dim_name(hub: HubDecision) -> str:
-    return f"dim_{hub.source_table}"
+    # A dimension is the current-state view of exactly one hub, so it is named
+    # after the hub — whose name the ModelingPlan contract guarantees unique —
+    # rather than the source table, which several hubs may share (e.g. a table
+    # that yields two business-key hubs). Naming by source table would emit two
+    # dims with the same name; naming by hub is collision-free by construction.
+    suffix = hub.name[len(_HUB_PREFIX):] if hub.name.startswith(_HUB_PREFIX) else hub.name
+    return f"dim_{suffix}"
 
 
 def _fact_name(bridge_name: str) -> str:
@@ -123,6 +129,20 @@ def _sats_by_hub(plan: ModelingPlan) -> dict[str, list[SatelliteDecision]]:
 
 def _link_index(plan: ModelingPlan) -> dict[str, LinkDecision]:
     return {ln.name: ln for ln in plan.links}
+
+
+def _valid_links(plan: ModelingPlan) -> list[LinkDecision]:
+    """Links whose every ``fk_column`` resolves to a hub hash key in the plan.
+
+    A link referencing a hash key no hub owns is dangling: it cannot form a
+    valid composite hash key in staging, a bridge, or a fact dimension. Such a
+    link is excluded from emission entirely (links, eff_sats, staging) so the
+    document never contains a half-wired link — every emitted link has full
+    staging hashes and bridge coverage. Excluding the link, rather than
+    emitting it broken, is what keeps the YAML loadable.
+    """
+    hub_hash_keys = {hub.hash_key for hub in plan.hubs}
+    return [ln for ln in plan.links if all(fk in hub_hash_keys for fk in ln.fk_columns)]
 
 
 def _pit_index(bv: BvProposal | None) -> dict[str, PitTable]:
@@ -206,15 +226,44 @@ def _staging_block(
     hubs: list[HubDecision],
     sats: list[SatelliteDecision],
     links: list[LinkDecision],
+    *,
+    hub_by_name: dict[str, HubDecision],
+    hub_by_hash_key: dict[str, HubDecision],
 ) -> dict[str, Any]:
-    hashed = _hashed_columns(
-        hubs=sorted(hubs, key=lambda h: h.name),
-        sats=sorted(sats, key=lambda s: s.name),
-    )
-    # Add link hash keys (composite) to hashed_columns for tables that host links.
+    # A staging model must compute EVERY hash its downstream raw-vault models
+    # select, in dependency order (component hub hash keys before the composite
+    # link hash keys that reference them). Three sources contribute hub hash
+    # keys to this table:
+    #   * hubs loaded from this table,
+    #   * the parent hub of each satellite on this table (the sat's hash key),
+    #   * every hub a link on this table references via its fk_columns (the
+    #     foreign keys) — resolved hash-key → hub so we know the BK columns.
+    # Each hub hash key hashes that hub's business-key columns (present here).
+    hub_hash_keys: dict[str, list[str]] = {}
+
+    def _need_hub(hub: HubDecision | None) -> None:
+        if hub is not None and hub.hash_key not in hub_hash_keys:
+            hub_hash_keys[hub.hash_key] = list(hub.business_keys)
+
+    for hub in sorted(hubs, key=lambda h: h.name):
+        _need_hub(hub)
+    for sat in sorted(sats, key=lambda s: s.name):
+        _need_hub(hub_by_name.get(sat.parent_hub))
+    for link in sorted(links, key=lambda ln: ln.name):
+        for fk in link.fk_columns:
+            _need_hub(hub_by_hash_key.get(fk))
+
+    hashed: dict[str, Any] = dict(hub_hash_keys)  # hub hash keys first (dependencies)
+
+    # Composite link hash keys reference the hub hash keys declared above.
     for link in sorted(links, key=lambda ln: ln.name):
         if link.hash_key not in hashed:
             hashed[link.hash_key] = list(link.fk_columns)
+
+    # Satellite hashdiffs last (they depend only on payload columns).
+    for sat in sorted(sats, key=lambda s: s.name):
+        if sat.hashdiff not in hashed:
+            hashed[sat.hashdiff] = {"is_hashdiff": True, "columns": list(sat.payload)}
 
     block: dict[str, Any] = {
         "name": _staging_model_name(table),
@@ -268,9 +317,14 @@ def _staging_blocks(plan: ModelingPlan) -> list[dict[str, Any]]:
     for sat in plan.satellites:
         tables.add(sat.source_table)
         sats_by_table.setdefault(sat.source_table, []).append(sat)
-    for link in plan.links:
+    for link in _valid_links(plan):  # skip dangling links (no resolvable FK hub)
         tables.add(link.source_table)
         links_by_table.setdefault(link.source_table, []).append(link)
+
+    # Indexes so each staging model can resolve the hub behind a satellite's
+    # parent or a link's foreign key (its hash key) and emit the matching hash.
+    hub_by_name = _hub_index(plan)
+    hub_by_hash_key = {h.hash_key: h for h in plan.hubs}
 
     return [
         _staging_block(
@@ -278,6 +332,8 @@ def _staging_blocks(plan: ModelingPlan) -> list[dict[str, Any]]:
             hubs_by_table.get(table, []),
             sats_by_table.get(table, []),
             links_by_table.get(table, []),
+            hub_by_name=hub_by_name,
+            hub_by_hash_key=hub_by_hash_key,
         )
         for table in sorted(tables, key=str.lower)
     ]
@@ -396,11 +452,16 @@ def _fact_block(
 ) -> dict[str, Any]:
     link = link_idx.get(bridge.parent_link)
     grain = link.hash_key if link else "HK_UNKNOWN"
-    dimensions = [
-        _dim_name(hub_idx[hub_name])
-        for hub_name in bridge.hub_keys
-        if hub_name in hub_idx
-    ]
+    # Deduplicate while preserving order: a self-referencing link resolves the
+    # same hub for both FK roles, which would otherwise list the dimension twice.
+    dimensions: list[str] = []
+    for hub_name in bridge.hub_keys:
+        hub = hub_idx.get(hub_name)
+        if hub is None:
+            continue
+        dim = _dim_name(hub)
+        if dim not in dimensions:
+            dimensions.append(dim)
     return {
         "name": _fact_name(bridge.name),
         "description": f"Fact view over {bridge.name}.",
@@ -480,7 +541,9 @@ def _build_document(
 
     sorted_hubs = sorted(plan.hubs, key=_by_name)
     sorted_sats = sorted(plan.satellites, key=_by_name)
-    sorted_links = sorted(plan.links, key=_by_name)
+    # Only links whose FKs resolve to real hubs are emitted — dangling links
+    # can't be staged/bridged, so emitting them would produce broken models.
+    sorted_links = sorted(_valid_links(plan), key=_by_name)
 
     doc: dict[str, Any] = {
         "system": _system_block(system, load_frequency=load_frequency),
@@ -509,11 +572,18 @@ def _build_document(
                 for b in sorted(bv.bridge_tables, key=_by_name)
             ]
 
-    # dim_tables: one per hub (requires at least one satellite for usefulness).
+    # dim_tables: one per hub that either carries descriptive satellites OR is
+    # referenced by a bridge (so every fact's `dimensions` resolves to a real
+    # dim — a bridge-referenced hub with no satellites still gets a key-only
+    # dimension rather than leaving the fact pointing at a missing model).
+    bridge_hub_names: set[str] = set()
+    if bv is not None:
+        for bridge in bv.bridge_tables:
+            bridge_hub_names.update(bridge.hub_keys)
     dim_blocks = [
         _dim_block(hub, sats_by_hub_map.get(hub.name, []), pit_idx)
         for hub in sorted_hubs
-        if sats_by_hub_map.get(hub.name)
+        if sats_by_hub_map.get(hub.name) or hub.name in bridge_hub_names
     ]
     if dim_blocks:
         doc["dim_tables"] = dim_blocks
