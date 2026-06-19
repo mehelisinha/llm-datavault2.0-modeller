@@ -66,6 +66,31 @@ class PipelineRunRequest(BaseModel):
 # ── Catalog adapter ─────────────────────────────────────────────────────────
 
 
+def _source_system_for(req: PipelineRunRequest) -> SourceSystem:
+    """Build a :class:`SourceSystem` with sane metadata from the request.
+
+    The UI sometimes echoes the catalog name into ``source_type`` (and leaves
+    ``record_source`` unset), which stamps a meaningless value onto every
+    downstream record and the generated YAML's ``system`` block. Normalise an
+    obvious non-type to the default Delta source type, and derive a real
+    record source as ``catalog.schema`` (the same convention the Spark
+    discovery adapter uses) when the caller doesn't supply one.
+    """
+    # Single source of truth for the fallback source type is the contract's own
+    # default, not a literal repeated here.
+    default_source_type = SourceSystem.model_fields["source_type"].default
+    source_type = (req.source_type or "").strip()
+    if source_type.lower() in {"", req.catalog.lower(), req.system_id.lower()}:
+        source_type = default_source_type
+    record_source = req.record_source or f"{req.catalog}.{req.bronze_schema}"
+    return SourceSystem(
+        system_id=req.system_id,
+        system_name=req.system_name,
+        source_type=source_type,
+        record_source=record_source,
+    )
+
+
 def _build_pipeline_input(req: PipelineRunRequest, settings: ApiSettings) -> PipelineInput:
     """Translate the request into a :class:`PipelineInput`.
 
@@ -85,12 +110,7 @@ def _build_pipeline_input(req: PipelineRunRequest, settings: ApiSettings) -> Pip
         vault_schema=req.vault_schema,
     )
 
-    system = SourceSystem(
-        system_id=req.system_id,
-        system_name=req.system_name,
-        source_type=req.source_type,
-        record_source=req.record_source or req.system_id,
-    )
+    system = _source_system_for(req)
     return PipelineInput(
         catalog=req.catalog,
         bronze_schema=req.bronze_schema,
