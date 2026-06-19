@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from dbt_builder.src.ai.agents import BvArchitect, BvArchitectError
+from dbt_builder.src.ai.agents import BvArchitect
 from dbt_builder.src.ai.contracts.bv import (
     BridgeTable,
     BvProposal,
@@ -12,56 +12,19 @@ from dbt_builder.src.ai.contracts.bv import (
     PitTable,
 )
 from dbt_builder.src.ai.contracts.decisions import (
-    DecisionConfidence,
     HubDecision,
-    LinkDecision,
     ModelingPlan,
-    SatelliteDecision,
 )
 
-
-def _hub(name: str) -> HubDecision:
-    return HubDecision(
-        name=name,
-        business_keys=("mrid",),
-        source_table=name.removeprefix("hub_"),
-        hash_key=f"HK_{name.removeprefix('hub_').upper()}",
-        confidence=DecisionConfidence.HIGH,
-        rationale="t",
-    )
-
-
-def _sat(name: str, parent_hub: str) -> SatelliteDecision:
-    return SatelliteDecision(
-        name=name,
-        source_table=parent_hub.removeprefix("hub_"),
-        parent_hub=parent_hub,
-        hash_key=f"HK_{parent_hub.removeprefix('hub_').upper()}",
-        hashdiff=f"HASHDIFF_{name.upper()}",
-        payload=("col_a",),
-        confidence=DecisionConfidence.MEDIUM,
-        rationale="t",
-    )
-
-
-def _link(name: str, *, fks: tuple[str, ...]) -> LinkDecision:
-    return LinkDecision(
-        name=name,
-        source_table=name.removeprefix("link_"),
-        hash_key=f"HK_{name.removeprefix('link_').upper()}",
-        fk_columns=fks,
-        confidence=DecisionConfidence.MEDIUM,
-        rationale="t",
-    )
+from ._factories import hub as _hub
+from ._factories import link as _link
+from ._factories import plan as _plan_factory
+from ._factories import sat as _sat
 
 
 def _plan(*, hubs=(), sats=(), links=()) -> ModelingPlan:
-    return ModelingPlan(
-        system_id="iec_cim",
-        hubs=hubs,
-        satellites=sats,
-        links=links,
-    )
+    """Thin adapter to the shared factory (keeps the ``sats=`` call style)."""
+    return _plan_factory(hubs=hubs, satellites=sats, links=links)
 
 
 # ── deterministic PIT ───────────────────────────────────────────────────────
@@ -117,13 +80,25 @@ def test_pit_threshold_must_be_at_least_two() -> None:
 def test_bridge_emitted_for_two_hub_link() -> None:
     plan = _plan(
         hubs=(_hub("hub_terminal"), _hub("hub_node")),
-        links=(_link("link_terminal_node", fks=("HK_TERMINAL", "HK_NODE")),),
+        links=(_link("link_terminal_node", "HK_TERMINAL", "HK_NODE"),),
     )
     proposal = BvArchitect().propose(plan)
     assert len(proposal.bridge_tables) == 1
     br = proposal.bridge_tables[0]
     assert br.name == "br_terminal_node"
-    assert br.hub_keys == ("HK_TERMINAL", "HK_NODE")
+    # hub_keys are resolved from the link's fk hash keys to hub NAMES so the
+    # emitter can look them up (otherwise it falls back to HK_UNKNOWN).
+    assert br.hub_keys == ("hub_terminal", "hub_node")
+
+
+def test_bridge_skipped_when_fks_resolve_to_too_few_hubs() -> None:
+    # A link whose fk hash keys don't match any hub in the plan is a dangling
+    # reference: the bridge would only emit HK_UNKNOWN, so it must be skipped.
+    plan = _plan(
+        hubs=(_hub("hub_terminal"),),
+        links=(_link("link_terminal_ghost", "HK_TERMINAL", "HK_GHOST"),),
+    )
+    assert BvArchitect().propose(plan).bridge_tables == ()
 
 
 def test_bridge_threshold_must_be_at_least_two() -> None:
@@ -161,7 +136,9 @@ def test_bv_sat_propose_fn_is_called_with_plan_and_hubs() -> None:
     assert proposal.bv_satellites[0].name == "bv_sat_terminal_score"
 
 
-def test_bv_sat_with_unknown_parent_hub_is_rejected() -> None:
+def test_bv_sat_with_unknown_parent_hub_is_dropped_not_fatal() -> None:
+    # A BV satellite naming a non-existent parent hub is dropped (logged), not
+    # raised — the optional BV layer must never fail the pipeline.
     plan = _plan(hubs=(_hub("hub_terminal"),))
 
     def fake(p: ModelingPlan, hubs):
@@ -174,9 +151,20 @@ def test_bv_sat_with_unknown_parent_hub_is_rejected() -> None:
             ),
         )
 
-    arch = BvArchitect(propose_bv_sats_fn=fake)
-    with pytest.raises(BvArchitectError):
-        arch.propose(plan)
+    proposal = BvArchitect(propose_bv_sats_fn=fake).propose(plan)
+    assert proposal.bv_satellites == ()
+
+
+def test_bv_sat_proposer_exception_does_not_break_proposal() -> None:
+    # If the proposer itself raises (e.g. an LLM/parse failure), the BV
+    # Architect still returns a valid proposal with no BV satellites.
+    plan = _plan(hubs=(_hub("hub_terminal"),))
+
+    def boom(p: ModelingPlan, hubs):
+        raise RuntimeError("proposer exploded")
+
+    proposal = BvArchitect(propose_bv_sats_fn=boom).propose(plan)
+    assert proposal.bv_satellites == ()
 
 
 # ── proposal invariants ────────────────────────────────────────────────────

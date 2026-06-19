@@ -19,6 +19,7 @@ without an LLM bound) which is what downstream steps need.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 
 from dbt_builder.src.ai.contracts.bv import (
@@ -33,6 +34,8 @@ from dbt_builder.src.ai.contracts.decisions import (
     ModelingPlan,
     SatelliteDecision,
 )
+
+_LOG = logging.getLogger(__name__)
 
 # Default naming conventions. Centralised so the renaming policy is one
 # obvious place rather than scattered across the agent's body.
@@ -129,18 +132,31 @@ class BvArchitect:
         return tuple(out)
 
     def derive_bridge_tables(self, plan: ModelingPlan) -> tuple[BridgeTable, ...]:
-        """One bridge per link with ≥ ``bridge_min_hubs`` hub references."""
+        """One bridge per link with ≥ ``bridge_min_hubs`` resolvable hub references.
+
+        A link carries hub *hash keys* in ``fk_columns`` (e.g. ``HK_DEPARTMENT``),
+        but a bridge — and the YAML emitter — reference hubs by *name*
+        (``hub_department``). Translate via the plan's hubs so ``hub_keys`` holds
+        real hub names; otherwise the emitter cannot resolve them and falls back
+        to ``HK_UNKNOWN`` (and the derived fact's ``dimensions`` come out empty).
+        FK columns that match no hub in the plan are dangling references and are
+        dropped; if too few resolvable hubs remain, the bridge is skipped.
+        """
+        name_by_hash_key = {hub.hash_key: hub.name for hub in plan.hubs}
         out: list[BridgeTable] = []
         for link in plan.links:
-            if len(link.fk_columns) < self._bridge_min:
-                continue
+            hub_names = tuple(
+                name_by_hash_key[fk] for fk in link.fk_columns if fk in name_by_hash_key
+            )
+            if len(hub_names) < self._bridge_min:
+                continue  # too few resolvable hubs (dangling FK) — skip the bridge
             out.append(
                 BridgeTable(
                     name=_bridge_name_for(link),
                     parent_link=link.name,
-                    hub_keys=link.fk_columns,
+                    hub_keys=hub_names,
                     rationale=(
-                        f"Link '{link.name}' joins {len(link.fk_columns)} hubs; "
+                        f"Link '{link.name}' joins {len(hub_names)} hubs; "
                         "bridge pre-resolves the many-to-many."
                     ),
                 )
@@ -149,28 +165,54 @@ class BvArchitect:
 
     # ── LLM-backed ──────────────────────────────────────────────────────────
     def derive_bv_satellites(self, plan: ModelingPlan) -> tuple[BvSatellite, ...]:
-        """Delegate to the injected propose-fn; return ``()`` when none bound."""
+        """Delegate to the injected propose-fn; ``()`` when none bound or on error.
+
+        Business-vault satellites are an OPTIONAL enhancement layered on top of
+        a complete raw vault, so their generation must never break the pipeline.
+        Any proposer failure, a satellite naming a non-existent parent hub, or a
+        duplicate satellite name is logged and dropped — the run continues with
+        the satellites that are sound (or none) rather than failing outright.
+        """
         if self._propose_bv_sats_fn is None:
             return ()
-        proposals = self._propose_bv_sats_fn(plan, plan.hubs)
-        # Belt-and-braces: refuse a proposal that names a non-existent parent hub
-        # — the LLM occasionally hallucinates a hub the rest of the plan never
-        # introduces, and that would crash the YAML generator with an opaque
-        # error far downstream.
+        try:
+            proposals = self._propose_bv_sats_fn(plan, plan.hubs)
+        except Exception as exc:  # noqa: BLE001 — optional layer must not break the run
+            _LOG.warning("BV-sat proposer failed (%s); continuing without BV satellites.", exc)
+            return ()
+
         hub_names = {h.name for h in plan.hubs}
+        kept: list[BvSatellite] = []
+        seen_names: set[str] = set()
         for sat in proposals:
             if sat.parent_hub not in hub_names:
-                raise BvArchitectError(
-                    f"BV satellite '{sat.name}' references unknown parent hub '{sat.parent_hub}'."
+                _LOG.warning(
+                    "Dropping BV satellite '%s': references unknown parent hub '%s'.",
+                    sat.name,
+                    sat.parent_hub,
                 )
-        return tuple(proposals)
+                continue
+            if sat.name in seen_names:
+                _LOG.warning("Dropping duplicate BV satellite name '%s'.", sat.name)
+                continue
+            seen_names.add(sat.name)
+            kept.append(sat)
+        return tuple(kept)
 
     # ── top level ───────────────────────────────────────────────────────────
     def propose(self, plan: ModelingPlan) -> BvProposal:
         """Run the full BV Architect on ``plan`` and return a typed proposal."""
+        pit_tables = self.derive_pit_tables(plan)
+        bridge_tables = self.derive_bridge_tables(plan)
+        bv_satellites = self.derive_bv_satellites(plan)
+        # A BV satellite name must not collide with a PIT / bridge name (the
+        # BvProposal contract forbids it). Drop colliding BV sats rather than
+        # let an optional-layer name clash fail the whole proposal.
+        reserved = {p.name for p in pit_tables} | {b.name for b in bridge_tables}
+        bv_satellites = tuple(s for s in bv_satellites if s.name not in reserved)
         return BvProposal(
             system_id=plan.system_id,
-            pit_tables=self.derive_pit_tables(plan),
-            bridge_tables=self.derive_bridge_tables(plan),
-            bv_satellites=self.derive_bv_satellites(plan),
+            pit_tables=pit_tables,
+            bridge_tables=bridge_tables,
+            bv_satellites=bv_satellites,
         )
