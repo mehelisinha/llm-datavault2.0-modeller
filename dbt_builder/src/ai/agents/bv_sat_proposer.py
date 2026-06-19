@@ -414,3 +414,42 @@ class LlmBvSatProposer:
             **self._build_kwargs(),
         )
         return (response.choices[0].message.content or "").strip()
+
+
+# ── factory ──────────────────────────────────────────────────────────────────
+
+
+def get_bv_sat_proposer(*, settings: AISettings | None = None) -> LlmBvSatProposer | None:
+    """Build an :class:`LlmBvSatProposer` from settings, or ``None`` when disabled.
+
+    Returns ``None`` (so the BV Architect runs deterministically, with no BV
+    satellites) whenever ``bv_sats_enabled`` is false — keeping the default
+    pipeline's LLM usage unchanged. The deployment defaults to the modeller's
+    (per user decision) so no extra configuration is required to switch it on.
+    """
+    from openai import AzureOpenAI
+
+    from dbt_builder.src.ai.settings import get_settings
+
+    cfg = settings or get_settings()
+    if not cfg.bv_sats_enabled:
+        return None
+    deployment = (cfg.bv_sat_chat_deployment or cfg.modeller_chat_deployment or "").strip()
+    if not deployment:
+        _LOG.warning(
+            "bv_sats_enabled is set but no deployment is configured "
+            "(bv_sat_chat_deployment / modeller_chat_deployment empty); skipping BV sats."
+        )
+        return None
+    client = AzureOpenAI(
+        azure_endpoint=cfg.azure_openai_endpoint,
+        api_key=cfg.azure_openai_api_key.get_secret_value(),
+        api_version=cfg.azure_openai_api_version,
+        max_retries=cfg.llm_max_retries,
+    )
+    return LlmBvSatProposer(
+        client=client,
+        deployment=deployment,
+        settings=cfg,
+        max_tokens=cfg.bv_sat_max_tokens,
+    )
