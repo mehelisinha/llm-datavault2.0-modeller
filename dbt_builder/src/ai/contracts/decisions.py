@@ -17,6 +17,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+# Per-hub satellite cap (rate-of-change split: details / operational /
+# measurements). Module-level so other modules — e.g. the modeller's tolerant
+# plan-dict coercion — share this single source of truth instead of repeating 3.
+SAT_CAP_PER_HUB = 3
+
 
 class EntityKind(str, Enum):
     """Closed taxonomy of Data Vault 2 raw-vault entity kinds."""
@@ -221,7 +226,6 @@ class ModelingPlan(BaseModel):
         # that is almost always an over-fragmentation regression where the LLM
         # split on noise. Caught here at the contract boundary so no downstream
         # consumer has to defend against it.
-        _SAT_CAP_PER_HUB = 3
         sat_count_per_hub: dict[str, int] = {}
         for sat in self.satellites:
             if sat.parent_hub not in hub_names:
@@ -230,10 +234,10 @@ class ModelingPlan(BaseModel):
                 )
             sat_count_per_hub[sat.parent_hub] = sat_count_per_hub.get(sat.parent_hub, 0) + 1
         for hub_name, count in sat_count_per_hub.items():
-            if count > _SAT_CAP_PER_HUB:
+            if count > SAT_CAP_PER_HUB:
                 raise ValueError(
                     f"Hub '{hub_name}' has {count} satellites; cap is "
-                    f"{_SAT_CAP_PER_HUB} (details / operational / measurements)"
+                    f"{SAT_CAP_PER_HUB} (details / operational / measurements)"
                 )
         return self
 
