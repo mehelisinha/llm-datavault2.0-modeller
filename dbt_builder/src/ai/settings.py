@@ -198,6 +198,55 @@ class AISettings(BaseSettings):
     # defaults so a bad path can never crash a run.
     ai_prompts_dir: str = Field(default="")
 
+    # Non-key technical / system columns that must never land in a satellite's
+    # descriptive payload (and therefore its hashdiff): source CDC-control and
+    # audit columns. Comma-separated, case-insensitive. Business keys and
+    # foreign keys are stripped automatically (they belong in hubs / links), so
+    # this list is only for NON-key technical columns. Empty by default and
+    # fully source-agnostic; populate it with whatever control/audit column
+    # names a given source carries, e.g.
+    # ``DWA_AI_TECHNICAL_PAYLOAD_COLUMNS=ctl_load_flag,audit_user,audit_ts``.
+    technical_payload_columns: str = Field(default="")
+
+    def technical_payload_column_set(self) -> frozenset[str]:
+        """Parsed, lower-cased set of technical payload columns to exclude."""
+        return frozenset(
+            token.strip().lower()
+            for token in self.technical_payload_columns.split(",")
+            if token.strip()
+        )
+
+    # ── Plan reviewer (two-model generate → review) ───────────────────────────
+    # A second, stronger model critiques and patches the modelling plan AFTER
+    # the (fast) generator produces it and BEFORE the deterministic emitter
+    # renders it. The generator runs many batched calls so it must be fast and
+    # cheap (default gpt-4.1); the reviewer runs ONE call per run, so it can be
+    # the strongest available model with negligible cost/latency impact
+    # (e.g. gpt-5.2). Review happens at the plan (JSON) level, so the emitter
+    # stays deterministic and the output byte-stable. Default OFF so the
+    # existing single-model flow is unchanged until explicitly enabled.
+    plan_review_enabled: bool = Field(default=False)
+    # Deployment used by the reviewer. Empty + enabled is a misconfiguration
+    # (the reviewer is skipped with a warning rather than crashing the run).
+    plan_reviewer_chat_deployment: str = Field(default="")
+    # Output budget for the reviewer's corrected-plan reply. The reviewer emits
+    # the full plan, so this must fit the plan JSON; for very large catalogues
+    # raise it (gpt-5-family deployments allow large completions) or the review
+    # truncates and the run safely falls back to the un-reviewed plan.
+    plan_reviewer_max_tokens: int = Field(default=32768, ge=1)
+    # Above this many hubs, the reviewer reviews the plan in per-hub-group
+    # chunks instead of one whole-plan call. A single call over a large plan
+    # tempts the model to "tidy up" by merging entities away (a collapse the
+    # guard then rejects, wasting the call); chunked review keeps each slice
+    # small enough to refine rather than collapse. ``0`` disables chunking.
+    plan_review_chunk_size: int = Field(default=12, ge=0)
+    # Max concurrent chunk reviews when a large plan is reviewed in chunks. The
+    # chunk reviews are independent LLM calls, so running them concurrently keeps
+    # the wall-clock close to a single call instead of summing them. ``0`` means
+    # "one worker per chunk" (fully concurrent); set a positive value to cap
+    # fan-out if the reviewer deployment rate-limits (429s). ``1`` = sequential.
+    plan_review_parallelism: int = Field(default=0, ge=0)
+
     # Opt-in flag for the DV2 Planning Agent (a richer pre-step that emits
     # hub/link/satellite-split decisions, BV proposals, PIT volume
     # estimates, and human-review flags as one structured JSON document).
@@ -205,6 +254,29 @@ class AISettings(BaseSettings):
     # the orchestrator wiring lands in a follow-up. When enabled, the
     # agent is invoked at the start of ANALYZE.
     planning_agent_enabled: bool = Field(default=False)
+
+    # ── dbt compile gate (Step 6 hard validation) ────────────────────────────
+    # When enabled, the validator materialises the generated plan into the
+    # configured dbt project and runs ``dbt parse`` → ``dbt compile`` (and
+    # ``dbt build`` when ``dbt_build_enabled``). Any dbt failure becomes an
+    # ERROR issue, which the approval gate treats as blocking — so nothing is
+    # approvable/exportable unless it actually compiles. Default OFF so offline
+    # runs/tests are unchanged; the project must have AutomateDV installed
+    # (``dbt deps``) and a usable profile. ``dbt_project_dir`` is the dbt
+    # project root the generated models are written into and built from.
+    dbt_validation_enabled: bool = Field(default=False)
+    dbt_project_dir: str = Field(default="")
+    dbt_build_enabled: bool = Field(default=False)
+
+    # ── Business-vault satellite proposer (LlmBvSatProposer) ──────────────────
+    # Opt-in third LLM touchpoint: after the raw-vault plan is built, propose
+    # derived / business-rule satellites (classification, normalisation,
+    # enrichment) gated by deterministic pattern detection. Default OFF so the
+    # pipeline's LLM usage is unchanged until explicitly enabled. One extra call
+    # per run. Deployment defaults to the modeller's (per user decision).
+    bv_sats_enabled: bool = Field(default=False)
+    bv_sat_chat_deployment: str = Field(default="")
+    bv_sat_max_tokens: int = Field(default=2000, ge=1)
 
     # Concurrency for per-table ``DESCRIBE TABLE`` calls during bronze /
     # vault snapshotting. Each call is an independent Databricks REST or
