@@ -28,3 +28,6 @@ PRIVAT/
 
 # Local-only scratch docs (not committed)
 .local-docs/
+
+# Thesis / concept write-up (local only, not committed or pushed)
+documentation/thesis/
