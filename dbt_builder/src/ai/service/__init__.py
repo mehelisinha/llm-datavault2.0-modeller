@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from dbt_builder.src.ai.agents import (
     BvArchitect,
@@ -61,6 +61,7 @@ from dbt_builder.src.ai.store import (
     SqliteApprovalStore,
     make_record,
 )
+from dbt_builder.src.ai.store.corpus import make_example_store, plan_to_example_rows
 from dbt_builder.src.ai.store.pipeline_run_store import (
     InMemoryPipelineRunStore,
     PipelineRunStore,
@@ -75,6 +76,9 @@ from dbt_builder.src.ai.store.yaml_store import (
 )
 from dbt_builder.src.ai.supervision import PipelineSupervisor, SupervisorConfig
 from dbt_builder.src.ai.validation import validate as run_validation
+
+if TYPE_CHECKING:
+    from dbt_builder.src.utils.yaml_store import DeltaExampleStore
 
 
 class ApprovalGateError(RuntimeError):
@@ -104,6 +108,7 @@ class DwaService:
         pipeline_run_store: PipelineRunStore | None = None,
         supervisor: PipelineSupervisor | None = None,
         yaml_store: YamlStore | None = None,
+        example_store: DeltaExampleStore | None = None,
     ) -> None:
         self._store: ApprovalStore = approval_store or SqliteApprovalStore(
             Path(".cache") / "approvals.sqlite"
@@ -127,6 +132,18 @@ class DwaService:
                 self._yaml_store = make_yaml_store(get_settings())
             except Exception:
                 self._yaml_store = LocalYamlStore()
+        # Learning corpus (feedback loop) — Delta-only; stays None on local / CI
+        # (or any construction failure) so approval NEVER depends on a warehouse
+        # being reachable. Populated on approve() alongside the YAML store.
+        if example_store is not None:
+            self._example_store: DeltaExampleStore | None = example_store
+        else:
+            try:
+                from dbt_builder.src.ai.settings import get_settings
+
+                self._example_store = make_example_store(get_settings())
+            except Exception:
+                self._example_store = None
 
     # ── Step 1 ──────────────────────────────────────────────────────────────
     def inspect_catalog(
@@ -311,6 +328,37 @@ class DwaService:
                 logging.getLogger(__name__).error(
                     "Failed to persist YAML for plan_id=%s: %s", plan_id, exc
                 )
+
+            # Feedback loop: explode the approved plan into per-object rows and
+            # append them to the learning corpus. Wrapped independently so a
+            # corpus failure never blocks approval or the YAML store write.
+            if self._example_store is not None and latest.plan_json:
+                try:
+                    plan = ModelingPlan.model_validate_json(latest.plan_json)
+                    rows = plan_to_example_rows(
+                        plan,
+                        catalog_id=catalog_id,
+                        plan_id=plan_id,
+                        version=next_version,
+                        approved_by=actor,
+                    )
+                    written = self._example_store.save_rows(rows)
+                    import logging
+
+                    logging.getLogger(__name__).info(
+                        "Learning corpus: appended %d example(s) for plan_id=%s (v%d)",
+                        written,
+                        plan_id,
+                        next_version,
+                    )
+                except Exception as exc:  # pragma: no cover
+                    import logging
+
+                    logging.getLogger(__name__).error(
+                        "Failed to append learning examples for plan_id=%s: %s",
+                        plan_id,
+                        exc,
+                    )
 
         record = make_record(
             plan_id=plan_id,
