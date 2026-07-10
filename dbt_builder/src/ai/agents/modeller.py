@@ -67,6 +67,7 @@ from dbt_builder.src.ai.contracts.payloads import (
 if TYPE_CHECKING:
     from openai import AzureOpenAI
 
+    from dbt_builder.src.ai.reference import ReferenceLoader
     from dbt_builder.src.ai.settings import AISettings
 
 _LOG = logging.getLogger(__name__)
@@ -202,6 +203,7 @@ def _system_prompt() -> str:
 
     rules = load_rules(_RV_RULES_NAME) or _BUILTIN_RV_RULES
     return f"{rules}\n\n{_OUTPUT_CONTRACT}"
+
 
 # Confidence string -> ordinal weight for tie-breaking.
 _CONFIDENCE_WEIGHT = {
@@ -359,9 +361,7 @@ def _get_llm_token_bucket() -> _TokenBucket:
                 tpm = get_settings().llm_tokens_per_minute
             except Exception:
                 tpm = 10_000_000  # effectively unbounded for tests
-            _LLM_TOKEN_BUCKET = _TokenBucket(
-                capacity=float(tpm), refill_per_sec=float(tpm) / 60.0
-            )
+            _LLM_TOKEN_BUCKET = _TokenBucket(capacity=float(tpm), refill_per_sec=float(tpm) / 60.0)
             _LOG.info(
                 "ModellingAgent LLM token bucket initialised: %d tokens/min (~%.0f tokens/sec)",
                 tpm,
@@ -383,9 +383,7 @@ def _estimate_call_tokens(messages: Sequence[dict[str, Any]], kwargs: dict[str, 
     except Exception:
         prompt_chars = 0
     prompt_tokens = math.ceil(prompt_chars / _CHARS_PER_TOKEN)
-    completion_budget = int(
-        kwargs.get("max_completion_tokens") or kwargs.get("max_tokens") or 0
-    )
+    completion_budget = int(kwargs.get("max_completion_tokens") or kwargs.get("max_tokens") or 0)
     return prompt_tokens + completion_budget
 
 
@@ -505,9 +503,7 @@ def _clean_payload(payload: Any, *, excluded: frozenset[str] | set[str]) -> list
     """
     if not isinstance(payload, (list, tuple)):
         return []
-    return [
-        col for col in payload if not (isinstance(col, str) and col.lower() in excluded)
-    ]
+    return [col for col in payload if not (isinstance(col, str) and col.lower() in excluded)]
 
 
 def _subgroup_from_name(name: Any) -> str | None:
@@ -561,9 +557,7 @@ def _merge_named(items: list[dict[str, Any]], *, union_key: str) -> list[dict[st
     return list(by_name.values())
 
 
-def _coerce_plan_dict(
-    data: Any, *, technical_columns: frozenset[str] = frozenset()
-) -> Any:
+def _coerce_plan_dict(data: Any, *, technical_columns: frozenset[str] = frozenset()) -> Any:
     """Best-effort reshape of LLM plan JSON to fit the strict ModelingPlan schema.
 
     Enforces every cross-entity invariant the ModelingPlan contract checks, so a
@@ -610,9 +604,7 @@ def _coerce_plan_dict(
         )
 
     bk_by_hub_name = {h["name"]: _bks(h) for h in hubs}
-    bk_by_hash_key = {
-        h["hash_key"]: _bks(h) for h in hubs if isinstance(h.get("hash_key"), str)
-    }
+    bk_by_hash_key = {h["hash_key"]: _bks(h) for h in hubs if isinstance(h.get("hash_key"), str)}
 
     # Links — merge same-named (union fk columns), then drop those the contract
     # would reject: a name colliding with a hub (names must be unique across
@@ -764,6 +756,8 @@ class ModellingAgent:
         max_completion_tokens: int = 0,
         seed: int | None = None,
         technical_payload_columns: frozenset[str] = frozenset(),
+        reference_loader: ReferenceLoader | None = None,
+        reference_limit: int = 0,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
@@ -813,6 +807,11 @@ class ModellingAgent:
         # coercion (see :func:`_clean_payload`). Lower-cased for case-insensitive
         # matching; keys/FKs are stripped automatically and need not be listed.
         self._technical_payload_columns = frozenset(c.lower() for c in technical_payload_columns)
+        # Feedback learning: an optional corpus of previously-approved DV objects
+        # and how many to inject as few-shot examples. ``None`` / ``0`` disables
+        # retrieval so the prompt is byte-identical to the pre-learning agent.
+        self._reference_loader = reference_loader
+        self._reference_limit = max(0, reference_limit)
         _LOG.info(
             "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
             "max_tokens=%d max_completion_tokens=%d batch_size=%d batch_parallelism=%d "
@@ -888,9 +887,7 @@ class ModellingAgent:
         batches: list[tuple[SourceTable, ...]] = _chunk_tables(
             tables, max_tables=size, max_prompt_tokens=self._max_prompt_tokens
         )
-        batch_payloads = [
-            payload.model_copy(update={"tables": b}) for b in batches
-        ]
+        batch_payloads = [payload.model_copy(update={"tables": b}) for b in batches]
         max_workers = self._batch_parallelism or len(batch_payloads)
         per_batch_samples = self._batch_samples
         batch_sizes = [len(b.tables) for b in batch_payloads]
@@ -1014,15 +1011,9 @@ class ModellingAgent:
             )
             left = payload.model_copy(update={"tables": tables[:mid]})
             right = payload.model_copy(update={"tables": tables[mid:]})
-            left_plan = self._propose_voted_adaptive(
-                left, samples=samples, _depth=_depth + 1
-            )
-            right_plan = self._propose_voted_adaptive(
-                right, samples=samples, _depth=_depth + 1
-            )
-            return _merge_plans(
-                [left_plan, right_plan], system_id=payload.system.system_id
-            )
+            left_plan = self._propose_voted_adaptive(left, samples=samples, _depth=_depth + 1)
+            right_plan = self._propose_voted_adaptive(right, samples=samples, _depth=_depth + 1)
+            return _merge_plans([left_plan, right_plan], system_id=payload.system.system_id)
 
     def _propose_voted(self, payload: DiscoveryPayload, *, samples: int) -> ModelingPlan:
         """Draw ``samples`` completions for ``payload``, vote, return winner.
@@ -1033,7 +1024,7 @@ class ModellingAgent:
         import time as _time
 
         _t0 = _time.perf_counter()
-        user_prompt = _build_user_prompt(payload)
+        user_prompt = _build_user_prompt(payload, reference_block=self._reference_block(payload))
         parallelism = min(self._sample_parallelism, samples)
         _LOG.info(
             "ModellingAgent.propose: drawing %d sample(s) with parallelism=%d "
@@ -1074,6 +1065,35 @@ class ModellingAgent:
         return _vote(candidates)
 
     # ---------------------------------------------------------------- internals
+
+    def _reference_block(self, payload: DiscoveryPayload) -> str:
+        """Select the most relevant approved examples for ``payload``, as a prompt block.
+
+        Returns ``""`` when no corpus is wired or ``reference_limit`` is 0 — the
+        prompt is then byte-identical to the pre-learning agent. Otherwise the
+        payload's table names drive a lexical lookup against the corpus; matches
+        are unioned in table order (deterministic), deduped by name, and capped
+        at ``reference_limit`` so prompt cost stays bounded regardless of batch
+        size. Selection is fully reproducible for an identical corpus + payload.
+        """
+        if self._reference_loader is None or self._reference_limit <= 0:
+            return ""
+        ordered: list[Any] = []
+        seen: set[str] = set()
+        for table in payload.tables:
+            for example in self._reference_loader.select_relevant(
+                table.name, limit=self._reference_limit
+            ):
+                if example.name not in seen:
+                    seen.add(example.name)
+                    ordered.append(example)
+                if len(ordered) >= self._reference_limit:
+                    break
+            if len(ordered) >= self._reference_limit:
+                break
+        if not ordered:
+            return ""
+        return self._reference_loader.to_prompt_block(ordered)
 
     def _draw_samples_parallel(
         self,
@@ -1293,13 +1313,17 @@ class ModellingAgent:
 # ====================================================================== prompt
 
 
-def _build_user_prompt(payload: DiscoveryPayload) -> str:
+def _build_user_prompt(payload: DiscoveryPayload, *, reference_block: str = "") -> str:
     """Render a compact JSON description of the source system.
 
     We include a concise JSON-schema hint inside the prompt because Azure
     response_format=json_object guarantees JSON syntax but not field shape.
     Keeping the schema hint here (rather than relying on the SDK's structured
     outputs) keeps the agent portable across SDK / API-version variations.
+
+    ``reference_block`` (when non-empty) prepends previously-approved reference
+    objects so the model imitates the shop's established naming / business-key
+    conventions. Empty by default → byte-identical to the pre-learning prompt.
     """
     tables: list[SourceTable] = list(payload.tables[:_MAX_TABLES_IN_PROMPT])
     body = {
@@ -1346,8 +1370,17 @@ def _build_user_prompt(payload: DiscoveryPayload) -> str:
             }
         ],
     }
+    preamble = ""
+    if reference_block:
+        preamble = (
+            "APPROVED REFERENCE EXAMPLES (previously human-approved Data Vault "
+            "objects from this shop — mirror their structure, naming and "
+            "business-key style when a source table is similar; do NOT copy them "
+            "verbatim if the source differs):\n" + reference_block + "\n\n"
+        )
     return (
-        "Source system:\n"
+        preamble
+        + "Source system:\n"
         + json.dumps(body, indent=2, ensure_ascii=False)
         + "\n\nReturn JSON with EXACTLY these top-level keys: "
         "system_id, hubs, links, satellites.\n"
@@ -1404,11 +1437,7 @@ def _chunk_tables(
     for t in tables:
         t_tokens = _estimate_table_tokens(t) if max_prompt_tokens > 0 else 0
         too_many = balanced_max > 0 and len(cur) >= balanced_max
-        too_big = (
-            max_prompt_tokens > 0
-            and cur
-            and (cur_tokens + t_tokens) > max_prompt_tokens
-        )
+        too_big = max_prompt_tokens > 0 and cur and (cur_tokens + t_tokens) > max_prompt_tokens
         if cur and (too_many or too_big):
             out.append(tuple(cur))
             cur, cur_tokens = [], 0
@@ -1460,8 +1489,7 @@ def _summarise_column(col: SourceColumn, *, compact: bool = False) -> dict[str, 
             samples = list(col.profile.sample_values[:_MAX_SAMPLE_VALUES_PER_COLUMN])
             if compact:
                 samples = [
-                    (s[:_WIDE_TABLE_TEXT_TRUNCATE] if isinstance(s, str) else s)
-                    for s in samples
+                    (s[:_WIDE_TABLE_TEXT_TRUNCATE] if isinstance(s, str) else s) for s in samples
                 ]
             out["samples"] = samples
     return out
@@ -1563,6 +1591,35 @@ def _merge_plans(plans: Sequence[ModelingPlan], *, system_id: str) -> ModelingPl
 # ====================================================================== factory
 
 
+def _load_reference_corpus(settings: AISettings) -> ReferenceLoader | None:
+    """Build a corpus-backed :class:`ReferenceLoader`, or ``None`` on any failure.
+
+    Called once per agent construction (not per completion). A missing warehouse,
+    empty corpus, or any load error degrades gracefully to ``None`` so modelling
+    still runs — just without few-shot examples — rather than failing the run.
+    """
+    try:
+        from dbt_builder.src.ai.reference import ReferenceLoader
+        from dbt_builder.src.ai.store.corpus import make_example_store
+
+        store = make_example_store(settings)
+        if store is None:
+            return None
+        loader = ReferenceLoader.from_corpus_rows(store.load_latest())
+        _LOG.info(
+            "ModellingAgent: loaded %d approved example(s) from the learning corpus",
+            len(loader.all()),
+        )
+        return loader
+    except Exception as exc:  # noqa: BLE001 — never let corpus load fail a run
+        _LOG.warning(
+            "ModellingAgent: could not load approved-YAML corpus (%s); "
+            "proceeding without few-shot examples.",
+            exc,
+        )
+        return None
+
+
 def get_modelling_agent(
     *,
     settings: AISettings | None = None,
@@ -1607,7 +1664,9 @@ def get_modelling_agent(
     # hot, fan-out-heavy modelling step does not share gpt-5's tight TPM
     # with the rest of the pipeline. An explicit ``deployment`` argument
     # (used by tests and ops scripts) always wins.
-    chosen = deployment or getattr(cfg, "modeller_chat_deployment", None) or cfg.primary_chat_deployment
+    chosen = (
+        deployment or getattr(cfg, "modeller_chat_deployment", None) or cfg.primary_chat_deployment
+    )
     budget = max_tokens if max_tokens is not None else cfg.modeller_max_tokens_for(chosen)
     if sample_parallelism is None:
         configured = cfg.modeller_sample_parallelism
@@ -1624,6 +1683,13 @@ def get_modelling_agent(
         large_catalog_threshold = cfg.modeller_large_catalog_threshold
     if max_completion_tokens is None:
         max_completion_tokens = cfg.modeller_completion_cap()
+    # Feedback learning: load the approved-example corpus once, only when enabled.
+    reference_loader: ReferenceLoader | None = None
+    reference_limit = 0
+    if getattr(cfg, "learning_examples_enabled", False):
+        reference_limit = getattr(cfg, "learning_examples_k", 0)
+        if reference_limit > 0:
+            reference_loader = _load_reference_corpus(cfg)
     client = AzureOpenAI(
         azure_endpoint=cfg.azure_openai_endpoint,
         api_key=cfg.azure_openai_api_key.get_secret_value(),
@@ -1647,4 +1713,6 @@ def get_modelling_agent(
         max_completion_tokens=max_completion_tokens,
         seed=None if cfg.llm_seed < 0 else cfg.llm_seed,
         technical_payload_columns=cfg.technical_payload_column_set(),
+        reference_loader=reference_loader,
+        reference_limit=reference_limit,
     )
