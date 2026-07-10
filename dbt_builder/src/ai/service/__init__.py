@@ -61,6 +61,7 @@ from dbt_builder.src.ai.store import (
     SqliteApprovalStore,
     make_record,
 )
+from dbt_builder.src.ai.store.approval_store import make_approval_store
 from dbt_builder.src.ai.store.corpus import make_example_store, plan_to_example_rows
 from dbt_builder.src.ai.store.pipeline_run_store import (
     InMemoryPipelineRunStore,
@@ -110,9 +111,19 @@ class DwaService:
         yaml_store: YamlStore | None = None,
         example_store: DeltaExampleStore | None = None,
     ) -> None:
-        self._store: ApprovalStore = approval_store or SqliteApprovalStore(
-            Path(".cache") / "approvals.sqlite"
-        )
+        # Approval audit trail. An explicit store always wins (tests); otherwise
+        # build from settings so a Delta backend lands the trail in Databricks
+        # alongside the YAML + corpus tables. Falls back to local SQLite when
+        # settings are unconfigured (dev / CI) so construction never fails.
+        if approval_store is not None:
+            self._store: ApprovalStore = approval_store
+        else:
+            try:
+                from dbt_builder.src.ai.settings import get_settings
+
+                self._store = make_approval_store(get_settings())
+            except Exception:
+                self._store = SqliteApprovalStore(Path(".cache") / "approvals.sqlite")
         # Optional — analyze() raises LlmAgentNotConfiguredError if missing.
         self._schema_analyzer = schema_analyzer
         # Deterministic agents always have safe defaults.
