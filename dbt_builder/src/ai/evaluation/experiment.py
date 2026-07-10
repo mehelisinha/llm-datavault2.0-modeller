@@ -15,6 +15,7 @@ settings varied per arm.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from statistics import fmean
@@ -160,12 +161,19 @@ def run_ablation(
     ``learning_examples_enabled`` / ``learning_examples_k``) and calls
     ``propose(case.payload)``. A learning curve is just a series of arms whose
     config seeds an increasing corpus size.
+
+    Each ``propose`` call is timed; the per-arm result includes ``mean_latency_s``
+    (wall-clock seconds per plan) so the quality gain from learning can be read
+    against its extra prompt cost.
     """
     results: dict[str, dict[str, float]] = {}
     for arm in arms:
         per_case: list[PlanMetrics] = []
+        latencies: list[float] = []
         for case in cases:
+            t0 = time.perf_counter()
             plan = propose(arm, case)
+            latencies.append(time.perf_counter() - t0)
             per_case.append(
                 evaluate_plan(
                     plan,
@@ -174,7 +182,10 @@ def run_ablation(
                     technical_columns=technical_columns,
                 )
             )
-        results[arm.label] = aggregate(per_case)
+        agg = aggregate(per_case)
+        if latencies:
+            agg["mean_latency_s"] = fmean(latencies)
+        results[arm.label] = agg
     return results
 
 
