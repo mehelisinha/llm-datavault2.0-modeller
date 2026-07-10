@@ -18,6 +18,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from dbt_builder.src.ai.store.executor import (
+    has_databricks_creds,
+    make_databricks_executor,
+)
 from dbt_builder.src.utils.yaml_store import (
     AdlsYamlStore,
     DeltaYamlStore,
@@ -45,46 +49,27 @@ def make_yaml_store(settings: AISettings) -> YamlStore:
     """
     backend = (getattr(settings, "metadata_store_backend", "auto") or "auto").lower()
 
-    if backend == "delta" or (backend == "auto" and _has_databricks_creds(settings)):
+    if backend == "delta" or (backend == "auto" and has_databricks_creds(settings)):
         return _make_delta(settings)
 
-    if backend == "adls" or (backend == "auto" and getattr(settings, "metadata_store_account", None)):
+    if backend == "adls" or (
+        backend == "auto" and getattr(settings, "metadata_store_account", None)
+    ):
         adls = _make_adls(settings)
         if adls is not None:
             return adls
 
     if backend not in {"auto", "local", "adls", "delta"}:
         raise ValueError(
-            f"Unknown metadata_store_backend={backend!r}. "
-            "Use one of: auto, local, adls, delta."
+            f"Unknown metadata_store_backend={backend!r}. Use one of: auto, local, adls, delta."
         )
 
     _log.debug("make_yaml_store: backend=%s → LocalYamlStore", backend)
     return LocalYamlStore()
 
 
-def _has_databricks_creds(settings: AISettings) -> bool:
-    return all(
-        bool(getattr(settings, name, None))
-        for name in ("databricks_workspace_url", "databricks_http_path", "databricks_token")
-    )
-
-
 def _make_delta(settings: AISettings) -> YamlStore:
-    if not _has_databricks_creds(settings):
-        raise RuntimeError(
-            "metadata_store_backend='delta' requires databricks_workspace_url, "
-            "databricks_http_path and databricks_token to be set."
-        )
-    from dbt_builder.src.utils.databricks_sql import DatabricksSqlExecutor
-
-    token = settings.databricks_token  # type: ignore[union-attr]
-    token_value = token.get_secret_value() if hasattr(token, "get_secret_value") else str(token)
-    executor = DatabricksSqlExecutor(
-        server_hostname=str(settings.databricks_workspace_url),
-        http_path=str(settings.databricks_http_path),
-        access_token=token_value,
-    )
+    executor = make_databricks_executor(settings)
     return DeltaYamlStore(
         executor,
         catalog=settings.metadata_delta_catalog,

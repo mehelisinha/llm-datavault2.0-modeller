@@ -24,8 +24,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Sequence, runtime_checkable
 
 import yaml
 
@@ -206,8 +207,10 @@ class AdlsYamlStore:
 
 __all__ = [
     "AdlsYamlStore",
+    "DeltaExampleStore",
     "DeltaYamlStore",
     "LocalYamlStore",
+    "RvExampleRow",
     "YamlStore",
     "catalog_from_yaml",
 ]
@@ -243,16 +246,19 @@ class DeltaYamlStore:
         schema: str = "default",
         table: str = "yaml_versions",
     ) -> None:
-        from dbt_builder.src.utils.databricks_sql import DatabricksSqlExecutor
+        from dbt_builder.src.utils.databricks_sql import (
+            DatabricksSqlExecutor,
+            ensure_schema,
+            quote_fqn,
+        )
 
         if not isinstance(executor, DatabricksSqlExecutor):  # defensive at boundary
             raise TypeError("executor must be a DatabricksSqlExecutor instance.")
-        # Identifier whitelist — these go into raw SQL, never user-supplied at runtime.
-        for ident in (catalog, schema, table):
-            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", ident):
-                raise ValueError(f"Invalid Delta identifier: {ident!r}")
+        # quote_fqn validates each identifier (whitelist) before interpolation —
+        # these go into raw SQL, never user-supplied at runtime.
         self._exec = executor
-        self._fqn = f"`{catalog}`.`{schema}`.`{table}`"
+        self._fqn = quote_fqn(catalog, schema, table)
+        ensure_schema(executor, catalog=catalog, schema=schema)
         self._ensure_table()
 
     def _ensure_table(self) -> None:
@@ -310,3 +316,147 @@ class DeltaYamlStore:
                 f"No approved YAML found for catalog '{catalog_id}' in {self._fqn}"
             )
         return str(row[0])
+
+
+# ── Per-object learning corpus (feedback loop) ───────────────────────────────
+
+
+@dataclass(frozen=True)
+class RvExampleRow:
+    """One approved raw-vault object, ready to persist / retrieve as a few-shot.
+
+    ``yaml_text`` is the byte-for-byte per-object dbt model YAML the
+    :class:`YamlGenerator` emitted, so a reader can re-parse it with the exact
+    same parser the on-disk reference loader uses — no shape drift.
+    """
+
+    catalog: str
+    plan_id: str
+    version: int
+    object_name: str  # e.g. hub_terminal
+    kind: str  # hub | satellite | link (ReferenceKind values)
+    source_path: str  # models/raw_vault/<dir>/<name>.yml
+    yaml_text: str
+    approved_by: str
+
+
+class DeltaExampleStore:
+    """Unity-Catalog Delta store for the approved-YAML learning corpus.
+
+    Insert-only: every approval snapshots its raw-vault objects as new rows in
+    ``{catalog}.{schema}.{table}``::
+
+        catalog      STRING     -- source-system catalog (NOT the UC catalog)
+        plan_id      STRING
+        version      INT
+        object_name  STRING
+        kind         STRING     -- hub | satellite | link
+        source_path  STRING
+        yaml_text    STRING     -- per-object dbt model YAML, byte-preserved
+        yaml_sha256  STRING
+        approved_by  STRING
+        approved_at  TIMESTAMP
+
+    :meth:`load_latest` returns the most recent row per ``(catalog, object_name)``
+    so re-approvals supersede older versions in the retrieved few-shot set.
+    """
+
+    def __init__(
+        self,
+        executor,  # type: ignore[no-untyped-def]  # DatabricksSqlExecutor
+        *,
+        catalog: str = "dwa_meta",
+        schema: str = "default",
+        table: str = "rv_examples",
+    ) -> None:
+        from dbt_builder.src.utils.databricks_sql import (
+            DatabricksSqlExecutor,
+            ensure_schema,
+            quote_fqn,
+        )
+
+        if not isinstance(executor, DatabricksSqlExecutor):  # defensive at boundary
+            raise TypeError("executor must be a DatabricksSqlExecutor instance.")
+        self._exec = executor
+        self._fqn = quote_fqn(catalog, schema, table)
+        ensure_schema(executor, catalog=catalog, schema=schema)
+        self._ensure_table()
+
+    def _ensure_table(self) -> None:
+        self._exec.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS {self._fqn} (
+                catalog      STRING    NOT NULL,
+                plan_id      STRING    NOT NULL,
+                version      INT       NOT NULL,
+                object_name  STRING    NOT NULL,
+                kind         STRING    NOT NULL,
+                source_path  STRING    NOT NULL,
+                yaml_text    STRING    NOT NULL,
+                yaml_sha256  STRING    NOT NULL,
+                approved_by  STRING,
+                approved_at  TIMESTAMP NOT NULL
+            ) USING DELTA
+            PARTITIONED BY (catalog)
+            """
+        )
+
+    def save_rows(self, rows: Sequence[RvExampleRow]) -> int:
+        """Insert ``rows`` (one per approved object). Returns the count written."""
+        for row in rows:
+            digest = hashlib.sha256(row.yaml_text.encode("utf-8")).hexdigest()
+            self._exec.execute(
+                f"""
+                INSERT INTO {self._fqn}
+                    (catalog, plan_id, version, object_name, kind, source_path,
+                     yaml_text, yaml_sha256, approved_by, approved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, current_timestamp())
+                """,
+                (
+                    row.catalog,
+                    row.plan_id,
+                    int(row.version),
+                    row.object_name,
+                    row.kind,
+                    row.source_path,
+                    row.yaml_text,
+                    digest,
+                    row.approved_by,
+                ),
+            )
+        return len(rows)
+
+    def load_latest(self) -> tuple[RvExampleRow, ...]:
+        """Return the newest row per ``(catalog, object_name)`` across the corpus.
+
+        Deduplication is server-side (window function) so re-approved objects
+        supersede their earlier versions and the retrieved few-shot set never
+        contains stale duplicates.
+        """
+        rows = self._exec.fetchall(
+            f"""
+            SELECT catalog, plan_id, version, object_name, kind, source_path,
+                   yaml_text, approved_by
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY catalog, object_name
+                    ORDER BY version DESC, approved_at DESC
+                ) AS _rn
+                FROM {self._fqn}
+            )
+            WHERE _rn = 1
+            """
+        )
+        return tuple(
+            RvExampleRow(
+                catalog=r[0],
+                plan_id=r[1],
+                version=int(r[2]),
+                object_name=r[3],
+                kind=r[4],
+                source_path=r[5],
+                yaml_text=r[6],
+                approved_by=r[7] if r[7] is not None else "",
+            )
+            for r in rows
+        )

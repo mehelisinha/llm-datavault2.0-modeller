@@ -245,17 +245,15 @@ class DeltaApprovalStore:
     ) -> None:
         from dbt_builder.src.utils.databricks_sql import (
             DatabricksSqlExecutor,
+            ensure_schema,
+            quote_fqn,
         )
 
         if not isinstance(executor, DatabricksSqlExecutor):
             raise TypeError("executor must be a DatabricksSqlExecutor instance.")
-        import re as _re
-
-        for ident in (catalog, schema, table):
-            if not _re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", ident):
-                raise ValueError(f"Invalid Delta identifier: {ident!r}")
         self._exec = executor
-        self._fqn = f"`{catalog}`.`{schema}`.`{table}`"
+        self._fqn = quote_fqn(catalog, schema, table)
+        ensure_schema(executor, catalog=catalog, schema=schema)
         self._ensure_table()
 
     def _ensure_table(self) -> None:
