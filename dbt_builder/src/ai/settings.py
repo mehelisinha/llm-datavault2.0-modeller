@@ -326,6 +326,78 @@ class AISettings(BaseSettings):
         description="Azure AD tenant ID for the ADLS Gen2 service principal.",
     )
 
+    # ── YAML Metadata store (Databricks Delta / Unity Catalog) ────────────────
+    # Selects which YamlStore / ApprovalStore backend the factories build:
+    #   "auto"  → Delta if the databricks_* creds below are all present, else
+    #             ADLS if metadata_store_account is set, else Local.
+    #   "delta" → force Delta (raises if creds missing).
+    #   "adls"  → force ADLS Gen2.   "local" → filesystem (dev / CI).
+    # These fields already have matching DWA_AI_* entries in .env; they were
+    # inert until now because AISettings (extra="ignore") dropped unmapped vars.
+    metadata_store_backend: str = Field(
+        default="auto",
+        description="YAML/approval store backend: auto | delta | adls | local.",
+    )
+    databricks_workspace_url: str | None = Field(
+        default=None,
+        description="Databricks SQL Warehouse server hostname (no https://).",
+    )
+    databricks_http_path: str | None = Field(
+        default=None,
+        description="Databricks SQL Warehouse HTTP path, e.g. /sql/1.0/warehouses/<id>.",
+    )
+    databricks_token: SecretStr | None = Field(
+        default=None,
+        description="Databricks PAT for the SQL Warehouse (only used when auth type is 'pat').",
+    )
+    databricks_auth_type: str = Field(
+        default="pat",
+        description=(
+            "Databricks SQL auth: 'pat' (static token) or an Azure AD type such "
+            "as 'azure-cli' for workspaces that disable PATs (uses the ambient "
+            "az-login / managed-identity session, no static token required)."
+        ),
+    )
+    # Fully-qualified Delta location is `{catalog}.{schema}.{table}` per store.
+    metadata_delta_catalog: str = Field(
+        default="dwa_meta",
+        description="Unity Catalog catalog holding the DWA metadata tables.",
+    )
+    metadata_delta_schema: str = Field(
+        default="default",
+        description="Schema (created on first use) holding the DWA metadata tables.",
+    )
+    metadata_delta_yaml_table: str = Field(
+        default="yaml_versions",
+        description="Delta table of approved rendered metadata YAML, versioned per catalog.",
+    )
+    metadata_delta_approvals_table: str = Field(
+        default="approvals",
+        description="Delta table of the insert-only approval audit trail.",
+    )
+    metadata_delta_examples_table: str = Field(
+        default="rv_examples",
+        description=(
+            "Delta table of the per-object learning corpus: one row per approved "
+            "hub / link / satellite, fed back to agents as few-shot examples."
+        ),
+    )
+
+    # ── Feedback learning (approved-YAML few-shot retrieval) ──────────────────
+    # When enabled, the modelling agent retrieves the most lexically-relevant
+    # approved examples from the corpus and injects them into its prompt. OFF by
+    # default so existing behaviour is byte-identical until explicitly opted in;
+    # this flag is also the on/off switch for the thesis ablation study.
+    learning_examples_enabled: bool = Field(
+        default=False,
+        description="Inject approved-YAML few-shot examples into the modelling prompt.",
+    )
+    learning_examples_k: int = Field(
+        default=3,
+        ge=0,
+        description="Max number of approved examples retrieved per agent call.",
+    )
+
     # ── Observability ─────────────────────────────────────────────────────────
     appinsights_connection_string: SecretStr | None = Field(default=None)
 
