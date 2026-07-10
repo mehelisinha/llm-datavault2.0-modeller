@@ -32,7 +32,7 @@ def test_score_command_runs_and_reports(tmp_path, capsys):
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(_plan().model_dump_json(), encoding="utf-8")
 
-    rc = main(["score", "--plan", str(plan_path), "--gold", "cim"])
+    rc = main(["score", "--plan", str(plan_path), "--gold", "IEC_CIM_001"])
     out = capsys.readouterr().out
 
     assert rc == 0

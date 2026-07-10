@@ -96,10 +96,25 @@ def _cmd_score(args: argparse.Namespace) -> int:
 
 
 def _load_payloads(directory: str) -> list:
-    from dbt_builder.src.ai.contracts.payloads import DiscoveryPayload
+    """Load DiscoveryPayloads from a directory.
 
+    Accepts both formats a user can produce without the web app:
+
+    * ``*.yaml`` / ``*.yml`` — the offline discovery shape (``system`` + ``tables``)
+      read by :func:`discover_from_yaml` (e.g. ``poc/metadata/iec_cim_discovery.yaml``).
+    * ``*.json`` — a raw ``DiscoveryPayload`` dump (e.g. exported from a run).
+
+    The web-app pipeline builds the payload internally and does not export it, so
+    the discovery YAML is the canonical file artifact for the study.
+    """
+    from dbt_builder.src.ai.contracts.payloads import DiscoveryPayload
+    from dbt_builder.src.ai.discovery.schema_discovery import discover_from_yaml
+
+    base = Path(directory)
     payloads = []
-    for path in sorted(Path(directory).glob("*.json")):
+    for path in sorted(base.glob("*.yaml")) + sorted(base.glob("*.yml")):
+        payloads.append(discover_from_yaml(path))
+    for path in sorted(base.glob("*.json")):
         payloads.append(DiscoveryPayload.model_validate_json(path.read_text(encoding="utf-8")))
     return payloads
 

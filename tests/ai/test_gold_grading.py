@@ -117,6 +117,6 @@ def test_wrong_business_key_drops_bk_accuracy():
 def test_load_bundled_gold_sets():
     models = load_gold_models()
     assert "servicenow" in models
-    assert "cim" in models
+    assert "IEC_CIM_001" in models  # cim gold is keyed by its discovery system_id
     assert models["servicenow"].hubs["hub_user"] == ("user_name",)
-    assert models["cim"].hubs["hub_terminal"] == ("mrid",)
+    assert models["IEC_CIM_001"].hubs["hub_terminal"] == ("mrid",)

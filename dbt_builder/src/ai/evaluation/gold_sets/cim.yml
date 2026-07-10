@@ -1,14 +1,23 @@
-# Gold DV2 model for a documented IEC 61968 / CIM subset (Terminal,
-# ConductingEquipment, ConnectivityNode). Every CIM hub is keyed on mRID.
-system_id: cim
+# Gold DV2 model for the IEC 61968 / CIM source system.
+#
+# Aligned with the authoritative hand-modelled reference in
+# poc/metadata/iec_cim_metadata.yaml, and keyed by the SAME system_id as the
+# discovery payload (poc/metadata/iec_cim_discovery.yaml) so the ablation runner
+# matches payload -> gold automatically. Every CIM hub is keyed on mRID.
+#
+# NOTE on the link name: the poc reference uses the legacy `lnk_` prefix; the
+# current modeller emits `link_`. This gold uses the modeller convention. If
+# your modeller names the 3-hub link differently, reconcile the name here after
+# a first run (see gold_sets/README.md).
+system_id: IEC_CIM_001
 hubs:
-  hub_terminal: [mrid]
   hub_conducting_equipment: [mrid]
   hub_connectivity_node: [mrid]
+  hub_terminal: [mrid]
 links:
-  - link_terminal_equipment
-  - link_terminal_node
+  - link_terminal_equipment_node
 satellites:
-  - sat_terminal_details
   - sat_conducting_equipment_details
+  - sat_conducting_equipment_operational
   - sat_connectivity_node_details
+  - sat_terminal_details
