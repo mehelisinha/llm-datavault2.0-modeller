@@ -25,14 +25,26 @@ from dbt_builder.src.ai.evaluation.conformance import (
     score_plan,
 )
 from dbt_builder.src.ai.evaluation.coverage import CoverageReport, coverage
+from dbt_builder.src.ai.evaluation.gold import (
+    GoldModel,
+    GoldScore,
+    PrecisionRecall,
+    grade_against_gold,
+    load_gold_models,
+)
 
 __all__ = [
     "BlastRadiusReport",
     "ConformanceIssue",
     "ConformanceReport",
     "CoverageReport",
+    "GoldModel",
+    "GoldScore",
     "IssueType",
+    "PrecisionRecall",
     "coverage",
+    "grade_against_gold",
+    "load_gold_models",
     "plan_blast_radius",
     "score_plan",
     "weighted_error_impact",

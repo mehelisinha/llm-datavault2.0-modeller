@@ -1,0 +1,14 @@
+# Gold DV2 model for a documented ServiceNow subset (sys_user, sys_user_group,
+# sys_user_grmember, incident). Hand-authored reference for grade_against_gold.
+# Business keys follow the semantic-key rule (number/user_name/name, not sys_id).
+system_id: servicenow
+hubs:
+  hub_user: [user_name]
+  hub_group: [name]
+  hub_incident: [number]
+links:
+  - link_user_group
+satellites:
+  - sat_user_details
+  - sat_group_details
+  - sat_incident_details

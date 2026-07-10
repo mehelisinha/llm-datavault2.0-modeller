@@ -1,0 +1,14 @@
+# Gold DV2 model for a documented IEC 61968 / CIM subset (Terminal,
+# ConductingEquipment, ConnectivityNode). Every CIM hub is keyed on mRID.
+system_id: cim
+hubs:
+  hub_terminal: [mrid]
+  hub_conducting_equipment: [mrid]
+  hub_connectivity_node: [mrid]
+links:
+  - link_terminal_equipment
+  - link_terminal_node
+satellites:
+  - sat_terminal_details
+  - sat_conducting_equipment_details
+  - sat_connectivity_node_details

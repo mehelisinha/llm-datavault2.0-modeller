@@ -84,6 +84,8 @@ ai = [
 # read them straight from the tree regardless.
 [tool.setuptools.package-data]
 "dbt_builder.src.ai.prompts" = ["*.md"]
+# Hand-authored gold-standard DV2 models used by the evaluation harness.
+"dbt_builder.src.ai.evaluation.gold_sets" = ["*.yml", "*.md"]
 
 # ── Foramt and Linting ─────────────────────────────
 [tool.ruff]
