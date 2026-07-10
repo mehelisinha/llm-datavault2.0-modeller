@@ -194,6 +194,33 @@ class ReferenceLoader:
         self._root = Path(root)
         self._examples: tuple[ReferenceExample, ...] = self._load_all()
 
+    @classmethod
+    def from_corpus_rows(cls, rows: Iterable[Any]) -> ReferenceLoader:
+        """Build a loader from stored corpus rows instead of a directory.
+
+        Each row must expose ``kind`` (a :class:`ReferenceKind` value),
+        ``source_path`` and ``yaml_text`` — exactly what ``DeltaExampleStore``
+        returns. The stored YAML is parsed with the SAME parser used for on-disk
+        files, so database- and file-sourced examples are indistinguishable
+        downstream. Rows whose kind is unknown or whose YAML no longer parses are
+        skipped, so a partially-populated corpus never breaks retrieval.
+        """
+        examples: list[ReferenceExample] = []
+        for row in rows:
+            try:
+                kind = ReferenceKind(row.kind)
+            except (ValueError, AttributeError):
+                continue
+            example = _parse_dbt_model_yaml(
+                Path(row.source_path), expected_kind=kind, raw_text=row.yaml_text
+            )
+            if example is not None:
+                examples.append(example)
+        loader = cls.__new__(cls)
+        loader._root = Path("delta://corpus")
+        loader._examples = tuple(examples)
+        return loader
+
     # ── construction helpers ────────────────────────────────────────────────
     def _load_all(self) -> tuple[ReferenceExample, ...]:
         if not self._root.is_dir():
