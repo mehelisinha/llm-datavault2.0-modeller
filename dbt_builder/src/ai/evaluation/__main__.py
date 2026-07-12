@@ -59,18 +59,12 @@ def _technical_columns() -> frozenset[str]:
         return frozenset()
 
 
-def _cmd_score(args: argparse.Namespace) -> int:
-    plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
-    gold = load_gold_models().get(args.gold) if args.gold else None
-    if args.gold and gold is None:
-        print(f"WARNING: no gold set named '{args.gold}' (have: {sorted(load_gold_models())})")
-    source_tables = tuple(t for t in (args.source_tables or "").split(",") if t)
-
-    report = score_plan(plan, technical_columns=_technical_columns())
+def _print_scorecard(plan, *, source_tables, gold, technical) -> None:
+    """Print the conformance + gold scorecard for one plan (shared by score/generate)."""
+    report = score_plan(plan, technical_columns=technical)
     metrics = evaluate_plan(
-        plan, source_tables=source_tables, gold=gold, technical_columns=_technical_columns()
+        plan, source_tables=source_tables, gold=gold, technical_columns=technical
     )
-
     print(f"system_id            : {plan.system_id}")
     print(
         f"objects              : {metrics.n_hubs} hubs, {metrics.n_links} links, {metrics.n_satellites} sats"
@@ -96,6 +90,81 @@ def _cmd_score(args: argparse.Namespace) -> int:
             print(f"  [{issue.type.value}] {where}: {issue.message}")
     else:
         print("\nno conformance issues.")
+
+
+def _cmd_score(args: argparse.Namespace) -> int:
+    plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
+    gold = load_gold_models().get(args.gold) if args.gold else None
+    if args.gold and gold is None:
+        print(f"WARNING: no gold set named '{args.gold}' (have: {sorted(load_gold_models())})")
+    source_tables = tuple(t for t in (args.source_tables or "").split(",") if t)
+    _print_scorecard(plan, source_tables=source_tables, gold=gold, technical=_technical_columns())
+    return 0
+
+
+def _approve_plan(plan, payload, *, actor: str) -> int:
+    """Run the real approval flow so the SCORED plan lands in Databricks + corpus.
+
+    Renders v3 YAML, runs the validation gate, submits a DRAFT, then approves.
+    Approval writes yaml_versions + approvals + rv_examples (the learning corpus),
+    so the exact plan you evaluated is what future runs learn from.
+    """
+    from dbt_builder.src.ai.rendering.metadata_v3_emitter import render_v3
+    from dbt_builder.src.ai.service import DwaService
+
+    service = DwaService()
+    bv = service.architect_bv(plan)
+    rendered = render_v3(plan, payload.system, bv)
+    validation = service.validate(plan=plan, rendered_yaml=rendered, bv=bv)
+    if not validation.passed:
+        print(
+            f"\n[BLOCKED] validation has {validation.summary.errors} ERROR-severity issue(s) — "
+            "approval gate refuses. Fix the plan and re-run."
+        )
+        return 1
+    service.submit_for_review(plan=plan, rendered_yaml=rendered, validation=validation, actor=actor)
+    record = service.approve(plan_id=validation.plan_id, actor=actor)
+    print(
+        f"\n[APPROVED] plan_id={record.plan_id} v{record.version} by {actor} — "
+        "stored to yaml_versions + approvals + rv_examples (corpus)."
+    )
+    return 0
+
+
+def _cmd_generate(args: argparse.Namespace) -> int:
+    from dbt_builder.src.ai.agents.modeller import get_modelling_agent
+    from dbt_builder.src.ai.discovery.schema_discovery import discover_from_yaml
+    from dbt_builder.src.ai.settings import get_settings
+
+    payload = discover_from_yaml(args.payload)
+    cfg = get_settings()
+    if args.no_learning:
+        cfg = cfg.model_copy(update={"learning_examples_enabled": False})
+    learning = (
+        "off" if args.no_learning else ("on" if cfg.learning_examples_enabled else "off (settings)")
+    )
+    print(
+        f"generating for system_id={payload.system.system_id} "
+        f"({len(payload.tables)} tables, learning={learning})...\n"
+    )
+
+    agent = get_modelling_agent(settings=cfg, samples=args.samples)
+    plan = agent.propose(payload)
+
+    gold = load_gold_models().get(args.gold or payload.system.system_id)
+    source_tables = tuple(t.name for t in payload.tables)
+    _print_scorecard(
+        plan, source_tables=source_tables, gold=gold, technical=cfg.technical_payload_column_set()
+    )
+
+    if args.out:
+        Path(args.out).write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+        print(f"\nplan written to {args.out}")
+
+    if args.approve:
+        return _approve_plan(plan, payload, actor=args.actor)
+    else:
+        print("\n(dry run — pass --approve to store this plan in the corpus)")
     return 0
 
 
@@ -199,6 +268,22 @@ def main(argv: list[str] | None = None) -> int:
         "--source-tables", default=None, help="comma-separated source table names for coverage"
     )
     p_score.set_defaults(func=_cmd_score)
+
+    p_gen = sub.add_parser(
+        "generate", help="generate a plan from a discovery YAML, score it, optionally approve"
+    )
+    p_gen.add_argument("--payload", required=True, help="discovery YAML (system + tables)")
+    p_gen.add_argument("--gold", default=None, help="gold system_id (defaults to the payload's)")
+    p_gen.add_argument("--out", default=None, help="write the generated ModelingPlan JSON here")
+    p_gen.add_argument("--samples", type=int, default=1, help="modeller votes per plan")
+    p_gen.add_argument("--no-learning", action="store_true", help="force learning OFF for this run")
+    p_gen.add_argument(
+        "--approve", action="store_true", help="approve + store the plan (corpus write)"
+    )
+    p_gen.add_argument(
+        "--actor", default="evaluator@local", help="approver identity (with --approve)"
+    )
+    p_gen.set_defaults(func=_cmd_generate)
 
     p_abl = sub.add_parser("ablation", help="run the learning OFF-vs-ON study")
     p_abl.add_argument("--payloads-dir", required=True, help="dir of DiscoveryPayload *.json files")
