@@ -79,7 +79,9 @@ from dbt_builder.src.ai.supervision import PipelineSupervisor, SupervisorConfig
 from dbt_builder.src.ai.validation import validate as run_validation
 
 if TYPE_CHECKING:
-    from dbt_builder.src.utils.yaml_store import DeltaExampleStore
+    from dbt_builder.src.utils.yaml_store import DeltaExampleStore, LocalExampleStore
+
+    ExampleStore = DeltaExampleStore | LocalExampleStore
 
 
 class ApprovalGateError(RuntimeError):
@@ -109,7 +111,7 @@ class DwaService:
         pipeline_run_store: PipelineRunStore | None = None,
         supervisor: PipelineSupervisor | None = None,
         yaml_store: YamlStore | None = None,
-        example_store: DeltaExampleStore | None = None,
+        example_store: ExampleStore | None = None,
     ) -> None:
         # Approval audit trail. An explicit store always wins (tests); otherwise
         # build from settings so a Delta backend lands the trail in Databricks
@@ -147,7 +149,7 @@ class DwaService:
         # (or any construction failure) so approval NEVER depends on a warehouse
         # being reachable. Populated on approve() alongside the YAML store.
         if example_store is not None:
-            self._example_store: DeltaExampleStore | None = example_store
+            self._example_store: ExampleStore | None = example_store
         else:
             try:
                 from dbt_builder.src.ai.settings import get_settings

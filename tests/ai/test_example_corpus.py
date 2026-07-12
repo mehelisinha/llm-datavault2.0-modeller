@@ -10,9 +10,13 @@ from dbt_builder.src.ai.contracts.decisions import (
     ModelingPlan,
     SatelliteDecision,
 )
-from dbt_builder.src.ai.store.corpus import plan_to_example_rows
+from dbt_builder.src.ai.store.corpus import make_example_store, plan_to_example_rows
 from dbt_builder.src.utils.databricks_sql import DatabricksSqlExecutor
-from dbt_builder.src.utils.yaml_store import DeltaExampleStore, RvExampleRow
+from dbt_builder.src.utils.yaml_store import (
+    DeltaExampleStore,
+    LocalExampleStore,
+    RvExampleRow,
+)
 
 
 def _plan() -> ModelingPlan:
@@ -172,3 +176,42 @@ def test_invalid_identifier_rejected():
     exe = _StubExecutor()
     with pytest.raises(ValueError):
         DeltaExampleStore(exe, catalog="bad-name", schema="s", table="t")
+
+
+# ── LocalExampleStore (filesystem corpus — Databricks-free) ──────────────────
+
+
+def _row(obj="hub_terminal", kind="hub", version=1, text="version: 2\n"):
+    return RvExampleRow(
+        "iec", "p1", version, obj, kind, f"models/raw_vault/hubs/{obj}.yml", text, "u"
+    )
+
+
+def test_local_example_store_round_trip(tmp_path):
+    store = LocalExampleStore(tmp_path / "corpus")
+    assert store.save_rows([_row("hub_terminal"), _row("sat_x", "satellite")]) == 2
+    loaded = store.load_latest()
+    assert {r.object_name for r in loaded} == {"hub_terminal", "sat_x"}
+    assert all(r.yaml_text == "version: 2\n" for r in loaded)  # payload preserved
+
+
+def test_local_example_store_keeps_highest_version(tmp_path):
+    store = LocalExampleStore(tmp_path / "corpus")
+    store.save_rows([_row(version=2, text="v2")])
+    store.save_rows([_row(version=1, text="v1")])  # lower version must NOT overwrite
+    (only,) = store.load_latest()
+    assert only.version == 2 and only.yaml_text == "v2"
+    store.save_rows([_row(version=3, text="v3")])  # higher version overwrites
+    (only,) = store.load_latest()
+    assert only.version == 3 and only.yaml_text == "v3"
+
+
+def test_local_example_store_empty(tmp_path):
+    assert LocalExampleStore(tmp_path / "missing").load_latest() == ()
+
+
+def test_make_example_store_local_backend_returns_local():
+    from types import SimpleNamespace
+
+    store = make_example_store(SimpleNamespace(metadata_store_backend="local"))
+    assert isinstance(store, LocalExampleStore)

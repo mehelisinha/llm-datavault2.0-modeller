@@ -22,9 +22,10 @@ Path convention (shared by both implementations)::
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol, Sequence, runtime_checkable
 
@@ -209,6 +210,7 @@ __all__ = [
     "AdlsYamlStore",
     "DeltaExampleStore",
     "DeltaYamlStore",
+    "LocalExampleStore",
     "LocalYamlStore",
     "RvExampleRow",
     "YamlStore",
@@ -338,6 +340,56 @@ class RvExampleRow:
     source_path: str  # models/raw_vault/<dir>/<name>.yml
     yaml_text: str
     approved_by: str
+
+
+class LocalExampleStore:
+    """Filesystem-backed learning corpus (dev / CI / Databricks-outage fallback).
+
+    Mirrors :class:`DeltaExampleStore`'s surface (``save_rows`` / ``load_latest``)
+    so the feedback loop runs with zero Databricks dependency. Each approved
+    object is stored as one JSON file at ``{root}/{catalog}/{object_name}.json``
+    holding the latest :class:`RvExampleRow`; a re-approval overwrites the older
+    version (highest version wins), so ``load_latest`` naturally returns the most
+    recent row per ``(catalog, object_name)`` — identical semantics to the Delta
+    store's window-function dedup.
+    """
+
+    def __init__(self, root: str | Path = ".cache/rv_examples") -> None:
+        self._root = Path(root)
+
+    def _path(self, catalog: str, object_name: str) -> Path:
+        safe_cat = re.sub(r"[^A-Za-z0-9_.\-]", "_", catalog) or "unknown"
+        safe_obj = re.sub(r"[^A-Za-z0-9_.\-]", "_", object_name) or "unknown"
+        return self._root / safe_cat / f"{safe_obj}.json"
+
+    def save_rows(self, rows: Sequence[RvExampleRow]) -> int:
+        """Persist ``rows``, keeping the highest version per object. Returns count written."""
+        written = 0
+        for row in rows:
+            path = self._path(row.catalog, row.object_name)
+            if path.exists():
+                try:
+                    existing = json.loads(path.read_text(encoding="utf-8"))
+                    if int(existing.get("version", -1)) > int(row.version):
+                        continue  # keep the newer version already on disk
+                except (OSError, ValueError, TypeError):
+                    pass
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(asdict(row), ensure_ascii=False), encoding="utf-8")
+            written += 1
+        return written
+
+    def load_latest(self) -> tuple[RvExampleRow, ...]:
+        """Return the latest row per object across the corpus (empty if none)."""
+        if not self._root.is_dir():
+            return ()
+        rows: list[RvExampleRow] = []
+        for path in sorted(self._root.glob("*/*.json")):
+            try:
+                rows.append(RvExampleRow(**json.loads(path.read_text(encoding="utf-8"))))
+            except (OSError, ValueError, TypeError):
+                continue  # skip a corrupt / schema-drifted file rather than fail
+        return tuple(rows)
 
 
 class DeltaExampleStore:

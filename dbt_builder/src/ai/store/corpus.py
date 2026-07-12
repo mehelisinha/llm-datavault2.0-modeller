@@ -27,7 +27,11 @@ from dbt_builder.src.ai.store.executor import (
     has_databricks_creds,
     make_databricks_executor,
 )
-from dbt_builder.src.utils.yaml_store import DeltaExampleStore, RvExampleRow
+from dbt_builder.src.utils.yaml_store import (
+    DeltaExampleStore,
+    LocalExampleStore,
+    RvExampleRow,
+)
 
 if TYPE_CHECKING:
     from dbt_builder.src.ai.contracts.decisions import ModelingPlan
@@ -79,25 +83,24 @@ def plan_to_example_rows(
     return rows
 
 
-def make_example_store(settings: AISettings) -> DeltaExampleStore | None:
-    """Return a :class:`DeltaExampleStore` when Databricks is configured, else None.
+def make_example_store(settings: AISettings) -> DeltaExampleStore | LocalExampleStore:
+    """Return the learning-corpus store for the configured backend.
 
-    The corpus is Delta-only (it needs SQL retrieval). Returns ``None`` for the
-    local / ADLS backends so dev and CI keep working without a warehouse — the
-    caller simply skips corpus persistence in that case.
+    * Delta (Databricks configured) → :class:`DeltaExampleStore`.
+    * Everything else (local / ADLS / auto-without-creds) →
+      :class:`LocalExampleStore`, so the feedback loop runs offline — dev, CI, and
+      any Databricks outage keep the approve→corpus→retrieval loop working.
     """
     backend = (getattr(settings, "metadata_store_backend", "auto") or "auto").lower()
-    if backend not in ("delta", "auto"):
-        return None
-    if not has_databricks_creds(settings):
-        return None
-    executor = make_databricks_executor(settings)
-    return DeltaExampleStore(
-        executor,
-        catalog=settings.metadata_delta_catalog,
-        schema=settings.metadata_delta_schema,
-        table=settings.metadata_delta_examples_table,
-    )
+    if backend == "delta" or (backend == "auto" and has_databricks_creds(settings)):
+        executor = make_databricks_executor(settings)
+        return DeltaExampleStore(
+            executor,
+            catalog=settings.metadata_delta_catalog,
+            schema=settings.metadata_delta_schema,
+            table=settings.metadata_delta_examples_table,
+        )
+    return LocalExampleStore()
 
 
 __all__ = ["make_example_store", "plan_to_example_rows"]
