@@ -5,7 +5,9 @@
 # generated YAML was used ONLY to align object NAMES to the modeller's convention.
 #
 # system_id matches this run's discovery payload. `volumemetrics` is intentionally
-# excluded (pipeline telemetry, not business data).
+# excluded (pipeline telemetry, not business data). See RUBRIC.md for the scoring
+# tiers and the full per-system caveats (task_sla boundary, hub-derivation
+# asymmetry, cross-schema scope, vendor_manager FK).
 #
 # ── KEY JUDGMENT CALL — business keys ─────────────────────────────────────────
 # ServiceNow reference tables (company / department / location / sla) have no
@@ -58,5 +60,8 @@ satellites:
   - sat_location_details
   - sat_location_operational
   - sat_sla_details
+  # task_sla is a boundary case: task_sla.task is cross-schema (no hub_task), so
+  # its measurements hang off hub_sla and MUST key on task_sla.sla (the SLA
+  # sys_id), NOT task_sla.sys_id. Keying on sys_id orphans the sat (Tier-3 error).
   - sat_task_sla_measurements
   - sat_user_group_details

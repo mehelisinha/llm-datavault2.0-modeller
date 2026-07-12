@@ -43,6 +43,7 @@ _REPORT_COLS = (
     "issue_count",
     "weighted_error_impact",
     "coverage_ratio",
+    "gold_core_f1",
     "gold_macro_f1",
     "gold_bk_accuracy",
     "mean_latency_s",
@@ -82,7 +83,10 @@ def _cmd_score(args: argparse.Namespace) -> int:
         print(f"coverage             : {metrics.coverage_ratio:.3f}")
     if gold is not None:
         print(
-            f"gold macro-F1        : {metrics.gold_macro_f1:.3f}  (hub {metrics.gold_hub_f1:.2f} / link {metrics.gold_link_f1:.2f} / sat {metrics.gold_sat_f1:.2f})"
+            f"gold core-F1 (mand.) : {metrics.gold_core_f1:.3f}  (hub {metrics.gold_hub_f1:.2f} / link {metrics.gold_link_f1:.2f})"
+        )
+        print(
+            f"gold macro-F1 (+sat) : {metrics.gold_macro_f1:.3f}  (sat {metrics.gold_sat_f1:.2f} — soft tier)"
         )
         print(f"business-key accuracy: {metrics.gold_bk_accuracy:.3f}")
     if report.issues:

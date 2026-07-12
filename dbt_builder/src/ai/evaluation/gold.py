@@ -92,6 +92,19 @@ class GoldScore(BaseModel):
         """Unweighted mean F1 across the three object kinds."""
         return (self.hubs.f1 + self.links.f1 + self.satellites.f1) / 3
 
+    @property
+    def core_f1(self) -> float:
+        """Mean F1 over the MANDATORY structural tier (hubs + links).
+
+        Satellites are excluded: their rate-of-change split is an
+        *acceptable-alternative* (soft) tier, so they belong in ``macro_f1`` /
+        ``satellites.f1`` but not in the pass/fail structural signal. Read
+        alongside ``business_key_accuracy`` — together they are the "did the
+        model get the entities and relationships right?" headline (see
+        ``gold_sets/RUBRIC.md``).
+        """
+        return (self.hubs.f1 + self.links.f1) / 2
+
 
 def _pr(produced: set[str], gold: set[str]) -> PrecisionRecall:
     return PrecisionRecall(

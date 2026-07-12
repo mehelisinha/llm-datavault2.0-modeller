@@ -63,6 +63,31 @@ def test_perfect_plan_scores_one():
     assert score.satellites.f1 == 1.0
     assert score.business_key_accuracy == 1.0
     assert score.macro_f1 == 1.0
+    assert score.core_f1 == 1.0  # mandatory tier (hubs + links)
+
+
+def test_core_f1_ignores_satellites():
+    # A plan that nails hubs + links but has NO satellites still scores core_f1=1.0
+    # (satellites are the soft tier), while macro_f1 drops.
+    plan = ModelingPlan(
+        system_id="t",
+        hubs=(
+            _hub("hub_user", ("user_name",), "HK_USER"),
+            _hub("hub_group", ("name",), "HK_GROUP"),
+        ),
+        links=(
+            LinkDecision(
+                name="link_user_group",
+                source_table="t",
+                hash_key="HK_UG",
+                fk_columns=("HK_USER", "HK_GROUP"),
+            ),
+        ),
+    )
+    score = grade_against_gold(plan, _gold())
+    assert score.core_f1 == 1.0
+    assert score.satellites.f1 == 0.0
+    assert score.macro_f1 < 1.0
 
 
 def test_missing_and_extra_hub_lower_precision_and_recall():

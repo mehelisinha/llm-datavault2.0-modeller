@@ -45,7 +45,14 @@ _SCALAR_FIELDS = (
     "coverage_ratio",
     "uncovered_count",
 )
-_GOLD_FIELDS = ("gold_hub_f1", "gold_link_f1", "gold_sat_f1", "gold_macro_f1", "gold_bk_accuracy")
+_GOLD_FIELDS = (
+    "gold_hub_f1",
+    "gold_link_f1",
+    "gold_sat_f1",
+    "gold_core_f1",
+    "gold_macro_f1",
+    "gold_bk_accuracy",
+)
 
 
 class PlanMetrics(BaseModel):
@@ -68,6 +75,7 @@ class PlanMetrics(BaseModel):
     gold_hub_f1: float | None = None
     gold_link_f1: float | None = None
     gold_sat_f1: float | None = None
+    gold_core_f1: float | None = None  # mandatory tier: hubs + links
     gold_macro_f1: float | None = None
     gold_bk_accuracy: float | None = None
 
@@ -91,6 +99,7 @@ def evaluate_plan(
             "gold_hub_f1": g.hubs.f1,
             "gold_link_f1": g.links.f1,
             "gold_sat_f1": g.satellites.f1,
+            "gold_core_f1": g.core_f1,
             "gold_macro_f1": g.macro_f1,
             "gold_bk_accuracy": g.business_key_accuracy,
         }
