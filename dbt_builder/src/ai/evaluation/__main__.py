@@ -131,6 +131,20 @@ def _approve_plan(plan, payload, *, actor: str) -> int:
     return 0
 
 
+def _cmd_approve(args: argparse.Namespace) -> int:
+    """Approve a previously-generated plan JSON (the EXACT plan you scored).
+
+    Use this for the see-precision-THEN-approve workflow: `generate --out plan.json`
+    to review the scorecard, then `approve --plan plan.json --payload disc.yaml` to
+    store that same plan (no regeneration, so the score you saw is what you store).
+    """
+    from dbt_builder.src.ai.discovery.schema_discovery import discover_from_yaml
+
+    plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
+    payload = discover_from_yaml(args.payload)
+    return _approve_plan(plan, payload, actor=args.actor)
+
+
 def _cmd_generate(args: argparse.Namespace) -> int:
     from dbt_builder.src.ai.agents.modeller import get_modelling_agent
     from dbt_builder.src.ai.discovery.schema_discovery import discover_from_yaml
@@ -284,6 +298,14 @@ def main(argv: list[str] | None = None) -> int:
         "--actor", default="evaluator@local", help="approver identity (with --approve)"
     )
     p_gen.set_defaults(func=_cmd_generate)
+
+    p_app = sub.add_parser("approve", help="approve a saved plan JSON (the exact plan you scored)")
+    p_app.add_argument(
+        "--plan", required=True, help="path to a ModelingPlan JSON (from generate --out)"
+    )
+    p_app.add_argument("--payload", required=True, help="the discovery YAML used to generate it")
+    p_app.add_argument("--actor", default="evaluator@local", help="approver identity")
+    p_app.set_defaults(func=_cmd_approve)
 
     p_abl = sub.add_parser("ablation", help="run the learning OFF-vs-ON study")
     p_abl.add_argument("--payloads-dir", required=True, help="dir of DiscoveryPayload *.json files")
