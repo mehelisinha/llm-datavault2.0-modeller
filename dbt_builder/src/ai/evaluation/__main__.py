@@ -30,6 +30,7 @@ from dbt_builder.src.ai.evaluation import (
     AblationArm,
     ExperimentCase,
     evaluate_plan,
+    grade_against_gold,
     load_gold_models,
     run_ablation,
     score_plan,
@@ -76,13 +77,26 @@ def _print_scorecard(plan, *, source_tables, gold, technical) -> None:
     if source_tables:
         print(f"coverage             : {metrics.coverage_ratio:.3f}")
     if gold is not None:
+        g = grade_against_gold(plan, gold)
+        print("\ngold grading (precision / recall / F1):")
         print(
-            f"gold core-F1 (mand.) : {metrics.gold_core_f1:.3f}  (hub {metrics.gold_hub_f1:.2f} / link {metrics.gold_link_f1:.2f})"
+            f"  hubs        : {g.hubs.precision:.2f} / {g.hubs.recall:.2f} / {g.hubs.f1:.2f}"
+            f"   (tp={g.hubs.true_positive} fp={g.hubs.false_positive} fn={g.hubs.false_negative})"
         )
         print(
-            f"gold macro-F1 (+sat) : {metrics.gold_macro_f1:.3f}  (sat {metrics.gold_sat_f1:.2f} — soft tier)"
+            f"  links       : {g.links.precision:.2f} / {g.links.recall:.2f} / {g.links.f1:.2f}"
+            f"   (tp={g.links.true_positive} fp={g.links.false_positive} fn={g.links.false_negative})"
         )
-        print(f"business-key accuracy: {metrics.gold_bk_accuracy:.3f}")
+        print(
+            f"  satellites  : {g.satellites.precision:.2f} / {g.satellites.recall:.2f} / {g.satellites.f1:.2f}"
+            "   (soft tier)"
+        )
+        print(f"  core-F1 (hubs+links, MANDATORY): {g.core_f1:.3f}")
+        print(f"  macro-F1 (all three)          : {g.macro_f1:.3f}")
+        print(
+            f"  business-key accuracy         : {g.business_key_accuracy:.3f} "
+            f"({g.business_key_matches}/{g.business_key_total})"
+        )
     if report.issues:
         print(f"\nissues ({len(report.issues)}):")
         for issue in report.issues:
@@ -143,6 +157,34 @@ def _cmd_approve(args: argparse.Namespace) -> int:
     plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
     payload = discover_from_yaml(args.payload)
     return _approve_plan(plan, payload, actor=args.actor)
+
+
+def _cmd_reject(args: argparse.Namespace) -> int:
+    """Record a REJECT decision for a generated plan (audit only, no corpus write).
+
+    Rejecting is human feedback too: it does NOT add the plan to the learning
+    corpus, but it IS logged in the approval audit trail — so you can compute the
+    approval rate (approved / (approved + rejected)) over your experiment runs.
+    """
+    from dbt_builder.src.ai.discovery.schema_discovery import discover_from_yaml
+    from dbt_builder.src.ai.rendering.metadata_v3_emitter import render_v3
+    from dbt_builder.src.ai.service import DwaService
+
+    plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
+    payload = discover_from_yaml(args.payload)
+    service = DwaService()
+    bv = service.architect_bv(plan)
+    rendered = render_v3(plan, payload.system, bv)
+    validation = service.validate(plan=plan, rendered_yaml=rendered, bv=bv)
+    service.submit_for_review(
+        plan=plan, rendered_yaml=rendered, validation=validation, actor=args.actor
+    )
+    record = service.reject(plan_id=validation.plan_id, actor=args.actor, comment=args.comment)
+    print(
+        f"[REJECTED] plan_id={record.plan_id} by {args.actor} — logged in the approval "
+        "audit trail; NOT added to the learning corpus."
+    )
+    return 0
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
@@ -306,6 +348,15 @@ def main(argv: list[str] | None = None) -> int:
     p_app.add_argument("--payload", required=True, help="the discovery YAML used to generate it")
     p_app.add_argument("--actor", default="evaluator@local", help="approver identity")
     p_app.set_defaults(func=_cmd_approve)
+
+    p_rej = sub.add_parser("reject", help="record a REJECT for a saved plan (audit only)")
+    p_rej.add_argument(
+        "--plan", required=True, help="path to a ModelingPlan JSON (from generate --out)"
+    )
+    p_rej.add_argument("--payload", required=True, help="the discovery YAML used to generate it")
+    p_rej.add_argument("--actor", default="evaluator@local", help="reviewer identity")
+    p_rej.add_argument("--comment", default="rejected via CLI", help="reason for rejection")
+    p_rej.set_defaults(func=_cmd_reject)
 
     p_abl = sub.add_parser("ablation", help="run the learning OFF-vs-ON study")
     p_abl.add_argument("--payloads-dir", required=True, help="dir of DiscoveryPayload *.json files")
