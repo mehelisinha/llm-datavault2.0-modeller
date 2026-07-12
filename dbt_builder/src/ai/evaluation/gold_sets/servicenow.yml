@@ -1,14 +1,62 @@
-# Gold DV2 model for a documented ServiceNow subset (sys_user, sys_user_group,
-# sys_user_grmember, incident). Hand-authored reference for grade_against_gold.
-# Business keys follow the semantic-key rule (number/user_name/name, not sys_id).
-system_id: servicenow
+# Gold DV2 model for the it4it_servicenow ServiceNow instance.
+#
+# Hand-authored from the SOURCE SCHEMA (table + column descriptions), NOT copied
+# from the model's generated output — that would make the ablation circular. The
+# generated YAML was used ONLY to align object NAMES to the modeller's convention.
+#
+# system_id matches this run's discovery payload. `volumemetrics` is intentionally
+# excluded (pipeline telemetry, not business data).
+#
+# ── KEY JUDGMENT CALL — business keys ─────────────────────────────────────────
+# ServiceNow reference tables (company / department / location / sla) have no
+# reliable *semantic* key (name / u_short_name are display fields, not guaranteed
+# unique or stable), so they are keyed on the stable `sys_id` GUID. `country` uses
+# the genuine ISO key `iso3166_3`; `user` / `group` use their membership reference
+# columns. If your shop's convention differs (e.g. key company on `name`), change
+# those lines — this is the one decision that is yours to make, not the tool's.
+system_id: edh_unreg_consumption_dev
+
 hubs:
-  hub_user: [user_name]
-  hub_group: [name]
-  hub_incident: [number]
+  hub_company: [sys_id]
+  hub_country: [iso3166_3]
+  hub_department: [sys_id]
+  hub_location: [sys_id]
+  hub_sla: [sys_id]
+  hub_user: [user]
+  hub_group: [group]
+
+# Associations found by scanning FK-like columns in each table.
+# NOTE: link_company_vendor_manager is included because core_company.vendor_manager
+# references a user, but hub_user is keyed on the `user` login (from sys_user_grmember)
+# while vendor_manager is a user sys_id — the FK may not resolve cleanly. Drop it if
+# you decide it is not reliably modellable in this schema.
 links:
+  - link_company_country
+  - link_company_parent            # self-referencing (core_company.parent)
+  - link_company_vendor_manager
+  - link_department_company
+  - link_department_parent         # self-referencing (cmn_department.parent)
+  - link_location_company
+  - link_location_country
+  - link_location_parent           # self-referencing (cmn_location.parent)
   - link_user_group
+  - link_u_mcs_company_approval_group   # from u_mcs_..._mapping (company↔group)
+  - link_u_mcs_company_department       # from u_mcs_..._mapping (company↔department)
+
+# Descriptive satellites (the WEAK signal — names/splits vary legitimately).
+# sat_u_mcs_company_and_approval_group_mapping_details is DELIBERATELY OMITTED:
+# u_approval_level is a *link* attribute (on the company↔approval-group link), not
+# a descriptive attribute of the company hub, so hanging it off hub_company is a
+# modelling error. Add it here only if you disagree.
 satellites:
-  - sat_user_details
-  - sat_group_details
-  - sat_incident_details
+  - sat_company_details
+  - sat_company_operational
+  - sat_country_details
+  - sat_country_operational
+  - sat_department_details
+  - sat_department_operational
+  - sat_location_details
+  - sat_location_operational
+  - sat_sla_details
+  - sat_task_sla_measurements
+  - sat_user_group_details
