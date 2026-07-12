@@ -143,6 +143,6 @@ def test_load_bundled_gold_sets():
     models = load_gold_models()
     # gold sets are keyed by their discovery system_id (not the filename)
     assert "IEC_CIM_001" in models
-    assert "edh_unreg_consumption_dev" in models  # the it4it_servicenow instance
+    assert "SNOW_IT4IT_001" in models  # the it4it_servicenow instance
     assert models["IEC_CIM_001"].hubs["hub_terminal"] == ("mrid",)
-    assert models["edh_unreg_consumption_dev"].hubs["hub_user"] == ("user",)
+    assert models["SNOW_IT4IT_001"].hubs["hub_user"] == ("user",)

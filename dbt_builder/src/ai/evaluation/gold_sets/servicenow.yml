@@ -4,10 +4,13 @@
 # from the model's generated output — that would make the ablation circular. The
 # generated YAML was used ONLY to align object NAMES to the modeller's convention.
 #
-# system_id matches this run's discovery payload. `volumemetrics` is intentionally
-# excluded (pipeline telemetry, not business data). See RUBRIC.md for the scoring
-# tiers and the full per-system caveats (task_sla boundary, hub-derivation
-# asymmetry, cross-schema scope, vendor_manager FK).
+# system_id matches poc/metadata/servicenow_it4it_discovery.yaml so `generate`
+# auto-pairs payload -> gold. (The live web-app pipeline emits the catalog name
+# 'edh_unreg_consumption_dev' as system_id instead; for a web-app plan, pass
+# --gold SNOW_IT4IT_001 explicitly — grading matches by object name, not system_id.)
+# `volumemetrics` is intentionally excluded (pipeline telemetry, not business data).
+# See RUBRIC.md for the scoring tiers and per-system caveats (task_sla boundary,
+# hub-derivation asymmetry, cross-schema scope, vendor_manager FK).
 #
 # ── KEY JUDGMENT CALL — business keys ─────────────────────────────────────────
 # ServiceNow reference tables (company / department / location / sla) have no
@@ -16,7 +19,7 @@
 # the genuine ISO key `iso3166_3`; `user` / `group` use their membership reference
 # columns. If your shop's convention differs (e.g. key company on `name`), change
 # those lines — this is the one decision that is yours to make, not the tool's.
-system_id: edh_unreg_consumption_dev
+system_id: SNOW_IT4IT_001
 
 hubs:
   hub_company: [sys_id]
