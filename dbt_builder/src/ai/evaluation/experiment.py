@@ -46,12 +46,11 @@ _SCALAR_FIELDS = (
     "uncovered_count",
 )
 _GOLD_FIELDS = (
-    "gold_hub_f1",
-    "gold_link_f1",
-    "gold_sat_f1",
-    "gold_core_f1",
-    "gold_macro_f1",
-    "gold_bk_accuracy",
+    "gold_entity_f1",
+    "gold_entity_precision",
+    "gold_entity_recall",
+    "gold_naming_adherence",
+    "gold_link_ratio",
 )
 
 
@@ -71,13 +70,12 @@ class PlanMetrics(BaseModel):
     coverage_ratio: float
     uncovered_count: int = Field(ge=0)
     issues_by_type: dict[str, int] = Field(default_factory=dict)
-    # Present only when a gold model was supplied.
-    gold_hub_f1: float | None = None
-    gold_link_f1: float | None = None
-    gold_sat_f1: float | None = None
-    gold_core_f1: float | None = None  # mandatory tier: hubs + links
-    gold_macro_f1: float | None = None
-    gold_bk_accuracy: float | None = None
+    # Present only when a gold model was supplied. Structural, naming-independent.
+    gold_entity_f1: float | None = None  # entity+key identification (correctness)
+    gold_entity_precision: float | None = None
+    gold_entity_recall: float | None = None
+    gold_naming_adherence: float | None = None  # convention transfer (learning effect)
+    gold_link_ratio: float | None = None  # produced/expected links (>1 = over-linking)
 
 
 def evaluate_plan(
@@ -96,12 +94,11 @@ def evaluate_plan(
     if gold is not None:
         g = grade_against_gold(plan, gold)
         gold_fields = {
-            "gold_hub_f1": g.hubs.f1,
-            "gold_link_f1": g.links.f1,
-            "gold_sat_f1": g.satellites.f1,
-            "gold_core_f1": g.core_f1,
-            "gold_macro_f1": g.macro_f1,
-            "gold_bk_accuracy": g.business_key_accuracy,
+            "gold_entity_f1": g.entity_f1,
+            "gold_entity_precision": g.entity.precision,
+            "gold_entity_recall": g.entity.recall,
+            "gold_naming_adherence": g.naming_adherence,
+            "gold_link_ratio": g.link_ratio,
         }
 
     return PlanMetrics(

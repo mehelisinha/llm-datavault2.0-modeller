@@ -1,19 +1,18 @@
 # Gold DV2 model for the IEC 61968 / CIM source system.
 #
-# Aligned with the authoritative hand-modelled reference in
-# poc/metadata/iec_cim_metadata.yaml, and keyed by the SAME system_id as the
-# discovery payload (poc/metadata/iec_cim_discovery.yaml) so the ablation runner
-# matches payload -> gold automatically. Every CIM hub is keyed on mRID.
+# Structural format: each hub is keyed by (source_table, business_keys) — the
+# naming-independent entity identity — plus the expected concept `name`. Grading
+# matches entities by (source_table, business_key) and reports naming adherence
+# separately (see gold.py / RUBRIC.md). system_id matches iec_cim_discovery.yaml.
 #
-# NOTE on the link name: the poc reference uses the legacy `lnk_` prefix; the
-# current modeller emits `link_`. This gold uses the modeller convention. If
-# your modeller names the 3-hub link differently, reconcile the name here after
-# a first run (see gold_sets/README.md).
+# Source tables come from poc/metadata/iec_cim_discovery.yaml. Every CIM hub is
+# keyed on mRID.
 system_id: IEC_CIM_001
 hubs:
-  hub_conducting_equipment: [mrid]
-  hub_connectivity_node: [mrid]
-  hub_terminal: [mrid]
+  - {source_table: conducting_equipment, business_keys: [mrid], name: hub_conducting_equipment}
+  - {source_table: connectivity_nodes,   business_keys: [mrid], name: hub_connectivity_node}
+  - {source_table: terminals,            business_keys: [mrid], name: hub_terminal}
+# Reference counts only (names are naming-confounded, so not name-matched).
 links:
   - link_terminal_equipment_node
 satellites:

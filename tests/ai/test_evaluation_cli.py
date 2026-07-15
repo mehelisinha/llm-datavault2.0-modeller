@@ -37,9 +37,8 @@ def test_score_command_runs_and_reports(tmp_path, capsys):
 
     assert rc == 0
     assert "conformance score" in out
-    assert "precision / recall / F1" in out  # per-kind P/R/F1 printed
-    assert "macro-F1" in out
-    assert "business-key accuracy" in out
+    assert "entity id" in out  # structural entity P/R/F1 printed
+    assert "naming adherence" in out
 
 
 def test_score_command_without_gold(tmp_path, capsys):
@@ -47,7 +46,7 @@ def test_score_command_without_gold(tmp_path, capsys):
     plan_path.write_text(_plan().model_dump_json(), encoding="utf-8")
     rc = main(["score", "--plan", str(plan_path)])
     assert rc == 0
-    assert "macro-F1" not in capsys.readouterr().out
+    assert "naming adherence" not in capsys.readouterr().out
 
 
 def test_ablation_reports_mean_latency():

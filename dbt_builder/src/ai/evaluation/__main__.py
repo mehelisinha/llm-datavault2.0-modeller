@@ -44,9 +44,9 @@ _REPORT_COLS = (
     "issue_count",
     "weighted_error_impact",
     "coverage_ratio",
-    "gold_core_f1",
-    "gold_macro_f1",
-    "gold_bk_accuracy",
+    "gold_entity_f1",
+    "gold_naming_adherence",
+    "gold_link_ratio",
     "mean_latency_s",
 )
 
@@ -78,24 +78,22 @@ def _print_scorecard(plan, *, source_tables, gold, technical) -> None:
         print(f"coverage             : {metrics.coverage_ratio:.3f}")
     if gold is not None:
         g = grade_against_gold(plan, gold)
-        print("\ngold grading (precision / recall / F1):")
+        print("\ngold grading (structural — naming-independent):")
         print(
-            f"  hubs        : {g.hubs.precision:.2f} / {g.hubs.recall:.2f} / {g.hubs.f1:.2f}"
-            f"   (tp={g.hubs.true_positive} fp={g.hubs.false_positive} fn={g.hubs.false_negative})"
+            f"  entity id (source_table + business key): "
+            f"P/R/F1 = {g.entity.precision:.2f} / {g.entity.recall:.2f} / {g.entity_f1:.2f}"
+            f"   (tp={g.entity.true_positive} fp={g.entity.false_positive} fn={g.entity.false_negative})"
         )
         print(
-            f"  links       : {g.links.precision:.2f} / {g.links.recall:.2f} / {g.links.f1:.2f}"
-            f"   (tp={g.links.true_positive} fp={g.links.false_positive} fn={g.links.false_negative})"
+            f"  naming adherence (concept names)       : {g.naming_adherence:.2f}"
+            f"   ({g.naming_matches}/{g.matched_entities} matched entities use the shop name)"
         )
         print(
-            f"  satellites  : {g.satellites.precision:.2f} / {g.satellites.recall:.2f} / {g.satellites.f1:.2f}"
-            "   (soft tier)"
+            f"  links produced/expected                : {g.produced_links}/{g.expected_links}"
+            f"   (ratio {g.link_ratio:.2f}; >1 = over-linking)"
         )
-        print(f"  core-F1 (hubs+links, MANDATORY): {g.core_f1:.3f}")
-        print(f"  macro-F1 (all three)          : {g.macro_f1:.3f}")
         print(
-            f"  business-key accuracy         : {g.business_key_accuracy:.3f} "
-            f"({g.business_key_matches}/{g.business_key_total})"
+            f"  satellites produced/expected           : {g.produced_satellites}/{g.expected_satellites}"
         )
     if report.issues:
         print(f"\nissues ({len(report.issues)}):")

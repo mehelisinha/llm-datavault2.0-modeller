@@ -1591,12 +1591,19 @@ def _merge_plans(plans: Sequence[ModelingPlan], *, system_id: str) -> ModelingPl
 # ====================================================================== factory
 
 
-def _load_reference_corpus(settings: AISettings) -> ReferenceLoader | None:
+def _load_reference_corpus(
+    settings: AISettings, *, exclude_catalogs: tuple[str, ...] = ()
+) -> ReferenceLoader | None:
     """Build a corpus-backed :class:`ReferenceLoader`, or ``None`` on any failure.
 
     Called once per agent construction (not per completion). A missing warehouse,
     empty corpus, or any load error degrades gracefully to ``None`` so modelling
     still runs — just without few-shot examples — rather than failing the run.
+
+    ``exclude_catalogs`` drops corpus rows from those source catalogs before
+    building the loader. This is the **leave-one-out** hook the ablation study
+    uses to prevent train/test leakage — testing system X with X's own approved
+    model excluded, so retrieval measures genuine transfer, not memorisation.
     """
     try:
         from dbt_builder.src.ai.reference import ReferenceLoader
@@ -1605,10 +1612,16 @@ def _load_reference_corpus(settings: AISettings) -> ReferenceLoader | None:
         store = make_example_store(settings)
         if store is None:
             return None
-        loader = ReferenceLoader.from_corpus_rows(store.load_latest())
+        rows = store.load_latest()
+        if exclude_catalogs:
+            excl = {c.lower() for c in exclude_catalogs}
+            rows = tuple(r for r in rows if r.catalog.lower() not in excl)
+        loader = ReferenceLoader.from_corpus_rows(rows)
         _LOG.info(
-            "ModellingAgent: loaded %d approved example(s) from the learning corpus",
+            "ModellingAgent: loaded %d approved example(s) from the learning corpus"
+            "%s",
             len(loader.all()),
+            f" (excluding catalogs {list(exclude_catalogs)})" if exclude_catalogs else "",
         )
         return loader
     except Exception as exc:  # noqa: BLE001 — never let corpus load fail a run
@@ -1635,6 +1648,9 @@ def get_modelling_agent(
     max_prompt_tokens: int | None = None,
     large_catalog_threshold: int | None = None,
     max_completion_tokens: int | None = None,
+    reference_loader_override: ReferenceLoader | None = None,
+    reference_limit_override: int | None = None,
+    learning_exclude_catalogs: tuple[str, ...] = (),
 ) -> ModellingAgent:
     """Build a :class:`ModellingAgent` from settings.
 
@@ -1684,12 +1700,27 @@ def get_modelling_agent(
     if max_completion_tokens is None:
         max_completion_tokens = cfg.modeller_completion_cap()
     # Feedback learning: load the approved-example corpus once, only when enabled.
+    # An explicit ``reference_loader_override`` (used by the ablation harness to
+    # inject a leave-one-out corpus) always wins and bypasses settings gating.
     reference_loader: ReferenceLoader | None = None
     reference_limit = 0
-    if getattr(cfg, "learning_examples_enabled", False):
-        reference_limit = getattr(cfg, "learning_examples_k", 0)
+    if reference_loader_override is not None:
+        reference_loader = reference_loader_override
+        reference_limit = (
+            reference_limit_override
+            if reference_limit_override is not None
+            else getattr(cfg, "learning_examples_k", 0)
+        )
+    elif getattr(cfg, "learning_examples_enabled", False):
+        reference_limit = (
+            reference_limit_override
+            if reference_limit_override is not None
+            else getattr(cfg, "learning_examples_k", 0)
+        )
         if reference_limit > 0:
-            reference_loader = _load_reference_corpus(cfg)
+            reference_loader = _load_reference_corpus(
+                cfg, exclude_catalogs=learning_exclude_catalogs
+            )
     client = AzureOpenAI(
         azure_endpoint=cfg.azure_openai_endpoint,
         api_key=cfg.azure_openai_api_key.get_secret_value(),

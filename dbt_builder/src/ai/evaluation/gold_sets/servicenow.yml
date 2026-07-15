@@ -1,58 +1,39 @@
 # Gold DV2 model for the it4it_servicenow ServiceNow instance.
 #
-# Hand-authored from the SOURCE SCHEMA (table + column descriptions), NOT copied
-# from the model's generated output — that would make the ablation circular. The
-# generated YAML was used ONLY to align object NAMES to the modeller's convention.
+# Hand-authored from the SOURCE SCHEMA (not the model's output — that would make
+# the ablation circular). Structural format: each hub is keyed by
+# (source_table, business_keys) so grading is naming-independent (matches
+# hub_core_company to the company entity regardless of name) and reports naming
+# adherence separately. system_id matches poc/metadata/servicenow_it4it_discovery.yaml.
 #
-# system_id matches poc/metadata/servicenow_it4it_discovery.yaml so `generate`
-# auto-pairs payload -> gold. (The live web-app pipeline emits the catalog name
-# 'edh_unreg_consumption_dev' as system_id instead; for a web-app plan, pass
-# --gold SNOW_IT4IT_001 explicitly — grading matches by object name, not system_id.)
-# `volumemetrics` is intentionally excluded (pipeline telemetry, not business data).
-# See RUBRIC.md for the scoring tiers and per-system caveats (task_sla boundary,
-# hub-derivation asymmetry, cross-schema scope, vendor_manager FK).
-#
-# ── KEY JUDGMENT CALL — business keys ─────────────────────────────────────────
-# ServiceNow reference tables (company / department / location / sla) have no
-# reliable *semantic* key (name / u_short_name are display fields, not guaranteed
-# unique or stable), so they are keyed on the stable `sys_id` GUID. `country` uses
-# the genuine ISO key `iso3166_3`; `user` / `group` use their membership reference
-# columns. If your shop's convention differs (e.g. key company on `name`), change
-# those lines — this is the one decision that is yours to make, not the tool's.
+# Business keys: ServiceNow reference tables (company/department/location/sla)
+# have no reliable semantic key, so they are keyed on the stable sys_id GUID;
+# country uses iso3166_3; user/group use their membership columns. CONFIRMED
+# convention (2026-07). `volumemetrics` is intentionally excluded (telemetry).
+# sys_user_grmember yields TWO entities (user, group) — hence two hubs on one
+# source table, disambiguated by business key. See RUBRIC.md for full caveats.
 system_id: SNOW_IT4IT_001
-
 hubs:
-  hub_company: [sys_id]
-  hub_country: [iso3166_3]
-  hub_department: [sys_id]
-  hub_location: [sys_id]
-  hub_sla: [sys_id]
-  hub_user: [user]
-  hub_group: [group]
-
-# Associations found by scanning FK-like columns in each table.
-# NOTE: link_company_vendor_manager is included because core_company.vendor_manager
-# references a user, but hub_user is keyed on the `user` login (from sys_user_grmember)
-# while vendor_manager is a user sys_id — the FK may not resolve cleanly. Drop it if
-# you decide it is not reliably modellable in this schema.
+  - {source_table: core_company,      business_keys: [sys_id],    name: hub_company}
+  - {source_table: core_country,      business_keys: [iso3166_3], name: hub_country}
+  - {source_table: cmn_department,    business_keys: [sys_id],    name: hub_department}
+  - {source_table: cmn_location,      business_keys: [sys_id],    name: hub_location}
+  - {source_table: contract_sla,      business_keys: [sys_id],    name: hub_sla}
+  - {source_table: sys_user_grmember, business_keys: [user],      name: hub_user}
+  - {source_table: sys_user_grmember, business_keys: [group],     name: hub_group}
+# Reference counts only (names are naming-confounded, so not name-matched).
 links:
   - link_company_country
-  - link_company_parent            # self-referencing (core_company.parent)
+  - link_company_parent
   - link_company_vendor_manager
   - link_department_company
-  - link_department_parent         # self-referencing (cmn_department.parent)
+  - link_department_parent
   - link_location_company
   - link_location_country
-  - link_location_parent           # self-referencing (cmn_location.parent)
+  - link_location_parent
   - link_user_group
-  - link_u_mcs_company_approval_group   # from u_mcs_..._mapping (company↔group)
-  - link_u_mcs_company_department       # from u_mcs_..._mapping (company↔department)
-
-# Descriptive satellites (the WEAK signal — names/splits vary legitimately).
-# sat_u_mcs_company_and_approval_group_mapping_details is DELIBERATELY OMITTED:
-# u_approval_level is a *link* attribute (on the company↔approval-group link), not
-# a descriptive attribute of the company hub, so hanging it off hub_company is a
-# modelling error. Add it here only if you disagree.
+  - link_u_mcs_company_approval_group
+  - link_u_mcs_company_department
 satellites:
   - sat_company_details
   - sat_company_operational
@@ -63,8 +44,5 @@ satellites:
   - sat_location_details
   - sat_location_operational
   - sat_sla_details
-  # task_sla is a boundary case: task_sla.task is cross-schema (no hub_task), so
-  # its measurements hang off hub_sla and MUST key on task_sla.sla (the SLA
-  # sys_id), NOT task_sla.sys_id. Keying on sys_id orphans the sat (Tier-3 error).
   - sat_task_sla_measurements
   - sat_user_group_details

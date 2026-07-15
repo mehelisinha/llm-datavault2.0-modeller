@@ -6,6 +6,7 @@ from dbt_builder.src.ai.contracts.decisions import HubDecision, ModelingPlan, Sa
 from dbt_builder.src.ai.evaluation import (
     AblationArm,
     ExperimentCase,
+    GoldHub,
     GoldModel,
     aggregate,
     evaluate_plan,
@@ -42,18 +43,20 @@ def _messy_plan() -> ModelingPlan:
 
 def test_evaluate_plan_populates_gold_fields_when_gold_present():
     gold = GoldModel(
-        system_id="t", hubs={"hub_user": ("user_name",)}, satellites=("sat_user_details",)
+        system_id="t",
+        hubs=(GoldHub(source_table="t", business_keys=("user_name",), name="hub_user"),),
+        satellites=("sat_user_details",),
     )
     m = evaluate_plan(_clean_plan(), source_tables=("t",), gold=gold)
     assert m.conformance_score == 1.0
-    assert m.gold_macro_f1 is not None
-    assert m.gold_bk_accuracy == 1.0
+    assert m.gold_entity_f1 == 1.0
+    assert m.gold_naming_adherence == 1.0
     assert m.coverage_ratio == 1.0
 
 
 def test_evaluate_plan_gold_fields_none_without_gold():
     m = evaluate_plan(_clean_plan(), source_tables=("t",))
-    assert m.gold_macro_f1 is None
+    assert m.gold_entity_f1 is None
 
 
 def test_aggregate_means_scalars():

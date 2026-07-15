@@ -34,6 +34,7 @@ from dbt_builder.src.ai.evaluation.experiment import (
     run_ablation,
 )
 from dbt_builder.src.ai.evaluation.gold import (
+    GoldHub,
     GoldModel,
     GoldScore,
     PrecisionRecall,
@@ -48,6 +49,7 @@ __all__ = [
     "ConformanceReport",
     "CoverageReport",
     "ExperimentCase",
+    "GoldHub",
     "GoldModel",
     "GoldScore",
     "IssueType",
