@@ -8,6 +8,7 @@
 # Source tables come from poc/metadata/iec_cim_discovery.yaml. Every CIM hub is
 # keyed on mRID.
 system_id: IEC_CIM_001
+discovery_payload: poc/metadata/iec_cim_discovery.yaml
 hubs:
   - {source_table: conducting_equipment, business_keys: [mrid], name: hub_conducting_equipment}
   - {source_table: connectivity_nodes,   business_keys: [mrid], name: hub_connectivity_node}

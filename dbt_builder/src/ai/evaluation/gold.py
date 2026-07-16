@@ -61,6 +61,12 @@ class GoldModel(BaseModel):
     hubs: tuple[GoldHub, ...] = ()
     links: tuple[str, ...] = ()  # reference only — count, not name-matched (confounded)
     satellites: tuple[str, ...] = ()  # reference only — count, not name-matched
+    # Provenance/wiring only — NOT used by grading. The canonical discovery YAML
+    # this gold was authored against, so a reproducible experiment run can resolve
+    # system_id -> payload from this single file (no hardcoded paths in runners).
+    discovery_payload: str | None = Field(
+        default=None, description="Repo-relative path to the discovery YAML for this system."
+    )
 
 
 class PrecisionRecall(BaseModel):

@@ -24,6 +24,37 @@ source code (`dbt_builder/src/ai/**`), not from the marketing description.
 | [`experiment-1-modeller-ablation.md`](./experiment-1-modeller-ablation.md) | **Experiment 1 — ablation** (OFF vs leave-one-out vs full-corpus). Finding: entity identification is at ceiling and learning-independent; the naming convention is *not* transferred by k=3 few-shot (the corpus's clean names come from the downstream reviewer). Structural, naming-independent metrics; 3 seeds/arm. |
 | [`experiment-2-learning-curve.md`](./experiment-2-learning-curve.md) | **Experiment 2 — learning curve** (k=0…10) + leave-one-out transfer probe. Finding: naming transfer is **threshold-gated** (0→1.0 at k≈10) and is **instance-level copying, not convention generalisation** (LOO at k=10 stays 0). Corrects the thesis claim into a precise, conditional one. |
 | [`experiment-3-cross-domain-control.md`](./experiment-3-cross-domain-control.md) | **Experiment 3 — CIM cross-domain control.** Findings: cross-domain examples are **inert, not harmful** (safe in a shared corpus); the naming effect is **invisible on CIM because its tables are already concept-named** → the effect's scope condition is a *table-vs-concept naming gap* (e.g. ServiceNow prefixes). Consolidated 1–3 map of where feedback helps / is inert / is safe. |
+| [`experiment-4-endtoend-taxonomy.md`](./experiment-4-endtoend-taxonomy.md) | **Experiment 4 — end-to-end reviewer + error-taxonomy shift.** Findings: the gpt-5.2 reviewer **resolves dangling link FKs** but **introduces surrogate-key hubs** → conformance up, entity_f1 (vs gold) down, naming neutral, and **blast-radius-weighted impact rises even as issue count falls**. Revises Exp 1: clean naming comes from the *modeller's learning*, not the reviewer. End-to-end quality is a **trade-off**, not a scalar win. |
+
+### Reproducible runner (all four experiments, one command)
+
+Experiments 1–4 are the same operation under different knobs, run through one
+declarative CLI — **no scratchpad scripts, no hardcoded paths**. A system is
+named by its gold `system_id` (its discovery-payload path is read from the gold
+file); a condition is a parsed spec (`off`, `on:k=10`,
+`loo:k=10,exclude=cat_a+cat_b`, `e2e:k=10,review=1`). Wiring lives in
+`dbt_builder/src/ai/evaluation/study.py`; pure logic is unit-tested with injected
+fakes in `tests/ai/test_study.py` (no network). Reproduce each experiment with:
+
+```bash
+# Exp 1 — ablation (ServiceNow: OFF vs leave-one-out vs full corpus)
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition "loo:k=3,exclude=edh_unreg_consumption_dev" --condition "on:k=3" --seeds 42,43,44
+
+# Exp 2 — learning curve + transfer probe
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition on:k=1 --condition on:k=3 --condition on:k=5 --condition on:k=10 \
+  --condition "loo:k=10,exclude=edh_unreg_consumption_dev" --seeds 42,43
+
+# Exp 3 — CIM cross-domain control
+python -m dbt_builder.src.ai.evaluation experiment --system IEC_CIM_001 \
+  --condition off --condition "loo:k=3,exclude=iec_cim+edh_unreg_silver_dev_st" \
+  --condition on:k=10 --condition "loo:k=10,exclude=iec_cim+edh_unreg_silver_dev_st" --seeds 42,43
+
+# Exp 4 — end-to-end reviewer + taxonomy shift
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --system IEC_CIM_001 \
+  --condition "e2e_off:k=0,review=1" --condition "e2e_on:k=10,review=1" --seeds 42,43
+```
 
 > The two halves meet at the **metadata YAML**: the AI side emits it, the
 > `dv_components` engine compiles it. Read `concepts-and-rationale.md` first for

@@ -29,11 +29,15 @@ from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 from dbt_builder.src.ai.evaluation import (
     AblationArm,
     ExperimentCase,
+    StageRecord,
     evaluate_plan,
     grade_against_gold,
     load_gold_models,
+    parse_condition,
     run_ablation,
+    run_study,
     score_plan,
+    summarise,
 )
 
 _ARM_OFF = "learning_off"
@@ -311,6 +315,107 @@ def _print_results(results: dict[str, dict[str, float]]) -> None:
         print(row)
 
 
+def _print_record(rec: StageRecord) -> None:
+    """One-line live progress for a finished trial (raw -> reviewed when reviewed)."""
+    raw = rec.raw
+    line = (
+        f"[{rec.system_id:14} {rec.condition:10} s={rec.seed}] "
+        f"ef1={raw.gold_entity_f1:.2f} nam={raw.gold_naming_adherence:.2f} "
+        f"conf={raw.conformance_score:.2f} iss={raw.issue_count} "
+        f"wimpact={raw.weighted_error_impact} lr={raw.gold_link_ratio:.2f} "
+        f"| model {rec.t_model_s:.0f}s"
+    )
+    if rec.reviewed is not None:
+        rv = rec.reviewed
+        line += (
+            f"  ->REV ef1={rv.gold_entity_f1:.2f} nam={rv.gold_naming_adherence:.2f} "
+            f"conf={rv.conformance_score:.2f} iss={rv.issue_count} "
+            f"wimpact={rv.weighted_error_impact} lr={rv.gold_link_ratio:.2f} "
+            f"(review {rec.t_review_s:.0f}s)"
+        )
+    print(line, flush=True)
+
+
+def _cmd_experiment(args: argparse.Namespace) -> int:
+    """Run a declarative study: systems × conditions × seeds, raw (+reviewed).
+
+    Subsumes every experiment (ablation, learning curve, cross-domain control,
+    end-to-end reviewer + taxonomy shift). Nothing is hardcoded: systems are gold
+    ``system_id``s (payload path read from the gold file) and conditions are
+    parsed specs like ``off``, ``on:k=10``, ``loo:k=10,exclude=a+b``, ``e2e:k=10,review=1``.
+    """
+    from dbt_builder.src.ai.settings import get_settings
+
+    systems = [s for s in ",".join(args.system).split(",") if s]
+    conditions = [parse_condition(c) for c in args.condition]
+    seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
+    print(
+        f"systems={systems}  conditions={[c.label for c in conditions]}  "
+        f"seeds={seeds}  samples={args.samples}\n"
+    )
+    records = run_study(
+        systems=systems,
+        conditions=conditions,
+        seeds=seeds,
+        settings=get_settings(),
+        samples=args.samples,
+        on_record=_print_record,
+    )
+    _print_study_summary(summarise(records))
+    if args.out:
+        import json
+
+        payload = {
+            "records": [r.model_dump() for r in records],
+            "summary": _summary_to_jsonable(summarise(records)),
+        }
+        Path(args.out).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"\nresults written to {args.out}")
+    return 0
+
+
+def _summary_to_jsonable(summary: dict) -> dict:
+    """Flatten the summarise() output (dataclasses/models) into plain JSON."""
+    out: dict = {}
+    for key, cell in summary.items():
+        entry: dict = {}
+        for stage in ("raw", "reviewed"):
+            s = cell.get(stage)
+            entry[stage] = (
+                None
+                if s is None
+                else {
+                    "means": s.means,
+                    "issues_by_type": s.issues_by_type,
+                    "naming_per_seed": list(s.naming_per_seed),
+                }
+            )
+        shift = cell.get("shift")
+        entry["shift"] = None if shift is None else shift.model_dump()
+        out[key] = entry
+    return out
+
+
+def _print_study_summary(summary: dict) -> None:
+    """Print per-(system/condition) raw->reviewed means + error-taxonomy shift."""
+    print("\n=== STUDY SUMMARY (means over seeds) ===")
+    for key, cell in summary.items():
+        raw = cell["raw"]
+        rev = cell.get("reviewed")
+        print(f"\n{key}:")
+        for f in ("gold_entity_f1", "gold_naming_adherence", "conformance_score",
+                  "issue_count", "weighted_error_impact", "gold_link_ratio"):
+            rv = "" if rev is None else f" -> {rev.means.get(f)}"
+            print(f"  {f:22} {raw.means.get(f)}{rv}")
+        print(f"  taxonomy raw     : {raw.issues_by_type or '{}'}")
+        if rev is not None:
+            print(f"  taxonomy reviewed: {rev.issues_by_type or '{}'}")
+            shift = cell["shift"]
+            print(f"  resolved         : {shift.resolved or '{}'}")
+            print(f"  introduced       : {shift.introduced or '{}'}")
+            print(f"  net_resolved     : {shift.net_resolved}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m dbt_builder.src.ai.evaluation")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -361,6 +466,27 @@ def main(argv: list[str] | None = None) -> int:
     p_abl.add_argument("--k", type=int, default=3, help="examples retrieved in the ON arm")
     p_abl.add_argument("--samples", type=int, default=1, help="modeller votes per plan")
     p_abl.set_defaults(func=_cmd_ablation)
+
+    p_exp = sub.add_parser(
+        "experiment",
+        help="run a declarative study: systems × conditions × seeds (raw + optional reviewer)",
+    )
+    p_exp.add_argument(
+        "--system",
+        action="append",
+        required=True,
+        help="gold system_id (repeatable or comma-separated), e.g. SNOW_IT4IT_001",
+    )
+    p_exp.add_argument(
+        "--condition",
+        action="append",
+        required=True,
+        help="condition spec (repeatable): off | on:k=10 | loo:k=10,exclude=a+b | e2e:k=10,review=1",
+    )
+    p_exp.add_argument("--seeds", default="42", help="comma-separated seeds, e.g. 42,43")
+    p_exp.add_argument("--samples", type=int, default=1, help="modeller votes per plan")
+    p_exp.add_argument("--out", default=None, help="write full records + summary JSON here")
+    p_exp.set_defaults(func=_cmd_experiment)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

@@ -13,6 +13,7 @@
 # sys_user_grmember yields TWO entities (user, group) — hence two hubs on one
 # source table, disambiguated by business key. See RUBRIC.md for full caveats.
 system_id: SNOW_IT4IT_001
+discovery_payload: poc/metadata/servicenow_it4it_discovery.yaml
 hubs:
   - {source_table: core_company,      business_keys: [sys_id],    name: hub_company}
   - {source_table: core_country,      business_keys: [iso3166_3], name: hub_country}
