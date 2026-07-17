@@ -159,3 +159,37 @@ toward (i) harder schemas and (ii) the stages where its signal is actionable.
 4. To confirm F-2, print the injected block for the ON-full agent:
    `agent._reference_block(payload)` — you will see concept-named examples
    (`hub_department`) that the output nonetheless does not adopt.
+
+Steps 2–3 above are the *original* (scratchpad) procedure. The experiment is now
+reproducible in **one command** via the unified harness:
+
+```bash
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition "loo:k=3,exclude=edh_unreg_consumption_dev" \
+  --condition "on:k=3" --seeds 42,43,44
+```
+
+## 8. Reproduction check (re-run through the unified harness)
+
+The original run used a bespoke script; the harness was built afterwards. The
+experiment was therefore **re-run end-to-end** to verify the final tooling
+reproduces the published numbers (a regression check on the refactored grading
+code, not a correction of the findings).
+
+| Arm | entity_f1 (published → re-run) | naming_adherence | conformance | link_ratio |
+|---|---|---|---|---|
+| OFF | 0.933 → 0.914 | 0.000 → **0.000** | 0.943 → 0.942 | 1.79 → 1.76 |
+| ON-LOO | 0.914 → 0.933 | 0.000 → **0.000** | 0.932 → 0.921 | 1.79 → 1.88 |
+| ON-full | 0.933 → 0.933 | 0.000 → **0.000** | 0.945 → 0.930 | 1.64 → 1.67 |
+
+**Every finding reproduces.** F-2 (`naming_adherence = 0` in all arms at k=3) is
+exact. F-1 (entity id at ceiling, learning-independent) holds: all arms sit in the
+0.91–0.93 band. F-3 (over-linking ~1.7–1.9×) holds. F-4 (latency) holds.
+
+**Honest note on the wobble.** OFF and ON-LOO *swapped* within the ceiling band
+(0.933/0.914 → 0.914/0.933). This is the single spurious `hub_task` landing on a
+different seed: the modeller is temperature 0 but LLM inference is not bit-exact,
+so ±1 object across 3 seeds moves the mean by ~0.02. The difference is **noise,
+not signal** — and it reinforces F-1, since no arm is reliably better than
+another. Any claim resting on a ≤0.02 entity_f1 gap between arms would be
+unsupported; none is made.

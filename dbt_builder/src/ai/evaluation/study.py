@@ -313,6 +313,16 @@ def run_study(
     trial for live progress logging. Discovery payloads are loaded once per system.
     """
     wiring = wiring or _DEFAULT_WIRING
+    labels = [c.label for c in conditions]
+    dupes = sorted({lbl for lbl in labels if labels.count(lbl) > 1})
+    if dupes:
+        # summarise() groups by (system, condition.label); duplicate labels would
+        # silently merge distinct arms (e.g. two 'on' arms at different k) into one
+        # average. Fail loud so a study definition can't corrupt its own table.
+        raise ValueError(
+            f"duplicate condition labels {dupes} — give each arm a unique label "
+            "(e.g. k1:k=1, k10:k=10), since results are grouped by label."
+        )
     golds = golds if golds is not None else load_gold_models()
     records: list[StageRecord] = []
     for system_id in systems:

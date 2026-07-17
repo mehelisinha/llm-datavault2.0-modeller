@@ -246,6 +246,16 @@ def test_run_study_iterates_systems_conditions_seeds():
     assert {r.seed for r in records} == {42, 43}
 
 
+def test_run_study_rejects_duplicate_condition_labels():
+    # two arms sharing a label would silently merge in summarise() -> fail loud.
+    with pytest.raises(ValueError, match="duplicate condition labels"):
+        run_study(
+            systems=["X"], conditions=[Condition("on", k=1), Condition("on", k=10)],
+            seeds=[42], settings=_Settings(), golds={"X": _gold()},
+            wiring=_wiring(review_plan=None),
+        )
+
+
 def test_run_study_unknown_system_raises():
     with pytest.raises(ValueError):
         run_study(systems=["NOPE"], conditions=[Condition("off")], seeds=[42],

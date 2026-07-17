@@ -145,3 +145,52 @@ already normalised in production.
    and observe `naming_adherence` drop back to 0. Inspect the injected examples
    with `agent._reference_block(p)` to confirm they are *other-entity* examples.
    (Script: `scratchpad/exp2_loo.py`.)
+
+The steps above are the *original* (scratchpad) procedure. The whole curve plus
+the transfer probe is now reproducible in **one command**:
+
+```bash
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition k1:k=1 --condition k3:k=3 --condition k5:k=5 \
+  --condition k10:k=10 --condition "loo_k10:k=10,exclude=edh_unreg_consumption_dev" \
+  --seeds 42,43
+```
+
+Note each arm needs a **distinct label** (`k1`, `k3`, …): results are grouped by
+label, so reusing one label across arms would merge them. The harness rejects
+duplicate labels rather than silently averaging distinct conditions together.
+
+## 8. Reproduction check (re-run through the unified harness)
+
+The original run used bespoke scripts; the harness was built afterwards. The
+curve and the transfer probe were **re-run** to verify the final tooling
+reproduces the published result.
+
+| k | naming_adherence (published → re-run) | entity_f1 (published → re-run) |
+|---|---|---|
+| 0 | 0.000 → **0.000** | 0.933 → 0.933 |
+| 1 | 0.000 → **0.000** | 0.933 → 0.933 |
+| 3 | 0.000 → **0.000** | 0.933 → 0.933 |
+| 5 | 0.000 → **0.000** | 0.933 → 0.875 |
+| **10** | **1.000 → 1.000** | 0.933 → 1.000 |
+| **LOO k=10** | **0.000 → 0.000** | 0.875 → 0.933 |
+
+**Both headline findings reproduce exactly, with zero seed variance:**
+- **F-1 (threshold, not gradual):** `naming_adherence` is flat at 0 for k ≤ 5 and
+  jumps to **1.0 at k = 10** — the phase-transition shape replicates precisely.
+- **F-2 (instance-level copying, not generalisation):** leave-one-out at k=10
+  returns `naming_adherence` to **0.0** — the model still receives 8 examples, but
+  for *other* entities, and does not infer the convention. This is the claim that
+  bounds the mechanism's generality, and it replicates exactly.
+
+**Honest note on the wobble.** `entity_f1` moves ±0.06 within its ceiling band
+across arms (e.g. k=5 0.933→0.875, k=10 0.933→1.000) — one spurious/extra hub
+shifting across seeds under non-bit-exact temperature-0 inference. F-3
+(correctness invariant to k) is unaffected: there is still no monotone trend in k,
+and no claim depends on these sub-0.1 differences. Naming — the metric carrying
+the findings — shows **zero** variance in every cell, which is why the conclusions
+are robust.
+
+*Provenance:* the k=0/1/3 arms and the k=5/10/LOO arms were run in two separate
+invocations of the command above (an interrupted session), then combined. Arms are
+independent by construction, so this does not affect the comparison.
