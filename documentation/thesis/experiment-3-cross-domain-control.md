@@ -110,3 +110,42 @@ learning curve, because it is falsifiable and it explains its own boundary cases
    ```
    Compare to the OFF baseline (`reference_limit_override=0`) — identical.
    (Full script: `scratchpad/exp3_cim.py`.)
+
+The steps above are the *original* (scratchpad) procedure. All four conditions are
+now reproducible in **one command** via the unified harness:
+
+```bash
+python -m dbt_builder.src.ai.evaluation experiment --system IEC_CIM_001 \
+  --condition off \
+  --condition "loo_k3:k=3,exclude=iec_cim+edh_unreg_silver_dev_st" \
+  --condition full_k10:k=10 \
+  --condition "loo_k10:k=10,exclude=iec_cim+edh_unreg_silver_dev_st" \
+  --seeds 42,43
+```
+
+## 7. Reproduction check (re-run through the unified harness)
+
+The original run used a bespoke script; the harness was built afterwards. The
+experiment was **re-run end-to-end** to verify the final tooling reproduces the
+published numbers.
+
+| Condition | entity_f1 | naming_adherence | conformance | link_ratio |
+|---|---|---|---|---|
+| OFF | 1.000 → **1.000** | 1.000 → **1.000** | 1.000 → **1.000** | 2.00 → **2.00** |
+| ON-LOO k=3 (cross-domain) | 1.000 → **1.000** | 1.000 → **1.000** | 1.000 → **1.000** | 2.00 → **2.00** |
+| ON-full k=10 | 1.000 → **1.000** | 1.000 → **1.000** | 1.000 → **1.000** | 2.00 → **2.00** |
+| ON-LOO k=10 (cross-domain) | 1.000 → **1.000** | 1.000 → **1.000** | 1.000 → **1.000** | 2.00 → **2.00** |
+
+**Exact reproduction — zero deviation in any cell, zero variance across seeds**
+(`issue_count = 0` throughout). Every finding stands unchanged: F-1 (cross-domain
+learning is inert, not harmful), F-2 (entity id at a perfect ceiling), F-3 (no
+naming gap to close on CIM), F-4 (over-linking at 2.0×).
+
+**Why this reproduces more cleanly than Experiments 1–2.** Those wobbled ±0.02–0.06
+on `entity_f1` because a *borderline* entity (the cross-schema `hub_task`) flickers
+across seeds under non-bit-exact temperature-0 inference. CIM has no such marginal
+case: three unambiguous mRID-keyed tables, so there is nothing for the model to be
+uncertain about. The CIM ceiling is therefore not merely high but **stable** —
+which *strengthens* this experiment's role as a control, since any degradation
+introduced by cross-domain examples would have shown up against a noise-free
+baseline rather than being lost in seed variance.
