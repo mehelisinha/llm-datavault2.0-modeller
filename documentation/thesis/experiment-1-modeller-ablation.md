@@ -62,10 +62,22 @@ when the exact concept-named examples are in context.** `naming_adherence = 0`
 in *all* arms, including ON-full. We verified the retrieved block does contain
 concept-named examples (e.g. `hub_department` for `cmn_department`), yet the
 agent still emits `hub_cmn_department`. The agent's table-based naming prior
-(from its system prompt) dominates the k=3 in-context examples. **Corollary:**
-the clean concept names in the approved corpus originate *downstream* (the
-plan-reviewer step renames the modeller's output), not from the modeller — so
-feeding them back to the modeller does not reproduce them.
+(from its system prompt) dominates the k=3 in-context examples. **Corollary
+(hypothesis):** the clean concept names in the approved corpus originate
+*downstream* (the plan-reviewer step renames the modeller's output), not from the
+modeller — so feeding them back to the modeller does not reproduce them.
+
+> **⚠ Revised by Experiment 4.** This corollary was a *hypothesis*, not a
+> measurement — Experiment 1 never graded the reviewer's output. Experiment 4
+> grades it directly and the corollary is **false**: the gpt-5.2 plan-reviewer is
+> **naming-neutral** (`naming_adherence` 0→0 with learning off, 1→1 with learning
+> on — it preserves whatever names the modeller emitted). The clean concept names
+> in the corpus therefore come from the **modeller's own few-shot learning** once
+> *k* crosses the threshold (Experiment 2), and/or from human edits at approval
+> time — **not** from the reviewer. The correct reading of F-2 is narrower: the
+> modeller ignores naming examples *at k=3*, but adopts them at *k≈10* (Exp 2);
+> the reviewer is not the source of the convention. See
+> `experiment-4-endtoend-taxonomy.md` §4 F-A.
 
 **F-3: Over-linking is systematic and learning-independent.** All arms produce
 ~1.6–1.8× the expected number of links: the modeller emits a link for every
@@ -90,15 +102,20 @@ and cannot add value.
   generative prior. This motivates Experiment 2 (does *more* context — higher
   *k* — transfer the convention?) and points to alternatives (an explicit,
   corpus-derived naming instruction, or applying the corpus at the *reviewer*
-  stage where naming is actually decided).
+  stage). *[Revised by Experiment 4: the reviewer does **not** decide naming — it
+  is naming-neutral — so the actionable lever is higher k at the modeller (Exp 2)
+  or an explicit naming instruction, not the reviewer.]*
 
 ## 5. Threats to validity / limitations
 
 - **Single system, one model.** Results may differ for schemas where entity
   extraction is *not* at ceiling (larger/ambiguous sources) or for weaker models.
-- **Modeller-only.** By isolating `propose()` we exclude the reviewer, which is
-  where naming is normalised in production — so this bounds the *mechanism*, not
-  the end-to-end product (a separate end-to-end study is warranted).
+- **Modeller-only.** By isolating `propose()` we exclude the reviewer — so this
+  bounds the *mechanism*, not the end-to-end product (a separate end-to-end study
+  is warranted). *[Experiment 4 ran that study and found the reviewer is
+  naming-neutral, so — contrary to the assumption originally stated here — naming
+  is **not** "normalised at the reviewer" in production; it is set at the modeller
+  by learning.]*
 - **Reproducibility.** LLM output is only best-effort deterministic under a fixed
   seed; we report 3 seeds, but naming_adherence's zero variance makes F-2 robust.
 - **Metric scope.** Links/satellites are reported as counts, not name-F1, because

@@ -108,6 +108,16 @@ the naming signal should be delivered as an explicit, corpus-derived instruction
 infers it from few-shot — or applied at the plan-reviewer stage, where naming is
 already normalised in production.
 
+> **⚠ Revised by Experiment 4.** The second alternative above ("applied at the
+> plan-reviewer stage, where naming is already normalised") rests on an assumption
+> that Experiment 4 **falsified**: the gpt-5.2 reviewer is *naming-neutral* — it
+> preserves the modeller's names (`naming_adherence` 0→0 off, 1→1 on) and does
+> **not** normalise them. So the reviewer is **not** a viable place to inject the
+> naming convention. The two remaining levers are the ones this experiment
+> established at the *modeller*: (a) raise *k* past the threshold (instance-level
+> copying), or (b) distil an explicit corpus-derived naming instruction (the only
+> route to true *generalisation*). See `experiment-4-endtoend-taxonomy.md` §4 F-A.
+
 ## 7. How to reproduce this experiment manually
 
 1. Backend on Databricks with the corpus populated (see Experiment 1, step 1).

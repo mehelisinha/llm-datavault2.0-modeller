@@ -83,8 +83,8 @@ untouched** (0→0, 1→1).
 ## 4. Two findings that revise earlier experiments
 
 **F-A: The reviewer does _not_ supply the clean naming — the modeller's learning
-does.** Experiment 1 hypothesised (F-3) that the corpus's concept-names came from
-the downstream reviewer. Experiment 4 falsifies that: with learning **off** the
+does.** Experiment 1 hypothesised (F-2's corollary) that the corpus's concept-names
+came from the downstream reviewer. Experiment 4 falsifies that: with learning **off** the
 reviewer leaves naming at 0 (it keeps table-based names), and with learning
 **on** the modeller already achieves 1.0 and the reviewer preserves it. Naming
 adherence is set upstream, by few-shot learning, **not** by review. (The reviewer
