@@ -121,6 +121,19 @@ def test_parse_condition_review_flag(val, expected):
     assert parse_condition(f"e2e:review={val}").review is expected
 
 
+def test_parse_condition_producer_heuristic():
+    assert parse_condition("det:producer=heuristic").producer == "heuristic"
+
+
+def test_parse_condition_producer_defaults_modeller():
+    assert parse_condition("off").producer == "modeller"
+
+
+def test_parse_condition_rejects_bad_producer():
+    with pytest.raises(ValueError, match="producer must be"):
+        parse_condition("x:producer=magic")
+
+
 def test_parse_condition_rejects_empty_label():
     with pytest.raises(ValueError):
         parse_condition(":k=3")
@@ -172,6 +185,19 @@ def test_build_modeller_learning_off_uses_limit_zero():
     )
     assert calls["reference_limit_override"] == 0
     assert "reference_loader_override" not in calls
+
+
+def test_build_modeller_heuristic_producer_uses_heuristic_factory():
+    sentinel = object()
+
+    def agent_factory(**kwargs):  # must NOT be called for the heuristic arm
+        raise AssertionError("modeller must not be built for a heuristic condition")
+
+    producer = build_modeller(
+        Condition("det", producer="heuristic"), settings=_Settings(),
+        wiring=Wiring(agent_factory=agent_factory, heuristic_factory=lambda: sentinel),
+    )
+    assert producer is sentinel
 
 
 def test_build_modeller_learning_on_threads_exclusions_and_k():

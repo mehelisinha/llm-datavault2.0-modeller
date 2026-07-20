@@ -13,6 +13,7 @@ experiment runner (Phase 6) build on these.
 
 from __future__ import annotations
 
+from dbt_builder.src.ai.evaluation.baselines import HeuristicClassifier
 from dbt_builder.src.ai.evaluation.blast_radius import (
     BlastRadiusReport,
     plan_blast_radius,
@@ -64,6 +65,7 @@ __all__ = [
     "ConformanceReport",
     "CoverageReport",
     "ExperimentCase",
+    "HeuristicClassifier",
     "GoldHub",
     "GoldModel",
     "GoldScore",
