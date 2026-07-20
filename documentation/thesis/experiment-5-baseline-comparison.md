@@ -100,14 +100,17 @@ conservative and miss relationships; the LLM is liberal and invents them.
 
 ## 4. Threats to validity / honest caveats
 
-- **Naming is the unstable axis (important).** This run measured modeller naming at
-  k=10 as 0.43–0.57, whereas the Experiment 2 reproduction measured 1.0 with zero
-  variance a few days earlier. The *direction* of the naming-threshold finding
-  (near-0 at low k, positive at k=10) is robust, but its *magnitude at k=10 is not
-  a stable point value* across sessions — most likely gpt-4.1 deployment drift or
-  retrieval-order nondeterminism over calendar time. Entity identification, by
-  contrast, is stable, which is why the Experiment 5 headline (F-1, F-2) rests on
-  entity_f1, not naming.
+- **Naming is the unstable axis (important).** Across three separate sessions the
+  modeller's naming adherence at k=10 measured **1.0, then 0.43–0.57, then 1.0
+  again** on the same ServiceNow schema (and the Experiment 2 reproduction also gave
+  1.0). The *direction* of the naming-threshold finding (near-0 at low k, positive
+  at k=10) is robust, but its *magnitude at k=10 is not a stable point value* across
+  sessions — most likely gpt-4.1 deployment drift or retrieval-order nondeterminism
+  over calendar time. Entity identification, by contrast, is stable across all runs
+  (modeller-stage 0.94–1.0; reviewed 0.71 every time), which is why the Experiment 5
+  headline (F-1, F-2) and the H3b effort result rest on entity fidelity and
+  correction counts, not naming. The §1 table shows one run; the naming row should
+  be read as "0.4–1.0, unstable", not as a fixed value.
 - **The manual arm's accuracy is tautological.** The gold *is* the manual output,
   so its entity_f1 is 1.0 by definition; it cannot be "wrong" against itself. The
   meaningful manual measurement is effort (§5), still to be collected. The gold is
@@ -119,29 +122,53 @@ conservative and miss relationships; the LLM is liberal and invents them.
 - **Two systems, two seeds.** External validity is limited; the *pattern* (AI-lift
   scales with schema difficulty) is the transferable finding.
 
-## 5. Human effort (H3b) — protocol for the manual arm
+## 5. Human effort (H3b) — objective correction steps
 
-The accuracy arms above run automatically; the **human-effort** dimension of H3b
-requires a measured manual session that only the researcher can perform. Protocol
-(to keep the number defensible):
+**Why not a timed session.** A wall-clock human-timing study needs an independent
+Data-Vault expert to model the tables by hand; none was available, and timing the
+task without such a person would be neither valid nor honest. Rather than report a
+figure that was never measured, H3b is answered with an **objective, reproducible
+proxy**: the number of **manual correction steps** — structural edits — needed to
+bring each arm's output up to the approvable (gold) model. This is computed by the
+harness (`correction_steps(plan, gold)`), not by hand, so it is exact and
+repeatable. (Definition and its documented conservatism — a mis-keyed hub costs a
+delete + an add; link/satellite edits are counted by number, a floor — live in
+`gold.py`.)
 
-1. **Same tables, cold start.** Model the same ServiceNow (and CIM) source tables
-   by hand via Unity Catalog, with no AI assistance, exactly as the proposal's
-   manual baseline describes.
-2. **Record:** wall-clock **time-to-approved** and the **number of discrete
-   decisions/corrections** (each hub/link/sat classification and each business-key
-   choice counts as one).
-3. **Full-arm comparison:** for the same tables, record the time to review and
-   approve the pipeline's output (accept/edit/reject per object) — the corrections
-   here are the pipeline's error rate made concrete.
-4. **Deterministic-arm comparison:** the rule output is instantaneous to produce;
-   record the time to *fix it up to approvable quality* (which, given F-1/F-4, is
-   substantial on ServiceNow — missing entities and all links must be added).
+**Correction steps to reach the gold** (Manual = build every object from scratch;
+the review arms = edits to fix the machine output). Full arm from a representative
+2-seed run:
 
-The prediction (H3b) is: manual is slowest per table; the full pipeline is fastest
-*to an approvable result* on the hard schema because it already found the entities;
-the deterministic arm is fast to produce but slow to repair. This table is the
-last piece of Experiment 5 and is filled from the researcher's timed session.
+| System | Manual (build from scratch) | Deterministic (fix rules) | Full — classification stage | Full — with reviewer |
+|---|---|---|---|---|
+| ServiceNow | 29 | 25 | **9.5** | 16.5 |
+| CIM | 8 | 4 | **2.0** | 2.5 |
+
+**F-5: The full system needs the fewest manual actions — and the reviewer costs
+some of that back.** On ServiceNow the classification stage needs ~9.5 edits vs 25
+to repair the rule output and 29 to build from scratch — a ~60% reduction in manual
+actions against the deterministic baseline. The **reviewer then raises the count to
+16.5** (it introduces surrogate-keyed and spurious hubs that must be corrected) —
+the same H1d trade-off seen in accuracy, now visible in effort. Even so, the full
+reviewed pipeline (16.5) still beats both baselines. On CIM every arm is cheap, and
+the AI arms are near zero-touch (2–2.5).
+
+**Estimated time (assumption, not measurement).** To give a sense of scale, apply a
+**stated practitioner assumption** — a Data-Vault engineer takes ~30–90 min to
+hand-model a standard hub+satellite table and ~2–3 h for a table with ambiguous
+keys or many relationships. ServiceNow has ~9 source tables, several of them
+ambiguous (the `iso3166_3` country key, the user/group split, telemetry/junction
+tables), so the **manual arm is estimated at roughly 10–20 h**; CIM's 3
+straightforward tables at roughly **1.5–4.5 h**. The automated arms remove most of
+this from-scratch modelling, leaving only the correction edits above. **These hour
+figures are estimates derived from a stated assumption, not timed observations** —
+they are presented only to convey magnitude, and a controlled timing study is
+recorded as future work.
+
+> **Integrity note.** No human modelling session was timed. The correction-step
+> counts are objective and reproducible; the hour ranges are explicitly
+> assumption-based estimates. Nothing in this section is a claimed measurement of a
+> session that did not occur.
 
 ## 6. Interpretation — what Experiment 5 establishes
 
@@ -155,6 +182,12 @@ last piece of Experiment 5 and is filled from the researcher's timed session.
   than a blanket "AI is better".
 - **Both automated arms mishandle link cardinality**, in opposite directions —
   neither is a solved problem, and this is an honest limitation to carry forward.
+- **H3b (correction effort):** the full system reaches the approvable model in the
+  **fewest manual correction steps** — ~9.5 (classification stage) vs 25
+  (deterministic) and 29 (build from scratch) on ServiceNow. The reviewer trades
+  some of that back (16.5), consistent with H1d, but the full pipeline still beats
+  both baselines. Measured objectively; a practitioner time estimate (manual arm
+  ≈10–20 h on ServiceNow) is stated as an assumption, not a measurement.
 
 ## 7. How to reproduce
 
@@ -170,6 +203,10 @@ python -m dbt_builder.src.ai.evaluation experiment \
   --system SNOW_IT4IT_001 --system IEC_CIM_001 \
   --condition "full:k=10,review=1" --seeds 42,43
 ```
-The manual arm is the gold model (`gold_sets/*.yml`) plus the timed session in §5.
-Heuristic classifier: `dbt_builder/src/ai/evaluation/baselines.py`, unit-tested in
-`tests/ai/test_baselines.py` (no network). Branch: `ai/exp5-baselines`.
+Both commands print `correction_steps` per arm (the H3b metric), alongside the
+accuracy metrics — so §1 and §5 come from the same runs. The manual arm is the gold
+model (`gold_sets/*.yml`); its build count is `build_from_scratch_steps(gold)`.
+Heuristic classifier: `dbt_builder/src/ai/evaluation/baselines.py`; correction-step
+metric: `correction_steps` in `gold.py`. Both unit-tested in
+`tests/ai/test_baselines.py` and `tests/ai/test_gold_grading.py` (no network).
+Branch: `ai/exp5-baselines`.
