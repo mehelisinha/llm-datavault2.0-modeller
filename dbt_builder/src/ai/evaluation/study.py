@@ -381,6 +381,7 @@ _MEAN_FIELDS = (
     "gold_entity_f1",
     "gold_naming_adherence",
     "gold_link_ratio",
+    "correction_steps",
     "conformance_score",
     "issue_count",
     "weighted_error_impact",

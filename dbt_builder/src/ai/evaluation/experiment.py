@@ -30,7 +30,7 @@ from dbt_builder.src.ai.evaluation.blast_radius import (
 )
 from dbt_builder.src.ai.evaluation.conformance import score_plan
 from dbt_builder.src.ai.evaluation.coverage import coverage
-from dbt_builder.src.ai.evaluation.gold import GoldModel, grade_against_gold
+from dbt_builder.src.ai.evaluation.gold import GoldModel, correction_steps, grade_against_gold
 
 # Scalar PlanMetrics fields averaged by :func:`aggregate`. Gold_* are optional
 # and averaged only over the cases that actually have a gold model.
@@ -51,6 +51,7 @@ _GOLD_FIELDS = (
     "gold_entity_recall",
     "gold_naming_adherence",
     "gold_link_ratio",
+    "correction_steps",
 )
 
 
@@ -76,6 +77,9 @@ class PlanMetrics(BaseModel):
     gold_entity_recall: float | None = None
     gold_naming_adherence: float | None = None  # convention transfer (learning effect)
     gold_link_ratio: float | None = None  # produced/expected links (>1 = over-linking)
+    # Objective human-effort proxy (H3b): structural edits to reach the gold.
+    correction_steps: int | None = None
+    correction_breakdown: dict[str, int] = Field(default_factory=dict)
 
 
 def evaluate_plan(
@@ -91,14 +95,24 @@ def evaluate_plan(
     blast = plan_blast_radius(plan)
 
     gold_fields: dict[str, float] = {}
+    correction_breakdown: dict[str, int] = {}
     if gold is not None:
         g = grade_against_gold(plan, gold)
+        corr = correction_steps(plan, gold)
+        correction_breakdown = {
+            "hub_add": corr.hub_add,
+            "hub_delete": corr.hub_delete,
+            "hub_rename": corr.hub_rename,
+            "link_delta": corr.link_delta,
+            "sat_delta": corr.sat_delta,
+        }
         gold_fields = {
             "gold_entity_f1": g.entity_f1,
             "gold_entity_precision": g.entity.precision,
             "gold_entity_recall": g.entity.recall,
             "gold_naming_adherence": g.naming_adherence,
             "gold_link_ratio": g.link_ratio,
+            "correction_steps": corr.total,
         }
 
     return PlanMetrics(
@@ -113,6 +127,7 @@ def evaluate_plan(
         coverage_ratio=cov.coverage_ratio,
         uncovered_count=len(cov.uncovered),
         issues_by_type=conf.issues_by_type,
+        correction_breakdown=correction_breakdown,
         **gold_fields,
     )
 

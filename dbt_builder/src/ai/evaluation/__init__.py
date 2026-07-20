@@ -35,10 +35,13 @@ from dbt_builder.src.ai.evaluation.experiment import (
     run_ablation,
 )
 from dbt_builder.src.ai.evaluation.gold import (
+    CorrectionReport,
     GoldHub,
     GoldModel,
     GoldScore,
     PrecisionRecall,
+    build_from_scratch_steps,
+    correction_steps,
     grade_against_gold,
     load_gold_models,
 )
@@ -61,6 +64,7 @@ __all__ = [
     "AblationArm",
     "BlastRadiusReport",
     "Condition",
+    "CorrectionReport",
     "ConformanceIssue",
     "ConformanceReport",
     "CoverageReport",
@@ -77,7 +81,9 @@ __all__ = [
     "TaxonomyShift",
     "Wiring",
     "aggregate",
+    "build_from_scratch_steps",
     "build_modeller",
+    "correction_steps",
     "coverage",
     "evaluate_plan",
     "grade_against_gold",
