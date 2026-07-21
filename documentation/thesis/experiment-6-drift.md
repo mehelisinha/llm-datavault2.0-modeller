@@ -130,7 +130,31 @@ expands with `atomic_changes`, classifies with `rule_based_impact` +
 `get_impact_classifier()`, and scores against `fixtures/cim_drift_labels.json` with
 `score_impacts`. Recreate the dataset from `fixtures/cim_drift.sql`.
 
-## 7. Appendix — synthetic proof-of-concept (for contrast)
+## 7. Viewing the drift in the UI
+
+The drift is visible in the DWA app with **no code change** — the pipeline's
+SNAPSHOT step already diffs a vault schema against a bronze schema, so pointing the
+"vault" (before) at `bronze` and the "bronze" (after) at `cim_drifted` yields the
+drift. Prerequisites are already in `.env`: `DWA_API_DISCOVERY_MODE=databricks`,
+`DWA_API_DATABRICKS_HOST`, `DWA_API_DATABRICKS_AUTH_TYPE=azure-cli`.
+
+1. Ensure `az login` is valid.
+2. Start the app: `pnpm dev`.
+3. Trigger a pipeline run with:
+   - catalog: `edh_unreg_silver_dev_st`
+   - **vault_schema: `bronze`** (the approved "before")
+   - **bronze_schema: `cim_drifted`** (the drifted "after")
+   - system_id: `IEC_CIM_001`, system_name: `IEC CIM`, source_type: `delta`
+   (Equivalently `POST /api/pipeline/run` with that JSON body.)
+4. The SNAPSHOT step shows the change-set (2 DRIFT, 1 NEW, 1 ORPHANED). Because the
+   `mrid` business-key type change is flagged **HIGH risk**, the supervisor **pauses**
+   the run — the UI shows the drift plus a risk banner (exactly the governance
+   behaviour RQ3 predicts).
+
+Verified via the identical backend code path (`scratchpad/verify_ui_drift.py`):
+UC REST → `inspect_catalog(bronze)` + `read_bronze(cim_drifted)` → `diff`.
+
+## 8. Appendix — synthetic proof-of-concept (for contrast)
 
 Before the real dataset existed, a hand-labelled **synthetic** set (n = 10, one
 `gpt-4.1` run) previewed the pipeline. It gave AI accuracy 0.90 vs rule-only 0.80,
