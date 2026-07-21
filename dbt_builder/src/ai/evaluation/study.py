@@ -55,12 +55,17 @@ class Condition:
     review
         When true, the gpt-5.2 plan reviewer runs on the modeller's draft and the
         reviewed plan is graded too (the end-to-end/product condition).
+    producer
+        Which arm generates the plan: ``"modeller"`` (the LLM, default) or
+        ``"heuristic"`` (the deterministic rule-based baseline). The heuristic
+        ignores ``k`` and ``exclude_catalogs`` (it has no corpus).
     """
 
     label: str
     k: int = 0
     exclude_catalogs: tuple[str, ...] = ()
     review: bool = False
+    producer: str = "modeller"
 
 
 def parse_condition(spec: str) -> Condition:
@@ -73,6 +78,7 @@ def parse_condition(spec: str) -> Condition:
         "on:k=10"                                -> k=10, full corpus
         "loo:k=10,exclude=iec_cim+edh_silver"    -> leave-one-out at k=10
         "e2e:k=10,review=1"                      -> end-to-end with reviewer
+        "det:producer=heuristic"                 -> deterministic rule-based arm
 
     Pure — no I/O. Raises ``ValueError`` on a malformed spec so a typo in a study
     definition fails loudly rather than silently running the wrong arm.
@@ -84,6 +90,7 @@ def parse_condition(spec: str) -> Condition:
     k = 0
     exclude: tuple[str, ...] = ()
     review = False
+    producer = "modeller"
     for part in (p for p in rest.split(",") if p.strip()):
         key, sep, val = part.partition("=")
         key, val = key.strip(), val.strip()
@@ -95,9 +102,17 @@ def parse_condition(spec: str) -> Condition:
             exclude = tuple(c for c in val.split("+") if c)
         elif key == "review":
             review = val.lower() in {"1", "true", "yes", "on"}
+        elif key == "producer":
+            if val not in {"modeller", "heuristic"}:
+                raise ValueError(
+                    f"condition spec {spec!r}: producer must be 'modeller' or 'heuristic'"
+                )
+            producer = val
         else:
             raise ValueError(f"condition spec {spec!r}: unknown key {key!r}")
-    return Condition(label=label, k=k, exclude_catalogs=exclude, review=review)
+    return Condition(
+        label=label, k=k, exclude_catalogs=exclude, review=review, producer=producer
+    )
 
 
 # ── Error-taxonomy shift (pure) ───────────────────────────────────────────────
@@ -211,18 +226,26 @@ def _default_discover(path: str):
     return discover_from_yaml(path)
 
 
+def _default_heuristic_factory():
+    from dbt_builder.src.ai.evaluation.baselines import HeuristicClassifier
+
+    return HeuristicClassifier()
+
+
 @dataclass(frozen=True)
 class Wiring:
     """Injectable dependencies for :func:`run_condition` / :func:`run_study`.
 
-    Defaults call the real modeller, corpus loader, reviewer, and discovery.
-    Tests pass fakes so the control flow runs with no LLM and no network.
+    Defaults call the real modeller, corpus loader, reviewer, discovery, and the
+    deterministic heuristic baseline. Tests pass fakes so the control flow runs
+    with no LLM and no network.
     """
 
     agent_factory: Callable = _default_agent_factory
     corpus_loader: Callable = _default_corpus_loader
     reviewer_factory: Callable = _default_reviewer_factory
     discover: Callable = _default_discover
+    heuristic_factory: Callable = _default_heuristic_factory
 
 
 # Immutable default set of production dependencies (shared; frozen dataclass).
@@ -232,13 +255,16 @@ _DEFAULT_WIRING = Wiring()
 def build_modeller(
     condition: Condition, *, settings, samples: int = 1, wiring: Wiring | None = None
 ):
-    """Construct the modelling agent for ``condition`` (the one wiring point).
+    """Construct the plan producer for ``condition`` (the one wiring point).
 
-    ``k <= 0`` → learning OFF (retrieval limit 0). Otherwise load the corpus with
-    the condition's leave-one-out exclusions and cap retrieval at ``k``. This is
-    the exact wiring Experiments 1–4 used, centralised so every study shares it.
+    ``producer="heuristic"`` returns the deterministic rule-based baseline
+    (ignores ``k``/corpus). Otherwise the LLM modeller: ``k <= 0`` → learning OFF
+    (retrieval limit 0); else load the corpus with the condition's leave-one-out
+    exclusions and cap retrieval at ``k``. Centralised so every study shares it.
     """
     wiring = wiring or _DEFAULT_WIRING
+    if condition.producer == "heuristic":
+        return wiring.heuristic_factory()
     if condition.k <= 0:
         return wiring.agent_factory(settings=settings, samples=samples, reference_limit_override=0)
     loader = wiring.corpus_loader(settings, exclude_catalogs=condition.exclude_catalogs)
@@ -355,6 +381,7 @@ _MEAN_FIELDS = (
     "gold_entity_f1",
     "gold_naming_adherence",
     "gold_link_ratio",
+    "correction_steps",
     "conformance_score",
     "issue_count",
     "weighted_error_impact",

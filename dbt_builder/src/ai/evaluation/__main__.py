@@ -404,7 +404,8 @@ def _print_study_summary(summary: dict) -> None:
         rev = cell.get("reviewed")
         print(f"\n{key}:")
         for f in ("gold_entity_f1", "gold_naming_adherence", "conformance_score",
-                  "issue_count", "weighted_error_impact", "gold_link_ratio"):
+                  "issue_count", "weighted_error_impact", "gold_link_ratio",
+                  "correction_steps"):
             rv = "" if rev is None else f" -> {rev.means.get(f)}"
             print(f"  {f:22} {raw.means.get(f)}{rv}")
         print(f"  taxonomy raw     : {raw.issues_by_type or '{}'}")

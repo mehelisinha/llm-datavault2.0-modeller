@@ -157,6 +157,70 @@ def grade_against_gold(plan: ModelingPlan, gold: GoldModel) -> GoldScore:
     )
 
 
+class CorrectionReport(BaseModel):
+    """Structural edits needed to turn a produced plan into the gold reference.
+
+    An objective, ground-truth-based proxy for **human correction effort** (H3b):
+    how many manual actions a reviewer would take to bring a machine-produced plan
+    up to the approvable (gold) model. Deliberately conservative and simple so it
+    is defensible without a timed human study.
+
+    Counting model (documented so the number is reproducible, not a black box):
+
+    * ``hub_add`` — gold hubs with no matching produced hub (by source_table +
+      business_key): the entity must be created.
+    * ``hub_delete`` — produced hubs matching no gold hub: a spurious entity to
+      remove. A **mis-keyed** hub (right table, wrong key) therefore costs 2 — one
+      delete + one add — rather than an in-place re-key. This is the conservative
+      choice and is stated as such.
+    * ``hub_rename`` — matched hubs whose name differs from the gold concept name.
+    * ``link_delta`` / ``sat_delta`` — the **count** difference vs gold (links and
+      satellites are naming-confounded, so a net-count floor is used rather than
+      name matching). This under-counts a "wrong one present + right one missing"
+      pair as a single edit — hence a floor, not an exact figure.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    hub_add: int = Field(ge=0)
+    hub_delete: int = Field(ge=0)
+    hub_rename: int = Field(ge=0)
+    link_delta: int = Field(ge=0)
+    sat_delta: int = Field(ge=0)
+
+    @property
+    def total(self) -> int:
+        """Total structural edits — the correction-step count."""
+        return self.hub_add + self.hub_delete + self.hub_rename + self.link_delta + self.sat_delta
+
+
+def correction_steps(plan: ModelingPlan, gold: GoldModel) -> CorrectionReport:
+    """Count the structural edits to turn ``plan`` into ``gold`` (see CorrectionReport)."""
+    model_by_key: dict[tuple[str, frozenset[str]], object] = {}
+    for hub in plan.hubs:
+        model_by_key.setdefault(_entity_key(hub.source_table, hub.business_keys), hub)
+    gold_by_key = {_entity_key(gh.source_table, gh.business_keys): gh for gh in gold.hubs}
+
+    matched = set(model_by_key) & set(gold_by_key)
+    hub_rename = sum(
+        1
+        for k in matched
+        if model_by_key[k].name.strip().lower() != gold_by_key[k].name.strip().lower()
+    )
+    return CorrectionReport(
+        hub_add=len(set(gold_by_key) - matched),
+        hub_delete=len(set(model_by_key) - matched),
+        hub_rename=hub_rename,
+        link_delta=abs(len(plan.links) - len(gold.links)),
+        sat_delta=abs(len(plan.satellites) - len(gold.satellites)),
+    )
+
+
+def build_from_scratch_steps(gold: GoldModel) -> int:
+    """Manual-arm effort: every gold object is created from scratch (one action each)."""
+    return len(gold.hubs) + len(gold.links) + len(gold.satellites)
+
+
 def load_gold_models(root: Path | str | None = None) -> dict[str, GoldModel]:
     """Load every ``*.yml`` gold model under ``root`` (defaults to gold_sets/).
 
@@ -179,10 +243,13 @@ def load_gold_models(root: Path | str | None = None) -> dict[str, GoldModel]:
 
 
 __all__ = [
+    "CorrectionReport",
     "GoldHub",
     "GoldModel",
     "GoldScore",
     "PrecisionRecall",
+    "build_from_scratch_steps",
+    "correction_steps",
     "grade_against_gold",
     "load_gold_models",
 ]

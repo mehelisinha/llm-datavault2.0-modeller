@@ -111,11 +111,21 @@ validation issues), the governance layer blocks 100% of unsafe promotions: no
 breaking change is auto-applied, no unvalidated YAML is accepted, and no
 ERROR-severity plan is promoted.
 
-**H3b — Less human effort than the baselines.** Producing an approved mapping (or
-drift patch) of equivalent quality requires less human time and fewer manual
-correction steps with the full multi-agent system than with the manual baseline.
-Against the deterministic-only baseline, the full system additionally supplies the
-entity classification that the deterministic path cannot produce at all.
+**H3b — Fewer manual correction steps than the baselines.** Reaching an approvable
+model of equivalent quality (the gold reference) requires **fewer manual correction
+steps** with the full multi-agent system than either building the model from
+scratch (the manual arm) or repairing the rule-based output (the deterministic
+arm). Correction steps are counted **objectively** as the structural edits — hubs
+to add/delete/rename, links and satellites to adjust — needed to bring an arm's
+output up to the reference. Under a **stated practitioner time-per-table
+assumption** this implies a proportional reduction in *estimated* effort; a
+controlled human-timing study was **not** conducted and is recorded as future work.
+
+*Note on scope (integrity).* The original hypothesis claimed less human *time*,
+which implies a measured timing study. No such study was run (no independent
+Data-Vault expert was available to time), so the claim is deliberately narrowed to
+the **objective, reproducible correction-step count**, with any time figure
+presented explicitly as an assumption-based *estimate* — never as a measurement.
 
 **H3c — Complete governance trail.** Every approved decision carries a complete,
 traceable audit record — actor, timestamp, plan version, and rationale — giving
@@ -135,5 +145,5 @@ full approval-chain traceability from source metadata to approved YAML.
 | H2b AI impact accuracy | — | build classifier + expert-labelled set (Exp 6) |
 | H2c drift effort | — | timed manual vs pipeline (Exp 6) |
 | H3a zero unsafe promotions | gates built | controlled unsafe-input test (Exp 7) |
-| H3b human effort | — | 3-arm timing (Exp 5) |
+| H3b correction steps | Exp 5 (objective counts: full < deterministic < manual) | optional practitioner-time estimate overlay |
 | H3c audit completeness | approval store built | read audit coverage from the store (Exp 7) |
