@@ -13,9 +13,11 @@ import pytest
 from dbt_builder.src.ai.contracts.catalog import (
     ChangeCategory,
     ChangeRisk,
+    ChangeSet,
     ColumnDiff,
     TableChange,
 )
+from dbt_builder.src.ai.drift.changeset import atomic_changes
 from dbt_builder.src.ai.drift.impact import (
     ChangeImpact,
     ImpactClassifier,
@@ -161,6 +163,36 @@ def test_score_impacts_confusion_and_cost():
 def test_score_impacts_length_mismatch_raises():
     with pytest.raises(ValueError):
         score_impacts([A], [A, B])
+
+
+# ── atomic-change expansion ───────────────────────────────────────────────────
+
+
+def _cs(*changes):
+    return ChangeSet(catalog="c", schema_name="s", computed_at=datetime.now(timezone.utc),
+                     changes=changes)
+
+
+def test_atomic_changes_splits_drift_per_column():
+    drift = _change(ChangeCategory.DRIFT, diffs=(
+        _diff("owner", "added", new="string"),
+        _diff("serial_number", "removed", old="string"),
+        _diff("mrid", "type_changed", "string", "bigint"),
+    ))
+    atoms = atomic_changes(_cs(drift), key_columns={"mrid"})
+    assert len(atoms) == 3
+    assert all(len(a.column_diffs) == 1 for a in atoms)
+    by_col = {a.column_diffs[0].name: a for a in atoms}
+    assert by_col["mrid"].risk is ChangeRisk.HIGH          # key retype -> HIGH
+    assert by_col["serial_number"].risk is ChangeRisk.MEDIUM
+    assert by_col["owner"].risk is ChangeRisk.LOW
+
+
+def test_atomic_changes_keeps_table_level_units():
+    new = _change(ChangeCategory.NEW)
+    orphan = _change(ChangeCategory.ORPHANED)
+    atoms = atomic_changes(_cs(new, orphan))
+    assert len(atoms) == 2  # NEW and ORPHANED stay as single units
 
 
 # ── deterministic detection recall (H2a) on a synthetic drift pair ────────────

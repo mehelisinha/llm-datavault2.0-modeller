@@ -8,6 +8,7 @@ both against expert labels (confusion matrix, per-class P/R, cost-weighted error
 
 from __future__ import annotations
 
+from dbt_builder.src.ai.drift.changeset import atomic_changes
 from dbt_builder.src.ai.drift.impact import (
     ChangeImpact,
     ImpactClassifier,
@@ -25,6 +26,7 @@ __all__ = [
     "DriftImpactReport",
     "ImpactClassifier",
     "ImpactVerdict",
+    "atomic_changes",
     "impact_cost",
     "rule_based_impact",
     "score_impacts",
