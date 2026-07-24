@@ -109,11 +109,15 @@ class DBTBuilder:
 if __name__ == "__main__":
     from pathlib import Path
 
-    yaml_path = Path(__file__).parents[2] / "poc" / "metadata" / "iec_cim_metadata.yaml"
+    # parents: [0]=runners [1]=src [2]=dbt_builder [3]=repo root. The metadata and
+    # output live at the repo root, so index [3] (was [2], which pointed one level
+    # too shallow and raised FileNotFoundError).
+    repo_root = Path(__file__).parents[3]
+    yaml_path = repo_root / "poc" / "metadata" / "iec_cim_metadata.yaml"
 
     builder = DBTBuilder(
         metadata_path=yaml_path,
-        output_path=Path(__file__).parents[2] / "output" / "iec_dv2",
+        output_path=repo_root / "output" / "iec_dv2",
     )
     # models = builder._get_component_models()
     # print(f"meta_models: ({models.__class__.__name__}):")

@@ -22,10 +22,15 @@ class HashedColumns(BaseModel):
 
     @computed_field
     @property
-    def dv_model(self) -> dict[str, dict[str, list[str] | bool]]:
-        return {
-            self.column_name: {"is_hashdiff": self.is_hashdiff, "columns": self.columns}
-        }
+    def dv_model(self) -> dict[str, dict[str, list[str] | bool] | list[str]]:
+        # AutomateDV expects a *hashdiff* as ``{is_hashdiff: true, columns: [...]}``
+        # and a business-key / PK hash as a **plain column list**. Emitting the dict
+        # form for a non-hashdiff makes AutomateDV warn ("use list syntax for PKs"),
+        # so render each in the shape AutomateDV wants. Both forms hash the same
+        # columns, so this only changes the declaration syntax, not the output.
+        if self.is_hashdiff:
+            return {self.column_name: {"is_hashdiff": True, "columns": self.columns}}
+        return {self.column_name: self.columns}
 
 
 class DerivedColumn(BaseModel):
