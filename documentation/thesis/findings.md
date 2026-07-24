@@ -235,17 +235,26 @@ exists.
 computed by resampling — appropriate for the very small samples used here, and
 deterministic for a fixed seed so intervals are reproducible.
 
-**Result.** Entity Identification F1: CIM **1.000, 95% CI [1.000, 1.000]** (n = 5);
-ServiceNow **0.933, 95% CI [0.933, 0.933]** (n = 3).
+**Result (five distinct seeds, gpt-4.1).**
 
-**What this means.** These intervals are degenerate, and it would be misleading to
-present them as evidence of precision. The interval collapses because **every run in
-the sample produced an identical value** — entity identification was perfectly
-stable across runs — not because the sample is large. The honest reading is: *entity
-identification showed zero observed variance in these samples*, which corroborates
-the stability finding in §2.2 (entity identification is the stable axis) while
-saying nothing about how the metric would behave on unseen systems. Reporting the
-interval, degenerate as it is, is more honest than reporting a bare mean.
+| System / condition | Entity Identification F1 (mean, 95% CI) | Naming Adherence (mean, 95% CI) | Link Ratio (mean, 95% CI) |
+|---|---|---|---|
+| ServiceNow / off | 0.947, [0.933, 0.973] | 0.000, [0.000, 0.000] | 1.673, [1.582, 1.800] |
+| ServiceNow / on | 0.933, [0.933, 0.933] | 0.000, [0.000, 0.000] | 1.764, [1.727, 1.836] |
+| CIM / off | 1.000, [1.000, 1.000] | **0.867, [0.600, 1.000]** | 2.000, [2.000, 2.000] |
+| CIM / on | 1.000, [1.000, 1.000] | 1.000, [1.000, 1.000] | 2.000, [2.000, 2.000] |
+
+**What this means.** The intervals confirm, with numbers, the central reliability
+finding of §2.2: **the confidence intervals for entity identification and link ratio
+are tight, while the interval for naming is wide.** CIM naming under leave-nothing-out
+spans **[0.600, 1.000]** — one of five seeds produced 0.333 while the others produced
+1.0. So naming is not merely low in some runs; it is *statistically unstable*, and any
+single-run naming figure (including the 1.0 values reported in earlier sessions) is a
+sample from a wide distribution, not a fixed property. Entity identification, by
+contrast, varies by at most one spurious hub (F1 0.933–0.973), and link ratio is
+stable around its over-linking value. **The practical rule this licenses: report
+entity identification and link ratio as reliable, and always report naming with its
+dispersion — never as a point estimate.**
 
 **Supports.** Statistical rigour across all quantitative claims.
 
@@ -374,14 +383,112 @@ reported.
 
 ---
 
+## 3B. Improvements applied after the main evaluation, and their measured effect
+
+Experiments 1–7 evaluated the system *as originally built*. The evaluation exposed
+two concrete defects — over-linking and a reviewer that re-keys hubs onto surrogates
+— and both were addressed with **deterministic (no-LLM) plan-hygiene passes**, then
+re-measured. The Experiment 1–7 figures above are the *pre-improvement* baseline; the
+figures here are the *post-improvement* system. This is the second Design-Science
+iteration in the thesis (the first being Experiment 7).
+
+### 3B.1 Link parsimony (over-linking)
+
+**What changed.** A deterministic pass removes links that relate fewer than two
+distinct hubs or name a hash key no hub owns (exactly the `link_under_two_hubs` /
+`link_fk_unresolved` conformance violations), and de-duplicates links over the same
+hub set. It never touches a well-formed link.
+
+**Result (link ratio; 1.0 is ideal).**
+
+| System | Before | After | Unresolved-FK links (before → after) |
+|---|---|---|---|
+| ServiceNow | 1.67 | **1.06** | ~9–14 → **0** |
+| CIM | 2.00 | 2.00 | 0 → 0 |
+
+**What this means.** On ServiceNow the pass **almost eliminates over-linking** —
+link ratio falls from 1.67 to 1.06 (near the ideal 1.0), and every unresolved-foreign-
+key link is gone. Crucially, CIM is **unchanged at 2.00**, and that is the *correct*
+behaviour, not a failure: CIM's extra link is *structurally valid* (both its foreign
+keys resolve to real hubs), so the deterministic pass rightly leaves it alone. The
+honest boundary of the fix: it removes **invalid** over-linking (dangling foreign
+keys, the bulk of ServiceNow's problem) but not **valid-but-semantically-spurious**
+over-linking (a real link the shop would model as an attribute instead — CIM's case),
+which cannot be distinguished without domain judgement. **Supports.** RQ1 / H1b.
+
+### 3B.2 Reviewer business-key restoration (the Experiment 4 regression)
+
+**What changed.** When the plan reviewer re-keys a hub onto a surrogate, the hub's
+original (source-grounded) business key is restored, while every *other* reviewer
+change is kept.
+
+**Result (full pipeline, ServiceNow).** Reviewed-stage Entity Identification F1
+**0.71 → 0.90**; link ratio 1.86 → 1.32; unresolved-FK links → 0.
+
+**What this means.** This directly repairs the Experiment 4 trade-off. There, the
+reviewer *lowered* entity identification (1.00 at the classification stage → 0.71
+after review) by replacing grounded business keys with surrogates. Restoring those
+keys lifts the reviewed-stage F1 back to **0.90** — close to the classification-stage
+ceiling — so the full pipeline now largely *keeps* the reviewer's conformance and
+connectivity gains **without** paying the entity-fidelity cost. The reviewer is no
+longer a net trade-off on this system; it is closer to a genuine improvement. (H1d as
+originally measured still stands as the *unconstrained* reviewer's behaviour; this is
+the constrained reviewer.) **Supports.** RQ1 / H1d (mitigation).
+
+### 3B.3 Model ablation — are the findings the mechanism's, or gpt-4.1's?
+
+**What changed.** Key conditions were repeated with `gpt-4o` in place of `gpt-4.1`
+(n = 3), everything else held constant.
+
+**Result.**
+
+| System / condition | gpt-4.1 entity F1 | gpt-4o entity F1 | gpt-4o naming | gpt-4o link ratio |
+|---|---|---|---|---|
+| CIM / off | 1.00 | 1.00 | 1.00 | 2.00 |
+| CIM / on | 1.00 | 1.00 | 1.00 | 2.00 |
+| ServiceNow / off | 0.95 | 0.93 | 0.00 | 0.73 |
+| ServiceNow / on | 0.93 | **0.53** | 1.00 | 0.39 |
+
+**What this means.** The findings are **partly the mechanism's and partly the
+model's**, and the ablation is honest about which. On the *easy* schema (CIM) the two
+models are indistinguishable — every figure is identical — so the "easy schemas are
+solved" claim is model-independent. On the *hard* schema they diverge sharply:
+gpt-4o's entity identification collapses to **0.53** with learning on (it appears to
+mis-use the retrieved examples, over- or under-producing entities), and where gpt-4.1
+*over*-links, gpt-4o *under*-links (ratio 0.73 / 0.39). So the **qualitative
+patterns** transfer — difficulty concentrates on hard schemas; naming is learnable
+(gpt-4o naming reaches 1.0 with learning) — but the **magnitudes and even the
+direction of the link error are model-specific.** The correct thesis statement is
+therefore conditional: the *structure* of the findings generalises across these two
+models, the *absolute numbers* do not, and a stronger model (gpt-4.1) is materially
+better on difficult schemas. **Supports.** external validity / threats to validity.
+
+### 3B.4 A non-expert approval aid (tooling, closes the H3c blocker)
+
+**What changed.** The scorecard now prints a plain-language **APPROVE / REVIEW /
+REJECT** recommendation with reasons, and the reject path auto-generates a meaningful
+comment from the same checks. REJECT fires only on objective defects (a fabricated
+source reference, or an empty plan); APPROVE only when nothing is flagged; everything
+else is REVIEW with the specifics listed. With no reference model it never rises above
+REVIEW, because correctness cannot be auto-verified.
+
+**What this means.** This does not change a metric; it changes who can operate the
+approval gate. The empty approval store (the sole blocker for H3c and for the
+approval-rate-over-time test of H1c) exists because approving required Data-Vault
+expertise. The recommendation makes an informed approve/reject decision possible
+without it, so the store can now be populated — turning H3c from "cannot be measured"
+into "not yet measured". **Supports.** RQ3 / H3c (unblocks measurement).
+
+---
+
 ## 4. Consolidated hypothesis scorecard
 
 | Hypothesis | Status | Principal evidence |
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
-| **H1b** naming and link parsimony are the weak axes | **Supported** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0) |
+| **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
 | **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert) |
-| **H1d** reviewer is a trade-off | **Supported** | Exp 4 (conformance ↑, entity F1 ↓, weighted impact ↑) |
+| **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |
 | **H2c** lower drift-review effort | **Supported** | Exp 6c (36 → 1 → 0 actions) |
@@ -448,7 +555,15 @@ shows the pre-/post-fix decision on the real drift.
 
 **Section 2 metrics (hallucination, consistency, idempotency, tokens, validation,
 kappa, confidence intervals).** `scratchpad/run_metrics.py` performs the repeated
-generations and prints every figure in §2.
+generations and prints every figure in §2; `scratchpad/run_seeds_ablation.py`
+produces the five-seed confidence intervals in §2.7.
+
+**Section 3B improvements.** `scratchpad/run_improvements.py` measures link parsimony
+before/after, the constrained reviewer's full-arm entity F1, and the gpt-4o ablation.
+The passes are unit-tested in `tests/ai/test_plan_hygiene.py`; they are enabled by the
+settings `link_parsimony_enabled` and `reviewer_preserve_business_keys` (both default
+on). The approval recommendation is `python -m dbt_builder.src.ai.evaluation generate
+--payload <disc.yaml> --gold <system_id>` (prints the APPROVE/REVIEW/REJECT verdict).
 
 **Not reproducible here — and not claimed.** The dbt compile-pass rate requires a
 dbt profile at `~/.dbt/profiles.yml` with Databricks credentials plus `dbt deps`;
@@ -465,9 +580,9 @@ inter-rater reliability requires a second human annotator.
 2. **dbt compile-pass rate** — needs a configured dbt profile (§2.4).
 3. **Audit-Trail Completeness** — needs approvals to be performed (§3, Experiment 7).
 4. **Approval rate over time** — the most direct test of H1c's "successive runs"
-   wording; blocked by the same empty approval store.
-5. **Model-ablation robustness** — repeating key experiments with a weaker generator
-   would show whether the findings are properties of the *mechanism* or of `gpt-4.1`.
-6. **Breadth** — two source systems and small seed counts. The transferable claims
+   wording; blocked by the same empty approval store (now unblocked for a non-expert
+   by the approval recommendation, §3B.4 — it needs the approvals to be *performed*).
+5. **Breadth** — two source systems and small seed counts. The transferable claims
    are the *patterns* (AI advantage scales with schema difficulty; naming is unstable
-   while entity identification is stable), not the absolute figures.
+   while entity identification is stable), not the absolute figures. (Model-ablation
+   robustness is now partially addressed — §3B.3 — over two models on two systems.)
