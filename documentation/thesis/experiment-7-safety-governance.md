@@ -73,6 +73,19 @@ default on).
 | Other five | ✅ | ✅ (unchanged) |
 | **Total** | **5/8 (62%)** | **8/8 (100%)** |
 
+**Verified on the real dataset, not just synthetic scenarios.** Running the actual
+`bronze` vs `cim_drifted` change-set (Experiment 6) through the supervisor:
+
+```
+as built (pre-fix)   -> PASS   max=medium   [high_drift_fraction(medium)]
+fixed                -> PAUSE  max=high     [high_drift_fraction(medium),
+                                             breaking_schema_change(high)]
+```
+
+This is the finding in its sharpest form: on **production data**, a breaking
+business-key retype was detected, correctly classified as breaking — and the
+as-built gate still said *proceed*. The fixed gate halts it.
+
 **F-3: The fix does not over-block.** A gate that pauses on everything is useless.
 Regression tests assert that **additive-only drift** (a new nullable column), a
 **new table alone**, and an **unchanged snapshot** still PASS without a
@@ -124,7 +137,42 @@ This is a data-collection gap, not a design gap.
 - **H3c is unmeasured**, per §4 — treat the structural guarantee as a design claim
   awaiting empirical confirmation.
 
-## 6. How to reproduce
+## 6. How to close this experiment
+
+**H3a is closed** for the scenario suite (100%, verified on real data). Two optional
+hardening steps would strengthen it:
+- **Widen the adversarial suite** beyond n = 8 (e.g. a renamed business key, a
+  table renamed rather than dropped, a type narrowing, simultaneous multi-table
+  breaking drift).
+- **Independent adversarial design** — have someone other than the fix's author
+  invent the unsafe cases, removing the "same person wrote the fix and the test"
+  limitation.
+
+**H3c is the only thing genuinely blocking closure.** It needs data, not code:
+
+1. **Perform real approvals so the audit trail populates.** Either through the UI
+   (`pnpm dev` → generate → review → approve) or the CLI:
+   ```bash
+   python -m dbt_builder.src.ai.evaluation generate \
+       --payload poc/metadata/iec_cim_discovery.yaml --gold IEC_CIM_001 --out plan.json
+   python -m dbt_builder.src.ai.evaluation approve \
+       --plan plan.json --payload poc/metadata/iec_cim_discovery.yaml --actor <you@example.com>
+   ```
+   Each approval writes `approvals` + `yaml_versions` (and `rv_examples`).
+   Aim for **≥10 decisions**, and include at least one **reject** so the
+   approve/reject audit path is exercised too.
+2. **Re-run the audit query** (`scratchpad/run_exp7b.py`) and report per-field
+   completeness — the fraction of records carrying actor, timestamp, version,
+   decision and rationale. That number closes H3c.
+3. **Bonus:** once approvals accumulate, the same table yields the **approval rate
+   over time** (approvals ÷ total decisions), which is the most direct test of
+   H1c's "across successive runs" wording — currently only approximated by the
+   *k*-sweep in Experiment 2.
+
+Until step 2 is done, the thesis should state plainly that **H3c is supported
+structurally but not empirically**.
+
+## 7. How to reproduce
 
 Regression tests for the safety floor (deterministic, no network):
 ```bash
