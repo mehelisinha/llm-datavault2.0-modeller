@@ -45,6 +45,14 @@ from dbt_builder.src.ai.evaluation.gold import (
     grade_against_gold,
     load_gold_models,
 )
+from dbt_builder.src.ai.evaluation.grounding import GroundingReport, check_grounding
+from dbt_builder.src.ai.evaluation.stats import (
+    bootstrap_ci,
+    cohens_kappa,
+    idempotency_rate,
+    plan_fingerprint,
+    self_consistency,
+)
 from dbt_builder.src.ai.evaluation.study import (
     Condition,
     StageRecord,
@@ -73,6 +81,7 @@ __all__ = [
     "GoldHub",
     "GoldModel",
     "GoldScore",
+    "GroundingReport",
     "IssueType",
     "PlanMetrics",
     "PrecisionRecall",
@@ -81,11 +90,17 @@ __all__ = [
     "TaxonomyShift",
     "Wiring",
     "aggregate",
+    "bootstrap_ci",
     "build_from_scratch_steps",
     "build_modeller",
+    "check_grounding",
+    "cohens_kappa",
     "correction_steps",
     "coverage",
     "evaluate_plan",
+    "idempotency_rate",
+    "plan_fingerprint",
+    "self_consistency",
     "grade_against_gold",
     "load_gold_models",
     "parse_condition",
