@@ -61,26 +61,57 @@ def test_clean_plan_is_approved():
     assert rec.blocking_reasons == () and rec.review_reasons == ()
 
 
-# ── REJECT (objective defects) ───────────────────────────────────────────────
+# ── REJECT (structural defects) ──────────────────────────────────────────────
 
 
-def test_fabricated_column_is_rejected():
+def test_fabricated_business_key_is_rejected():
+    # A business key that is not a real source column breaks the hub's identity.
     plan = ModelingPlan(system_id="s", hubs=(
         HubDecision(name="hub_terminal", source_table="terminals",
-                    business_keys=("mrid",), hash_key="HK_T"),),
+                    business_keys=("ghost_key",), hash_key="HK_T"),),
         satellites=(SatelliteDecision(name="sat_t", source_table="terminals",
                     parent_hub="hub_terminal", hash_key="HK_T", hashdiff="HD_T",
-                    payload=("ghost_column",)),))
-    rec = _rec(plan)
+                    payload=("name",)),))
+    rec = _rec(plan, with_gold=False)
     assert rec.verdict is ApprovalVerdict.REJECT
-    assert any("ghost_column" in r for r in rec.blocking_reasons)
-    assert "ghost_column" in rec.rejection_message
+    assert any("ghost_key" in r for r in rec.blocking_reasons)
+
+
+def test_fabricated_table_is_rejected():
+    # The whole source table is invented — the object has no real origin.
+    plan = ModelingPlan(system_id="s", hubs=(
+        HubDecision(name="hub_ghost", source_table="nonexistent_table",
+                    business_keys=("mrid",), hash_key="HK_G"),),
+        satellites=(SatelliteDecision(name="sat_g", source_table="nonexistent_table",
+                    parent_hub="hub_ghost", hash_key="HK_G", hashdiff="HD_G",
+                    payload=("name",)),))
+    rec = _rec(plan, with_gold=False)
+    assert rec.verdict is ApprovalVerdict.REJECT
+    assert any("nonexistent_table" in r for r in rec.blocking_reasons)
 
 
 def test_empty_plan_is_rejected():
     rec = _rec(ModelingPlan(system_id="s"))
     assert rec.verdict is ApprovalVerdict.REJECT
     assert any("no hubs" in r for r in rec.blocking_reasons)
+
+
+# ── REVIEW (localized, fixable — no longer a hard REJECT) ─────────────────────
+
+
+def test_fabricated_payload_column_is_review_not_reject():
+    # One stray descriptive column on an otherwise-sound satellite: fixable by
+    # dropping it, so it must fall to REVIEW rather than force a blanket REJECT.
+    plan = ModelingPlan(system_id="s", hubs=(
+        HubDecision(name="hub_terminal", source_table="terminals",
+                    business_keys=("mrid",), hash_key="HK_T"),),
+        satellites=(SatelliteDecision(name="sat_t", source_table="terminals",
+                    parent_hub="hub_terminal", hash_key="HK_T", hashdiff="HD_T",
+                    payload=("ghost_column",)),))
+    rec = _rec(plan, with_gold=False)
+    assert rec.verdict is ApprovalVerdict.REVIEW
+    assert rec.blocking_reasons == ()
+    assert any("ghost_column" in r for r in rec.review_reasons)
 
 
 # ── REVIEW (imperfect, human decides) ────────────────────────────────────────

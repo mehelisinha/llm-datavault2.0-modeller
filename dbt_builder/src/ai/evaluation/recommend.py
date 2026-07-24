@@ -5,20 +5,26 @@ its YAML. This module distils the objective checks already computed elsewhere
 (source grounding, DV2 conformance, and — when a reference model exists — gold
 grading) into one of three verdicts with human-readable reasons:
 
-* **REJECT** — an *objective* defect: the plan references source structure that does
-  not exist (a hallucination), or it is empty. These are unambiguously wrong and
-  should never enter the learning corpus.
-* **REVIEW** — something imperfect that needs a human eye: a convention issue,
-  over-linking, an unfollowed naming convention, or the absence of any reference
-  model to check correctness against.
+* **REJECT** — a *structural* defect that makes an entity unusable: the plan
+  invents a whole source table, invents a hub's business key (breaking its
+  identity), or is empty. These are unambiguously wrong and should never enter the
+  learning corpus.
+* **REVIEW** — something imperfect that needs a human eye: a fabricated *payload*
+  column (a localized, fixable blemish — one stray descriptive column, not a broken
+  entity), a convention issue, over-linking, an unfollowed naming convention, or the
+  absence of any reference model to check correctness against.
 * **APPROVE** — nothing was flagged: grounded, conformant, and (where a reference
   exists) a perfect entity match with the shop naming convention.
 
 The verdict leans on **objective binary signals** rather than tuned thresholds, so
-it is defensible without magic numbers: REJECT is driven by fabricated references
-and empty plans; APPROVE requires *nothing* to be flagged; everything in between is
-REVIEW with the specifics listed. The reasons double as an auto-generated,
-meaningful rejection message — so a non-expert can reject informatively.
+it is defensible without magic numbers: REJECT is driven by *structural* fabrications
+(invented tables / business keys) and empty plans; APPROVE requires *nothing* to be
+flagged; everything in between — including a fabricated payload column — is REVIEW
+with the specifics listed. Grading fabrications by blast radius (structural → REJECT,
+payload → REVIEW) is what keeps APPROVE/REVIEW reachable on real, messy schemas,
+where a single mis-transcribed descriptive column would otherwise force a blanket
+REJECT on an otherwise-sound plan. The reasons double as an auto-generated, meaningful
+rejection message — so a non-expert can reject informatively.
 
 Pure and deterministic: reports in, a recommendation out. No I/O, no LLM.
 """
@@ -74,14 +80,21 @@ def recommend_approval(
     blocking: list[str] = []
     review: list[str] = []
 
-    # ── objective defects → REJECT ────────────────────────────────────────────
-    if grounding is not None and grounding.fabricated_references > 0:
-        for ref in (*grounding.fabricated_tables, *grounding.fabricated_columns):
-            blocking.append(f"fabricated reference (not in source): {ref}")
+    # ── structural defects → REJECT ───────────────────────────────────────────
+    # A fabricated table or business key makes the entity unusable (invented
+    # origin / broken identity). A fabricated *payload* column is localized and
+    # falls to REVIEW below, so a single stray descriptive column cannot force a
+    # blanket REJECT on an otherwise-sound plan.
+    if grounding is not None:
+        for ref in grounding.structural_fabrications:
+            blocking.append(f"fabricated source reference (not in source): {ref}")
     if any(i.type.value == "empty_plan" for i in conformance.issues):
         blocking.append("the plan has no hubs")
 
     # ── things a human should look at → REVIEW ────────────────────────────────
+    if grounding is not None:
+        for ref in grounding.fabricated_payload_columns:
+            review.append(f"fabricated payload column (not in source) — remove or map it: {ref}")
     for issue in conformance.issues:
         if issue.type.value == "empty_plan":
             continue  # already blocking
