@@ -15,8 +15,15 @@ Small, dependency-free implementations of the statistics the evaluation needs:
   entities. A proxy for reliability (and for the model's own confidence).
 * :func:`idempotency_rate` — the fraction of repeated runs that reproduce the
   first run's output **exactly**.
+* :func:`paired_permutation_test` / :func:`cliffs_delta` / :func:`compare_paired`
+  — **significance and effect size** for the tiny, paired seed samples used in the
+  experiments. A permutation test is exact for small n and makes no normality
+  assumption (a t-test would be indefensible at n=3–5); Cliff's delta reports the
+  *size* of a difference independently of whether it is significant; and both are
+  bundled by :func:`compare_paired` alongside the mean difference and its bootstrap
+  interval, so a comparison is never reported as a bare pair of means.
 
-All pure and deterministic (the bootstrap takes an explicit seed).
+All pure and deterministic (every resampling routine takes an explicit seed).
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 from collections.abc import Sequence
+from itertools import product
 
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 
@@ -121,10 +129,137 @@ def idempotency_rate(plans: Sequence[ModelingPlan]) -> float:
     return sum(1 for p in plans if p == first) / len(plans)
 
 
+def _is_extreme(candidate: float, observed: float, alternative: str) -> bool:
+    """Whether a permuted statistic is at least as extreme as ``observed``."""
+    if alternative == "two-sided":
+        return abs(candidate) >= abs(observed) - 1e-12
+    if alternative == "greater":
+        return candidate >= observed - 1e-12
+    if alternative == "less":
+        return candidate <= observed + 1e-12
+    raise ValueError(f"unknown alternative: {alternative!r}")
+
+
+def paired_permutation_test(
+    a: Sequence[float],
+    b: Sequence[float],
+    *,
+    alternative: str = "two-sided",
+    max_exact: int = 18,
+    iterations: int = 100_000,
+    seed: int = 0,
+) -> float:
+    """Permutation p-value that the paired mean difference ``mean(a - b)`` is zero.
+
+    The experiments pair conditions by seed (``off@42`` vs ``on@42``), so the
+    correct test is a **paired** one: it permutes by flipping the sign of each
+    per-pair difference — the exact null for "the condition label is exchangeable
+    within a pair". No normality assumption, which a t-test could not justify at
+    n=3–5.
+
+    Exhaustively enumerates all ``2**n`` sign-flips when ``n <= max_exact`` (an
+    *exact* p-value); otherwise Monte-Carlo samples ``iterations`` flips with a
+    fixed ``seed`` (reproducible). Returns ``1.0`` when every difference is zero
+    (no effect to detect).
+    """
+    if len(a) != len(b):
+        raise ValueError(f"paired samples differ in length: {len(a)} vs {len(b)}")
+    n = len(a)
+    if n == 0:
+        raise ValueError("cannot test empty samples")
+
+    diffs = [float(x) - float(y) for x, y in zip(a, b, strict=True)]
+    if all(abs(d) <= 1e-12 for d in diffs):
+        return 1.0
+    observed = sum(diffs) / n
+
+    if n <= max_exact:
+        total = 0
+        extreme = 0
+        for signs in product((1.0, -1.0), repeat=n):
+            stat = sum(s * d for s, d in zip(signs, diffs, strict=True)) / n
+            total += 1
+            if _is_extreme(stat, observed, alternative):
+                extreme += 1
+        return extreme / total
+
+    rng = random.Random(seed)
+    extreme = 0
+    for _ in range(iterations):
+        stat = sum((d if rng.random() < 0.5 else -d) for d in diffs) / n
+        if _is_extreme(stat, observed, alternative):
+            extreme += 1
+    return extreme / iterations
+
+
+def cliffs_delta(a: Sequence[float], b: Sequence[float]) -> float:
+    """Cliff's delta effect size: P(a>b) − P(a<b), in ``[-1, 1]``.
+
+    A non-parametric, scale-free measure of *how much* two samples differ, robust
+    to the tiny n here. ``0`` = fully overlapping, ``±1`` = complete separation.
+    Report it beside the permutation p-value so a "non-significant" result at low
+    power is not mistaken for "no effect", and a significant one carries its size.
+    """
+    if not a or not b:
+        raise ValueError("cannot compute Cliff's delta on an empty sample")
+    gt = sum(1 for x in a for y in b if x > y)
+    lt = sum(1 for x in a for y in b if x < y)
+    return (gt - lt) / (len(a) * len(b))
+
+
+def cliffs_delta_label(delta: float) -> str:
+    """Standard magnitude bins for Cliff's delta (Romano et al., 2006)."""
+    d = abs(delta)
+    if d < 0.147:
+        return "negligible"
+    if d < 0.330:
+        return "small"
+    if d < 0.474:
+        return "medium"
+    return "large"
+
+
+def compare_paired(
+    a: Sequence[float],
+    b: Sequence[float],
+    *,
+    alternative: str = "two-sided",
+    seed: int = 0,
+) -> dict[str, float | str]:
+    """Full paired comparison of two conditions: means, difference, CI, p, effect.
+
+    Bundles :func:`paired_permutation_test`, :func:`cliffs_delta` and a bootstrap
+    interval on the per-pair differences so a contrast is reported as *effect +
+    uncertainty + significance*, never as two bare means. Deterministic for a
+    fixed ``seed``.
+    """
+    n = len(a)
+    diffs = [float(x) - float(y) for x, y in zip(a, b, strict=True)]
+    mean_a = sum(a) / n if n else 0.0
+    mean_b = sum(b) / n if n else 0.0
+    lo, hi = bootstrap_ci(diffs, seed=seed) if n else (0.0, 0.0)
+    delta = cliffs_delta(a, b)
+    return {
+        "n_pairs": float(n),
+        "mean_a": round(mean_a, 4),
+        "mean_b": round(mean_b, 4),
+        "mean_diff": round(mean_a - mean_b, 4),
+        "diff_ci_low": lo,
+        "diff_ci_high": hi,
+        "p_value": round(paired_permutation_test(a, b, alternative=alternative, seed=seed), 4),
+        "cliffs_delta": round(delta, 4),
+        "effect_size": cliffs_delta_label(delta),
+    }
+
+
 __all__ = [
     "bootstrap_ci",
+    "cliffs_delta",
+    "cliffs_delta_label",
     "cohens_kappa",
+    "compare_paired",
     "idempotency_rate",
+    "paired_permutation_test",
     "plan_fingerprint",
     "self_consistency",
 ]

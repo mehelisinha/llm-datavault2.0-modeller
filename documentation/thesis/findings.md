@@ -26,6 +26,44 @@ value that model accepts); systems are ServiceNow IT4IT (`SNOW_IT4IT_001`, 9 sou
 tables, a *difficult* schema) and IEC-61968 CIM (`IEC_CIM_001`, 3 source tables, an
 *easy* schema).
 
+### 1.1 Metric catalogue — everything measured, and why
+
+Every metric used anywhere in this thesis, what question it answers, and where its
+result lives. Metrics in the top block need **no gold standard** (portable to any
+run); the middle block needs a **gold/reference model**; the bottom block is
+**drift- and governance-specific**.
+
+| Metric | What it is used for (the question it answers) | Gold needed? | Result in |
+|---|---|---|---|
+| **Hallucination Rate** | Does the model invent tables/columns not in the source? (the one LLM-specific failure mode) | No | §2.1 |
+| **Self-Consistency** | Does the same input reproduce the same *entity set* across runs? (stability) | No | §2.2 |
+| **Idempotency Rate** | Does the same input reproduce the *exact same plan*, field for field? (stronger stability) | No | §2.3 |
+| **Structural Validation Pass Rate** | Does the plan render to YAML that parses and whose references resolve? | No | §2.4 |
+| **dbt compile (live)** | Does the generated dbt project actually compile against a real warehouse? | No | §2.4 |
+| **Token Consumption per Plan** | What does one generation cost, and how does cost scale with schema size? | No | §2.5 |
+| **Cohen's Kappa** | Agreement between two label sets after removing chance (drift labels here) | Labels | §2.6 |
+| **Bootstrap 95% CIs** | How much does each metric wobble across seeds? (is a number reliable or a lucky draw?) | Mixed | §2.7 |
+| **Entity Identification F1** | Are the right hubs/links/sats identified vs the expert model? (core correctness) | Yes | Exp 1,3,4,5 |
+| **Naming-Convention Adherence** | Do generated names match the shop convention? (the learnable weak axis) | Yes | Exp 1,2,3 |
+| **Link Cardinality Ratio** | Over-/under-linking vs the ideal (1.0 = right number of links) | Yes | Exp 1,3,5; §3B.1 |
+| **DV2 Convention Conformance Score** | Rule-based Data-Vault well-formedness (unresolved FKs, orphan sats, …) | Partial | Exp 1,4 |
+| **Error-Taxonomy Distribution** | *Which kinds* of error occur, and how the reviewer shifts them | Yes | Exp 4 |
+| **Blast-Radius-Weighted Error Impact** | Weights each error by how many models depend on it (not all errors are equal) | Yes | Exp 4 |
+| **Manual Correction-Step Count** | Human effort to fix output to acceptance — the objective effort proxy (replaces fabricated timings) | Yes | Exp 5; H3b |
+| **Generation Latency** | Wall-clock cost of a run, incl. the learning/reviewer overhead | No | Exp 1 |
+| **Drift Detection Recall** | Does the deterministic diff catch every real schema change? (safety-critical) | Answer key | Exp 6 |
+| **Change-Impact Classification Accuracy** | Does the AI label additive/cosmetic/breaking correctly vs rules? | Answer key | Exp 6 |
+| **Breaking-Change Recall** | Are *breaking* changes never missed? (the one class that must not leak) | Answer key | Exp 6 |
+| **Cost-Weighted Misclassification Error** | Penalises dangerous mislabels (breaking→safe) more than harmless ones | Answer key | Exp 6 |
+| **Drift-Review Action Count** | Human actions to triage a drift, unaided vs rules vs AI (effort, H2c) | Answer key | Exp 6c |
+| **Governance Block Rate** | Fraction of unsafe promotions the supervisor actually blocks | Scenario set | Exp 7 |
+| **Audit-Trail Completeness** | Do persisted approvals capture actor/time/version/decision/rationale? | Real approvals | Exp 7 (unmeasured) |
+
+The two remaining unmeasured items — **inter-rater reliability** (needs a second human
+annotator) and **audit-trail / approval-rate** (needs real approvals performed) — are
+gaps of *data collection*, not of missing code; both metrics are implemented and
+tested. See §6.
+
 ---
 
 ## 2. Reliability and grounding of generated models
@@ -162,33 +200,44 @@ hallucination rate, this supports the claim that the pipeline's output is
 well-formed by construction: the emitter is deterministic and the contract layer
 rejects malformed plans before they reach it.
 
-**dbt compile (preliminary, to be finalised).** A dbt profile using Databricks
-OAuth (external browser, no stored secret) was configured, `dbt deps` installed the
-AutomateDV/dbt-utils packages, and **`dbt compile` ran against live Databricks on the
-generated CIM project**: it registered the adapter, parsed the whole project
-(*"Found 12 models, 42 data tests, 3 sources, 1418 macros"*), and compiled the Data
-Vault models (hubs + link) with **no errors**. So the generated project *does*
-compile against a real warehouse.
+**dbt compile against live Databricks — the generated project compiles cleanly.**
+A dbt profile using Databricks OAuth (external browser, no stored secret) was
+configured, `dbt deps` installed the AutomateDV/dbt-utils packages, and `dbt compile`
+ran against the live warehouse on the generated CIM project. It parsed the whole
+project — *"Found 12 models, 42 data tests, 3 sources, 1419 macros"* — and produced
+compiled SQL for **all 12 models with zero errors and zero emitter warnings**. The
+compiled artifacts confirm the full Data Vault rendered: **3 staging, 3 hubs, 1 link,
+4 satellites, and 1 effectivity satellite** (`eff_sat_terminal_equipment_node`), plus
+all 42 data tests. The only lines the run emits besides the model loads are benign,
+code-independent dbt/Databricks notices (thrift SSL legacy-validation chatter and two
+dbt behaviour-change opt-in notices); none originate in the generated project.
 
-The compile surfaced two **non-fatal** warnings, both of which have since been fixed
-at the emitter (deterministic generator):
-1. *AutomateDV staging warnings* — the generated staging models declared their
-   business-key hashes in the dict form rather than a plain column list, so AutomateDV
-   warned "use list syntax for PKs". Fixed in `HashedColumns.dv_model` (PK → list,
-   hashdiff → `{is_hashdiff: true, …}`); it changes only the declaration syntax, not
-   the hashed columns.
-2. *An unused `business_vault` config path* in `dbt_project.yml` — declared even
-   though no business-vault models are generated. Now declared only when BV models
-   exist.
+**What this means.** The generator does not merely produce YAML that passes its own
+validator — it produces a dbt project that a real warehouse accepts and compiles
+end-to-end, including the effectivity satellite, incremental-merge hubs/links/sats,
+and every AutomateDV macro call. That closes the loop from "structurally valid
+artifact" to "deployable artifact".
 
-> **Status — provisional.** A clean *regenerate-then-recompile* to confirm both
-> warnings are gone is pending: regeneration is currently blocked by two
-> **pre-existing** issues unrelated to these fixes — OneDrive locking the old output
-> directory during the clean step, and the CIM metadata's eff-sat
-> (`eff_sat_terminal_equipment_node`) missing a required `end_date` key. Once those
-> are resolved the recompile will confirm a warning-free pass, and this section will
-> state the final result rather than the preliminary one. **No compile-pass *rate* is
-> claimed yet** — only that the project compiled without errors on a representative run.
+**Compile-pass *rate* (harness).** A rate needs more than one project. The reproducible
+harness for it is now in place: `scripts/dbt/build_projects.py` turns any set of DWA
+metadata YAMLs into dbt projects (offline, no warehouse), and `scripts/dbt/dbt_sweep.py`
+runs `dbt deps`/`compile` over them and parses each `run_results.json` into a
+compile-pass rate (`dbt_builder/src/runners/dbt_results.py`, unit-tested). Today the
+project population is the CIM gold (**1/1 compiling clean**); the rate grows as further
+metadata YAMLs — hand-authored, or emitted from generated plans via `render_v3` — are
+added. The breadth limit (how many distinct projects exist) is a data-collection gap,
+not a tooling gap (see §6).
+
+**Execution — `dbt run` + `dbt test` (harness).** Compile proves the SQL is valid;
+*execution* proves it materialises and its data tests pass. The same sweep runs the
+`run`/`test` stages and reports models-built and tests-passed counts from
+`run_results.json`. This is the one step that writes tables to the warehouse and needs
+the operator's OAuth session, so its number is produced by the operator's live run, not
+fabricated here; §6 lists it as harness-ready, pending execution.
+
+**No compile-pass *rate* or execution-pass figure is claimed yet** — one project is
+confirmed compiling; the rates are what the harness produces once more projects and a
+live `run`/`test` are supplied.
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -276,6 +325,47 @@ entity identification and link ratio as reliable, and always report naming with 
 dispersion — never as a point estimate.**
 
 **Supports.** Statistical rigour across all quantitative claims.
+
+### 2.8 Significance Testing and Statistical Power
+
+**What it measures.** Whether a difference between two conditions is larger than
+sampling noise (a **p-value**), and *how large* it is regardless of significance
+(an **effect size**). The experiments pair conditions by seed (`off@42` vs `on@42`),
+so the correct test is a **paired permutation test**: it enumerates all `2ⁿ`
+sign-flips of the per-seed differences — an *exact* p-value at these sample sizes,
+with no normality assumption (a t-test would be indefensible at n=3–5). Effect size
+is **Cliff's delta** (scale-free, non-parametric). Both are implemented in
+`stats.py` (`paired_permutation_test`, `cliffs_delta`, `compare_paired`) and unit-
+tested against hand-computed values.
+
+**Worked result (the one contrast with recorded per-seed values).** For CIM naming
+adherence, learning OFF vs ON — the five-seed values recorded in §2.7 (four seeds at
+1.0, one at 0.333, versus all five at 1.0):
+
+| Contrast | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
+|---|---|---|---|---|---|---|
+| CIM naming, OFF→ON | 0.867 | 1.000 | −0.133 [−0.400, 0.000] | **1.000** | −0.20 | small |
+
+**What this means — and why the p-value is the point.** The means differ (0.867 vs
+1.0), but the paired permutation test returns **p = 1.0**: the entire difference rests
+on a *single* discordant seed, and one out of five pairs can never be significant
+under sign-flipping. This is not a defect of the test — it is the honest verdict that
+**the apparent naming "gain" from learning on CIM is statistically indistinguishable
+from noise**, which corroborates the instability finding of §2.2 rather than
+contradicting the learning story (CIM tables are already concept-named, §Exp 3, so
+there was little for learning to add). The methodological lesson the thesis should
+state: with n = 3–5 seeds, only effects present in *most* seeds are detectable; a
+single-seed effect is undetectable **by construction**, so such differences must be
+reported as directional, never as established.
+
+**Reproducibility.** `python scripts/stats/significance.py --results <experiment.json>
+--metric gold_entity_f1 --compare off,on` computes the full table for any metric and
+condition pair from an `experiment --out` JSON. The complete significance table across
+all contrasts (entity F1, link ratio, correction steps) is produced by re-running the
+experiments with `--out` and pointing the script at the result — the tooling is done;
+the remaining table is a re-run, not new code.
+
+**Supports.** Statistical rigour; directly addresses the small-n threat to validity.
 
 ---
 
@@ -584,24 +674,63 @@ settings `link_parsimony_enabled` and `reviewer_preserve_business_keys` (both de
 on). The approval recommendation is `python -m dbt_builder.src.ai.evaluation generate
 --payload <disc.yaml> --gold <system_id>` (prints the APPROVE/REVIEW/REJECT verdict).
 
-**Not reproducible here — and not claimed.** The dbt compile-pass rate requires a
-dbt profile at `~/.dbt/profiles.yml` with Databricks credentials plus `dbt deps`;
-Audit-Trail Completeness requires real approvals to exist in the Delta store;
-inter-rater reliability requires a second human annotator.
+**Significance + effect size (§2.8).** `python scripts/stats/significance.py --results
+<experiment.json> --metric gold_entity_f1 --compare off,on` reads an `experiment --out`
+JSON and prints the paired permutation p-value, bootstrap CI and Cliff's delta for each
+system. Unit-tested in `tests/ai/test_significance.py`.
+
+**dbt compile-pass rate and execution (§2.4).** Two composable scripts:
+```bash
+# 1) generate dbt projects from metadata YAMLs (offline, no warehouse)
+python scripts/dbt/build_projects.py \
+  --metadata poc/metadata/iec_cim_metadata.yaml --out-root <build_dir>
+
+# 2) run dbt stages over them and report pass rates (live warehouse)
+#    gap 3 (compile-pass rate):
+python scripts/dbt/dbt_sweep.py --projects-root <build_dir> \
+  --stages deps,compile --profiles-dir ~/.dbt --results-out sweep.json
+#    gap 2 (execution — materialise + test; writes tables):
+python scripts/dbt/dbt_sweep.py --project output/iec_dv2 \
+  --stages deps,run,test --profiles-dir ~/.dbt --results-out exec.json
+```
+The `run_results.json` parser is unit-tested in `tests/ai/test_dbt_results.py`.
+
+**Single clean compile confirmed; a *rate* is not claimed.** A dbt profile
+(`~/.dbt/profiles.yml`, Databricks OAuth) plus `dbt deps` was configured and the
+generated CIM project compiled cleanly against live Databricks — 12 models, 42 tests,
+zero emitter warnings (§2.4). What is *not* claimed is a compile-pass *rate* across
+many generated projects, nor an execution-pass figure — both are produced by the
+harness above once more projects and a live `run`/`test` are supplied. Audit-Trail
+Completeness still requires real approvals to exist in the Delta store; inter-rater
+reliability still requires a second human annotator.
 
 ---
 
 ## 6. What is still not measured
 
+Each item below is now blocked by **data collection, not missing code** — every metric
+has an implemented, unit-tested computation and a reproducible script (§5).
+
 1. **Inter-rater reliability of the gold sets** — the single largest threat to
    construct validity. The kappa function is implemented and tested; it needs a
-   second annotator, not more code.
-2. **dbt compile-pass rate** — needs a configured dbt profile (§2.4).
-3. **Audit-Trail Completeness** — needs approvals to be performed (§3, Experiment 7).
-4. **Approval rate over time** — the most direct test of H1c's "successive runs"
+   second annotator, not more code. (A solo triangulation — intra-rater test–retest +
+   an independent LLM annotator + a documented codebook — is planned as the substitute.)
+2. **dbt compile-pass *rate* (harness ready).** A single project compiles cleanly
+   (§2.4) and the multi-project sweep (`build_projects.py` → `dbt_sweep.py`) computes a
+   rate; the population is currently one project (CIM). Raising it needs more distinct
+   projects (further metadata YAMLs or emitted plans), which is a breadth question (item 5).
+3. **dbt execution — `run` + `test` (harness ready, pending a live run).** The sweep
+   materialises the models and runs the 42 data tests and reports the pass counts; the
+   one live warehouse run that writes tables has not yet been executed.
+4. **Audit-Trail Completeness** — needs approvals to be performed (§3, Experiment 7).
+5. **Approval rate over time** — the most direct test of H1c's "successive runs"
    wording; blocked by the same empty approval store (now unblocked for a non-expert
    by the approval recommendation, §3B.4 — it needs the approvals to be *performed*).
-5. **Breadth** — two source systems and small seed counts. The transferable claims
+6. **Full significance table (tooling done, §2.8).** The paired permutation test +
+   effect size are implemented and demonstrated on the one contrast with recorded
+   per-seed values; the complete table across every contrast is a re-run of the
+   experiments with `--out`, not new code.
+7. **Breadth** — two source systems and small seed counts. The transferable claims
    are the *patterns* (AI advantage scales with schema difficulty; naming is unstable
    while entity identification is stable), not the absolute figures. (Model-ablation
    robustness is now partially addressed — §3B.3 — over two models on two systems.)

@@ -176,30 +176,31 @@ This is pure, cheap, deterministic (plan + payload in, rate out) and needs no go
 set. It matters because hallucination is *the* canonical LLM failure mode, and for
 an LLM thesis its absence is a conspicuous hole.
 
-**A caveat worth testing rather than assuming:** the modeller's prompt forbids
-inventing tables/columns, and `_coerce_plan_dict` strips unknown payload columns —
-so the measured rate may well be ~0. That would be a **finding** (the guardrail
-demonstrably works), not a non-result. Right now it is an *untested assumption*.
+**The caveat, now tested rather than assumed:** the modeller's prompt forbids
+inventing tables/columns, and `_coerce_plan_dict` strips unknown payload columns.
+Measuring it did **not** return a flat zero — ServiceNow scored **0.0015** (one
+fabricated payload column across ~660 references), CIM 0.0000. So the guardrail is
+*substantially* but not *perfectly* effective; that is a stronger finding than the
+assumed zero would have been. See `findings.md §2.1`.
 
-## Other metrics worth adding (prioritised)
+## Metrics status — all of the below are now implemented, tested, and reported
 
-1. **Grounding / hallucination rate** — as above. *Highest value, lowest cost.*
-2. **dbt compile-pass rate** — does the emitted YAML actually compile against
-   dbt + AutomateDV? The `dbt_gate` exists but no **structural-validity rate** has
-   been reported. This is the strongest "does it really work" evidence available.
-3. **Self-consistency / output stability** — the modeller already samples and votes
-   by entity fingerprint; the **fingerprint agreement rate** across samples is a
-   free reliability metric (and a proxy for confidence).
-4. **Statistical rigour** — currently means only. Add **bootstrap confidence
-   intervals** and effect sizes; with small n use a non-parametric test rather than
-   asserting a difference from point estimates.
-5. **Inter-rater reliability (Cohen's κ)** on the gold set — the standing
-   construct-validity limitation (single-author ground truth).
-6. **Token / cost per plan** — practical viability alongside latency.
-7. **Idempotency rate** — repeated runs on unchanged input produce identical output
-   (asserted once in Exp 7; could be a reported rate).
-8. **Model-ablation robustness** — repeat key experiments with a weaker model to
-   show findings are properties of the *mechanism*, not of `gpt-4.1`.
-9. **Approval rate over time** — approvals ÷ (approvals + rejections) as the corpus
-   grows: the most direct test of H1c's "successive runs" wording. *Blocked by the
-   same empty approval store as H3c.*
+Everything on the earlier "worth adding" list has since been built and measured; this
+table is the audit trail. Full results and interpretation live in `findings.md`.
+
+| Metric | Status | Where measured |
+|---|---|---|
+| Grounding / hallucination rate | **Done** — 0.0015 SNOW, 0.0000 CIM | findings §2.1 |
+| dbt compile (live warehouse) | **Done** — 12 models compile clean, zero warnings | findings §2.4 |
+| Self-consistency / output stability | **Done** — 0.80 CIM, 0.33 SNOW | findings §2.2 |
+| Statistical rigour (bootstrap CIs) | **Done** — 95% CIs over five seeds | findings §2.7 |
+| Inter-rater reliability (Cohen's κ) | **Implemented + tested; unmeasured** — needs a 2nd annotator | findings §2.6, §6 |
+| Token / cost per plan | **Done** — ≈3.9k CIM, ≈13.9k SNOW tokens | findings §2.5 |
+| Idempotency rate | **Done** — 0.20 CIM, 0.33 SNOW, 1.00 rules | findings §2.3 |
+| Model-ablation robustness | **Done** — gpt-4o vs gpt-4.1 | findings §3B.3 |
+| Approval rate over time | **Blocked** — empty approval store (same as H3c) | findings §6 |
+
+Only two items are not fully *measured*, and both are blocked by **missing data, not
+missing code**: inter-rater reliability (needs a second human annotator) and the
+approval-rate/audit-trail metrics (need real approvals performed). Both are
+implemented and unit-tested and will produce numbers the moment the data exists.

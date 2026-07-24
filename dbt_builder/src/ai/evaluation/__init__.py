@@ -53,8 +53,12 @@ from dbt_builder.src.ai.evaluation.recommend import (
 )
 from dbt_builder.src.ai.evaluation.stats import (
     bootstrap_ci,
+    cliffs_delta,
+    cliffs_delta_label,
     cohens_kappa,
+    compare_paired,
     idempotency_rate,
+    paired_permutation_test,
     plan_fingerprint,
     self_consistency,
 )
@@ -101,11 +105,15 @@ __all__ = [
     "build_from_scratch_steps",
     "build_modeller",
     "check_grounding",
+    "cliffs_delta",
+    "cliffs_delta_label",
     "cohens_kappa",
+    "compare_paired",
     "correction_steps",
     "coverage",
     "evaluate_plan",
     "idempotency_rate",
+    "paired_permutation_test",
     "plan_fingerprint",
     "self_consistency",
     "grade_against_gold",
