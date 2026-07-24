@@ -37,6 +37,12 @@ class SupervisorConfig:
     max_new_tables: int = 15
     drift_fraction_threshold: float = 0.40
     pause_on_any_orphan: bool = False
+    # Safety floor: halt when the deterministic impact rule calls any detected
+    # change BREAKING (business-key retype, dropped column, vanished source).
+    # Added after Experiment 7 measured a 62% block rate: the diff engine already
+    # computed per-change risk, but nothing consulted it, so breaking schema
+    # changes flowed straight through the gate.
+    pause_on_breaking_change: bool = True
 
     # ── PLAN thresholds ───────────────────────────────────────────────────
     low_confidence_fraction_threshold: float = 0.40
@@ -152,6 +158,29 @@ class PipelineSupervisor:
                     ),
                 )
             )
+
+        # Safety floor (H3a): escalate any change the deterministic impact rule
+        # classifies BREAKING. Reuses the Use-Case-B rule (no LLM, conservative)
+        # rather than duplicating the logic, so the gate acts on the risk the diff
+        # engine already computed. A pause — the operator can still acknowledge.
+        if self._cfg.pause_on_breaking_change:
+            from dbt_builder.src.ai.drift.impact import ChangeImpact, rule_based_impact
+
+            breaking = [
+                c for c in change_set.changes if rule_based_impact(c) is ChangeImpact.BREAKING
+            ]
+            if breaking:
+                names = ", ".join(sorted(c.table_name for c in breaking)[:5])
+                signals.append(
+                    RiskSignal(
+                        kind=RiskKind.BREAKING_SCHEMA_CHANGE,
+                        severity=RiskSeverity.HIGH,
+                        detail=(
+                            f"{len(breaking)} breaking schema change(s) detected "
+                            f"({names}) — review before applying."
+                        ),
+                    )
+                )
 
         if self._cfg.pause_on_any_orphan:
             orphan_count = sum(

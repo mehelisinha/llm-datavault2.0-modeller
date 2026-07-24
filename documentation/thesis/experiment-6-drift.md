@@ -1,9 +1,10 @@
 # Experiment 6 — Schema-drift detection and impact classification (Use Case B, RQ2)
 
-**Status.** Code built and unit-tested; **6a (recall) and 6b (impact accuracy) run
-on a REAL CIM drift dataset** in Databricks (`edh_unreg_silver_dev_st.cim_drifted`
-vs `.bronze`). **6c (human effort)** is outstanding. Everything lives on branch
-`ai/usecaseB-drift`. The synthetic proof-of-concept (§7) is kept for contrast.
+**Status.** Complete. **6a (recall), 6b (impact accuracy) and 6c (review effort)**
+all run on a REAL CIM drift dataset in Databricks
+(`edh_unreg_silver_dev_st.cim_drifted` vs `.bronze`), and the drift is viewable in
+the UI (§7). Everything lives on branch `ai/usecaseB-drift`. The earlier synthetic
+proof-of-concept is kept as an appendix (§8) for contrast.
 
 **Hypotheses (from `RQ-Hypothesis.md`).** H2a — the deterministic diff has complete
 recall on structural changes. H2b — the AI impact classifier (additive / cosmetic /
@@ -80,24 +81,51 @@ compatibility judgement the rule cannot, on a real change, but confirming it nee
 more cosmetic examples (a richer schema, or ServiceNow).
 
 **F-3: The synthetic safety worry did _not_ reproduce.** In the earlier synthetic
-proof-of-concept (§7) the AI once mislabelled an *orphaned* table as cosmetic,
+proof-of-concept (§8) the AI once mislabelled an *orphaned* table as cosmetic,
 dropping breaking recall to 0.75. On the **real** data the AI classified the
 orphaned `connectivity_nodes` correctly as breaking. So the safety regression is a
 *possible* failure mode (worth the hybrid guardrail below), but it did not occur
 here — reported honestly in both directions rather than cherry-picked.
 
 **F-4: Design implication — hybrid remains the safe architecture.** Because an LLM
-*can* occasionally miss a safety-critical case (§7), the recommended design is the
+*can* occasionally miss a safety-critical case (§8), the recommended design is the
 AI for subtle type-compatibility judgement **on top of** the rule's hard
 safety-floor (orphaned / removed column / high-risk key change are always breaking).
 On this dataset the hybrid would score the AI's 1.00 while *guaranteeing* the rule's
 perfect breaking recall — the best of both.
 
+### H2c — drift-review effort (objective action counts)
+
+As in Experiment 5's H3b, effort is measured as **manual actions**, not wall-clock
+time (no human drift-review session was timed, so no timing is claimed). Three
+action types: **discovery** (comparisons a reviewer must make to *find* the
+changes), **decisions** (assigning an impact to each change), and **corrections**
+(fixing a wrong machine label).
+
+| Arm | Discovery | Decisions | Corrections | **Total actions** |
+|---|---|---|---|---|
+| Manual (unaided) | 28 | 8 | — | **36** |
+| Deterministic (rule-only) | 0 | 0 | 1 | **1** |
+| Deterministic + AI | 0 | 0 | 0 | **0** |
+
+Discovery = 4 table-presence checks + 24 distinct column comparisons
+(conducting_equipment 13, terminals 11) — what a human must inspect by hand to
+find the 8 changes. Corrections come straight from §3: the rule mislabels the one
+widening, the AI mislabels nothing.
+
+**F-5: H2c is supported — the pipeline removes the search burden entirely.** An
+unaided reviewer performs ~36 actions; the pipeline reduces this to 1 (rule) or 0
+(AI) corrective actions, because change *discovery* is fully automated (H2a recall
+= 1.00) and classification is near-perfect. The saving is dominated by discovery
+(28 of 36 actions), which is exactly the tedious, error-prone part.
+
+*Honest qualification:* "0 corrections" is not "0 effort" — the reviewer still
+**reads** the 8 machine classifications to confirm them. What is eliminated is the
+28-step search and the 8 independent judgement calls; what remains is verification.
+A time figure would need the practitioner-assumption overlay used in Exp 5 §5.
+
 ## 4. What is still needed
 
-- **6c (human effort):** compare drift-review effort — correction-style counts (as
-  in Exp 5) for reviewing the pre-classified pipeline output vs an unaided manual
-  drift review. Can reuse the Experiment 5 correction-step approach.
 - **More cosmetic cases / a second system:** to move F-2 from directional to
   statistically supported (drift ServiceNow, or add numeric columns that permit
   clean widenings).
@@ -129,6 +157,8 @@ Real run (needs Azure + the `cim_drifted` schema): `scratchpad/run_exp6.py` read
 expands with `atomic_changes`, classifies with `rule_based_impact` +
 `get_impact_classifier()`, and scores against `fixtures/cim_drift_labels.json` with
 `score_impacts`. Recreate the dataset from `fixtures/cim_drift.sql`.
+Effort counts (H2c): `scratchpad/run_exp6c.py` reads both schemas and computes the
+discovery/decision/correction actions in §3.
 
 ## 7. Viewing the drift in the UI
 
@@ -146,10 +176,15 @@ drift. Prerequisites are already in `.env`: `DWA_API_DISCOVERY_MODE=databricks`,
    - **bronze_schema: `cim_drifted`** (the drifted "after")
    - system_id: `IEC_CIM_001`, system_name: `IEC CIM`, source_type: `delta`
    (Equivalently `POST /api/pipeline/run` with that JSON body.)
-4. The SNAPSHOT step shows the change-set (2 DRIFT, 1 NEW, 1 ORPHANED). Because the
-   `mrid` business-key type change is flagged **HIGH risk**, the supervisor **pauses**
-   the run — the UI shows the drift plus a risk banner (exactly the governance
-   behaviour RQ3 predicts).
+4. The SNAPSHOT step shows the change-set (2 DRIFT, 1 NEW, 1 ORPHANED), and the run
+   **pauses** with a risk banner because the `mrid` business-key retype is a
+   breaking change.
+
+> **Note (Experiment 7).** That pause only happens *after* the governance fix made
+> in Experiment 7. As originally built the supervisor never consulted the diff's
+> per-change risk, so this exact drift would have been detected, correctly
+> classified as breaking — and then **not stopped** (block rate 62%). See
+> `experiment-7-safety-governance.md` §2–§3.
 
 Verified via the identical backend code path (`scratchpad/verify_ui_drift.py`):
 UC REST → `inspect_catalog(bronze)` + `read_bronze(cim_drifted)` → `diff`.

@@ -35,6 +35,7 @@ class RiskKind(str, Enum):
 
     HIGH_NEW_TABLE_VOLUME = "high_new_table_volume"
     HIGH_DRIFT_FRACTION = "high_drift_fraction"
+    BREAKING_SCHEMA_CHANGE = "breaking_schema_change"
     ORPHANED_ENTITIES_PRESENT = "orphaned_entities_present"
     LOW_CONFIDENCE_DECISIONS = "low_confidence_decisions"
     EMPTY_PLAN = "empty_plan"
