@@ -320,3 +320,29 @@ export function usePipelineRun(
     ...options,
   });
 }
+
+/** Plain-language approve/review/reject guidance for a settled run's plan. */
+export type GovernanceRecommendation = {
+  verdict: "" | "approve" | "review" | "reject";
+  blocking_reasons: string[];
+  review_reasons: string[];
+  rejection_message: string;
+  hallucination_rate: number;
+};
+
+export function useRunRecommendation(
+  runId: string | null,
+  options?: UseQueryOptions<GovernanceRecommendation, Error>,
+) {
+  return useQuery({
+    queryKey: ["pipeline", "run", runId, "recommendation"],
+    enabled: Boolean(runId),
+    queryFn: async () => {
+      const res = await api.GET("/api/pipeline/runs/{run_id}/recommendation" as any, {
+        params: { path: { run_id: runId! } },
+      });
+      return unwrapApiResult(res) as GovernanceRecommendation;
+    },
+    ...options,
+  });
+}

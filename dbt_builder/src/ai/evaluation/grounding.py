@@ -17,6 +17,8 @@ hand-authored reference model. Pure and deterministic.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
@@ -47,18 +49,29 @@ class GroundingReport(BaseModel):
 
 
 def check_grounding(plan: ModelingPlan, payload: DiscoveryPayload) -> GroundingReport:
+    """Verify every source reference in ``plan`` against the discovery ``payload``."""
+    columns_by_table = {
+        t.name.strip().lower(): {c.name.strip().lower() for c in t.columns}
+        for t in payload.tables
+    }
+    return check_grounding_from_columns(plan, columns_by_table)
+
+
+def check_grounding_from_columns(
+    plan: ModelingPlan, columns_by_table: Mapping[str, set[str]]
+) -> GroundingReport:
     """Verify every source table / business key / payload column the plan names.
+
+    ``columns_by_table`` maps lower-cased source-table name → set of lower-cased
+    column names. Accepting the plain mapping (rather than a full payload) lets the
+    pipeline compute grounding from its bronze snapshot, and keeps this the single
+    implementation both callers share.
 
     Counts one *reference* per (object → source table) and one per named column
     (hub business keys, satellite payload columns). Link ``fk_columns`` are hub
     hash keys, not source columns, so they are excluded here — their integrity is
     already covered by the ``link_fk_unresolved`` conformance check.
     """
-    columns_by_table: dict[str, set[str]] = {
-        t.name.strip().lower(): {c.name.strip().lower() for c in t.columns}
-        for t in payload.tables
-    }
-
     total = 0
     fabricated_tables: list[str] = []
     fabricated_columns: list[str] = []
@@ -102,4 +115,4 @@ def check_grounding(plan: ModelingPlan, payload: DiscoveryPayload) -> GroundingR
     )
 
 
-__all__ = ["GroundingReport", "check_grounding"]
+__all__ = ["GroundingReport", "check_grounding", "check_grounding_from_columns"]

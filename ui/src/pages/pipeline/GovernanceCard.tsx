@@ -16,7 +16,9 @@ import {
   useApprovePlan,
   useRejectPlan,
   useRequestChanges,
+  useRunRecommendation,
   useSubmitForReview,
+  type GovernanceRecommendation,
 } from "@/api/hooks";
 import { validationPassed } from "@/api/types";
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, Spinner } from "@/components/ui";
@@ -37,6 +39,13 @@ export function GovernanceCard({ run }: { run: PipelineRun }) {
   // Only visible when the run is settled.
   const runSettled = run.status === "done" || run.status === "paused";
   const canRender = runSettled && plan && validation && yamlContent;
+
+  // Plain-language approve/review/reject guidance from the backend checks.
+  const recQuery = useRunRecommendation(run.run_id, {
+    enabled: Boolean(runSettled && plan),
+  } as never);
+  const rec = recQuery.data ?? null;
+  const prefilled = useRef(false);
 
   const submit = useSubmitForReview({
     onSuccess: () => {
@@ -78,6 +87,16 @@ export function GovernanceCard({ run }: { run: PipelineRun }) {
     }
   }, [hasSubmitted]);
 
+  // Pre-fill the reject comment from the recommendation's reasons the first time
+  // it arrives with a REJECT verdict — so a non-expert can reject with a
+  // meaningful message without having to write one. Never overwrites typed text.
+  useEffect(() => {
+    if (rec && rec.verdict === "reject" && !prefilled.current && !comment && rec.rejection_message) {
+      setComment(rec.rejection_message);
+      prefilled.current = true;
+    }
+  }, [rec, comment]);
+
   if (!canRender) return null;
 
   const validationOk = validationPassed(validation);
@@ -118,6 +137,7 @@ export function GovernanceCard({ run }: { run: PipelineRun }) {
           <CardTitle>{PIPELINE_LABELS.sectionGovernance}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {rec && rec.verdict ? <RecommendationBanner rec={rec} /> : null}
           {!hasSubmitted ? (
             <>
               <p className="text-sm text-muted-foreground">{APPROVAL_LABELS.submitNeeded}</p>
@@ -171,6 +191,50 @@ export function GovernanceCard({ run }: { run: PipelineRun }) {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+const VERDICT_STYLES: Record<string, { box: string; label: string }> = {
+  approve: {
+    box: "border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100",
+    label: "Recommendation: APPROVE",
+  },
+  review: {
+    box: "border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100",
+    label: "Recommendation: REVIEW",
+  },
+  reject: {
+    box: "border-destructive/40 bg-destructive/10 text-destructive",
+    label: "Recommendation: REJECT",
+  },
+};
+
+/**
+ * Plain-language guidance so a non-expert knows whether to approve. It never
+ * decides — the buttons still do — it only summarises the objective checks
+ * (source grounding, DV2 conformance, gold match) into a verdict + reasons.
+ */
+function RecommendationBanner({ rec }: { rec: GovernanceRecommendation }) {
+  const style = VERDICT_STYLES[rec.verdict] ?? VERDICT_STYLES.review;
+  const reasons = [
+    ...rec.blocking_reasons.map((r) => ({ key: `b:${r}`, mark: "⛔", text: r })),
+    ...rec.review_reasons.map((r) => ({ key: `r:${r}`, mark: "•", text: r })),
+  ];
+  return (
+    <div className={`rounded-md border p-3 text-sm ${style.box}`}>
+      <p className="font-semibold">{style.label}</p>
+      {reasons.length > 0 ? (
+        <ul className="mt-1 space-y-0.5">
+          {reasons.map((r) => (
+            <li key={r.key}>
+              {r.mark} {r.text}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1">Nothing was flagged — safe to approve.</p>
+      )}
     </div>
   );
 }

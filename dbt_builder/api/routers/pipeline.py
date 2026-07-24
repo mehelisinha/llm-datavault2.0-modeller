@@ -171,6 +171,81 @@ def run_pipeline(
     return run
 
 
+class GovernanceRecommendation(BaseModel):
+    """Plain-language approve/review/reject guidance for a pipeline run's plan.
+
+    Computed from the objective checks already available on the run — DV2
+    conformance, source grounding (from the bronze snapshot), and gold grading
+    when a reference model exists for the system — so a non-expert reviewer knows
+    whether to approve, and a rejection carries a meaningful auto-generated reason.
+    """
+
+    verdict: str  # approve | review | reject
+    blocking_reasons: list[str] = []
+    review_reasons: list[str] = []
+    rejection_message: str = ""
+    hallucination_rate: float = 0.0
+
+
+def _recommendation_for_run(run: PipelineRun) -> GovernanceRecommendation:
+    """Build the approval recommendation from a settled run's plan + snapshot."""
+    from dbt_builder.src.ai.evaluation.conformance import score_plan
+    from dbt_builder.src.ai.evaluation.gold import grade_against_gold, load_gold_models
+    from dbt_builder.src.ai.evaluation.grounding import check_grounding_from_columns
+    from dbt_builder.src.ai.evaluation.recommend import recommend_approval
+
+    plan = run.plan
+    try:
+        from dbt_builder.src.ai.settings import get_settings as _get_ai_settings
+
+        technical = _get_ai_settings().technical_payload_column_set()
+    except Exception:  # noqa: BLE001 — settings not configured in some contexts
+        technical = frozenset()
+
+    grounding = None
+    if run.bronze_snapshot is not None:
+        columns_by_table = {
+            t.name.strip().lower(): {c.name.strip().lower() for c in t.columns}
+            for t in run.bronze_snapshot.tables
+        }
+        if columns_by_table:
+            grounding = check_grounding_from_columns(plan, columns_by_table)
+
+    gold = load_gold_models().get(plan.system_id)
+    gold_score = grade_against_gold(plan, gold) if gold is not None else None
+
+    rec = recommend_approval(
+        conformance=score_plan(plan, technical_columns=technical),
+        grounding=grounding,
+        gold=gold_score,
+    )
+    return GovernanceRecommendation(
+        verdict=rec.verdict.value,
+        blocking_reasons=list(rec.blocking_reasons),
+        review_reasons=list(rec.review_reasons),
+        rejection_message=rec.rejection_message,
+        hallucination_rate=grounding.hallucination_rate if grounding is not None else 0.0,
+    )
+
+
+@router.get("/runs/{run_id}/recommendation", response_model=GovernanceRecommendation)
+def get_run_recommendation(
+    run_id: str,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> GovernanceRecommendation:
+    """Approve/review/reject guidance for a run's plan (empty verdict until modelled)."""
+    run = service.get_pipeline_run(run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Pipeline run {run_id!r} not found."
+        )
+    if run.plan is None:
+        # The plan does not exist until ANALYZE has run; surface an explicit
+        # "not ready" rather than a 500 so the UI can simply hide the card.
+        return GovernanceRecommendation(verdict="", review_reasons=["plan not generated yet"])
+    return _recommendation_for_run(run)
+
+
 @router.get("/runs/{run_id}", response_model=PipelineRun)
 def get_pipeline_run(
     run_id: str,
