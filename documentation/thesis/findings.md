@@ -162,14 +162,33 @@ hallucination rate, this supports the claim that the pipeline's output is
 well-formed by construction: the emitter is deterministic and the contract layer
 rejects malformed plans before they reach it.
 
-**Important limitation — this is not a dbt compile-pass rate.** The full dbt
-compile gate is **disabled by default** and could **not** be exercised in this
-environment: it requires a configured dbt profile (`~/.dbt/profiles.yml`) with live
-Databricks credentials, which does not exist here — a `dbt parse` attempt failed for
-exactly that reason. **No dbt compile-pass rate is claimed anywhere in this thesis.**
-What is claimed is the offline structural validation rate above. Closing this gap
-requires configuring a dbt profile and running `dbt deps` and `dbt parse` against a
-generated project (see §5).
+**dbt compile (preliminary, to be finalised).** A dbt profile using Databricks
+OAuth (external browser, no stored secret) was configured, `dbt deps` installed the
+AutomateDV/dbt-utils packages, and **`dbt compile` ran against live Databricks on the
+generated CIM project**: it registered the adapter, parsed the whole project
+(*"Found 12 models, 42 data tests, 3 sources, 1418 macros"*), and compiled the Data
+Vault models (hubs + link) with **no errors**. So the generated project *does*
+compile against a real warehouse.
+
+The compile surfaced two **non-fatal** warnings, both of which have since been fixed
+at the emitter (deterministic generator):
+1. *AutomateDV staging warnings* — the generated staging models declared their
+   business-key hashes in the dict form rather than a plain column list, so AutomateDV
+   warned "use list syntax for PKs". Fixed in `HashedColumns.dv_model` (PK → list,
+   hashdiff → `{is_hashdiff: true, …}`); it changes only the declaration syntax, not
+   the hashed columns.
+2. *An unused `business_vault` config path* in `dbt_project.yml` — declared even
+   though no business-vault models are generated. Now declared only when BV models
+   exist.
+
+> **Status — provisional.** A clean *regenerate-then-recompile* to confirm both
+> warnings are gone is pending: regeneration is currently blocked by two
+> **pre-existing** issues unrelated to these fixes — OneDrive locking the old output
+> directory during the clean step, and the CIM metadata's eff-sat
+> (`eff_sat_terminal_equipment_node`) missing a required `end_date` key. Once those
+> are resolved the recompile will confirm a warning-free pass, and this section will
+> state the final result rather than the preliminary one. **No compile-pass *rate* is
+> claimed yet** — only that the project compiled without errors on a representative run.
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
