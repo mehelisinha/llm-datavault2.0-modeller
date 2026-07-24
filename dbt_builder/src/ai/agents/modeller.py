@@ -758,6 +758,7 @@ class ModellingAgent:
         technical_payload_columns: frozenset[str] = frozenset(),
         reference_loader: ReferenceLoader | None = None,
         reference_limit: int = 0,
+        link_parsimony: bool = True,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
@@ -812,6 +813,9 @@ class ModellingAgent:
         # retrieval so the prompt is byte-identical to the pre-learning agent.
         self._reference_loader = reference_loader
         self._reference_limit = max(0, reference_limit)
+        # Deterministic post-generation hygiene: prune structurally invalid /
+        # duplicate links the LLM over-produces (see agents.plan_hygiene).
+        self._link_parsimony = link_parsimony
         _LOG.info(
             "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
             "max_tokens=%d max_completion_tokens=%d batch_size=%d batch_parallelism=%d "
@@ -835,6 +839,20 @@ class ModellingAgent:
     # ------------------------------------------------------------------ public
 
     def propose(self, payload: DiscoveryPayload) -> ModelingPlan:
+        """Return a validated :class:`ModelingPlan` for ``payload``.
+
+        Wraps the generation strategy with a deterministic hygiene pass
+        (:func:`prune_redundant_links`) so structurally invalid / duplicate links
+        the model over-produces are removed before the plan is returned.
+        """
+        plan = self._propose_dispatch(payload)
+        if self._link_parsimony:
+            from dbt_builder.src.ai.agents.plan_hygiene import prune_redundant_links
+
+            plan = prune_redundant_links(plan)
+        return plan
+
+    def _propose_dispatch(self, payload: DiscoveryPayload) -> ModelingPlan:
         """Return a validated :class:`ModelingPlan` for ``payload``.
 
         Dispatches to one of two strategies, transparently to the caller:
@@ -1746,4 +1764,5 @@ def get_modelling_agent(
         technical_payload_columns=cfg.technical_payload_column_set(),
         reference_loader=reference_loader,
         reference_limit=reference_limit,
+        link_parsimony=bool(getattr(cfg, "link_parsimony_enabled", True)),
     )

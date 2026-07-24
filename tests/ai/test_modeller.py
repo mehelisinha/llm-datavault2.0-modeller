@@ -495,7 +495,21 @@ def test_duplicate_link_names_are_merged_not_fatal() -> None:
                     "source_table": "conducting_equipment",
                     "business_keys": ["mrid"],
                     "hash_key": "HK_CE",
-                }
+                },
+                # The merged link's FK hubs must exist, else the deterministic
+                # link-parsimony pass (correctly) prunes it as an unresolved link.
+                {
+                    "name": "hub_other",
+                    "source_table": "other",
+                    "business_keys": ["mrid"],
+                    "hash_key": "HK_OTHER",
+                },
+                {
+                    "name": "hub_third",
+                    "source_table": "third",
+                    "business_keys": ["mrid"],
+                    "hash_key": "HK_THIRD",
+                },
             ],
             "links": [
                 {

@@ -120,12 +120,19 @@ class PlanReviewer:
         settings: AISettings,
         max_tokens: int = 32768,
         technical_payload_columns: frozenset[str] = frozenset(),
+        preserve_business_keys: bool = True,
+        link_parsimony: bool = True,
     ) -> None:
         self._client = client
         self._deployment = deployment
         self._settings = settings
         self._max_tokens = max_tokens
         self._is_gpt5 = deployment.startswith("gpt-5")
+        # Deterministic post-review hygiene (see agents.plan_hygiene): restore a
+        # grounded business key the reviewer re-keyed (Exp 4), and prune links it
+        # left invalid or over-produced.
+        self._preserve_business_keys = preserve_business_keys
+        self._link_parsimony = link_parsimony
         # Same payload hygiene the generator applies — the reviewer emits the
         # final plan, so it must not re-introduce key/technical columns.
         self._technical_payload_columns = frozenset(c.lower() for c in technical_payload_columns)
@@ -143,8 +150,28 @@ class PlanReviewer:
         """
         chunk_size = getattr(self._settings, "plan_review_chunk_size", 0) or 0
         if chunk_size <= 0 or len(plan.hubs) <= chunk_size:
-            return self._review_once(plan, payload)
-        return self._review_chunked(plan, payload, chunk_size=chunk_size)
+            reviewed = self._review_once(plan, payload)
+        else:
+            reviewed = self._review_chunked(plan, payload, chunk_size=chunk_size)
+        return self._apply_hygiene(reviewed, original=plan)
+
+    def _apply_hygiene(self, reviewed: ModelingPlan, *, original: ModelingPlan) -> ModelingPlan:
+        """Deterministic post-review passes: restore grounded keys, prune links.
+
+        Applied to whatever ``review`` returns — including the original plan on a
+        fallback — so the output is always at least as faithful and conformant as
+        the input. Pure; no LLM.
+        """
+        from dbt_builder.src.ai.agents.plan_hygiene import (
+            prune_redundant_links,
+            restore_business_keys,
+        )
+
+        if self._preserve_business_keys:
+            reviewed = restore_business_keys(reviewed, original)
+        if self._link_parsimony:
+            reviewed = prune_redundant_links(reviewed)
+        return reviewed
 
     def _review_once(self, plan: ModelingPlan, payload: DiscoveryPayload) -> ModelingPlan:
         """Single-call review of one (sub-)plan; returns the original on failure."""
@@ -426,4 +453,6 @@ def get_plan_reviewer(*, settings: AISettings | None = None) -> PlanReviewer | N
         settings=cfg,
         max_tokens=cfg.plan_reviewer_max_tokens,
         technical_payload_columns=cfg.technical_payload_column_set(),
+        preserve_business_keys=bool(getattr(cfg, "reviewer_preserve_business_keys", True)),
+        link_parsimony=bool(getattr(cfg, "link_parsimony_enabled", True)),
     )

@@ -247,6 +247,16 @@ class AISettings(BaseSettings):
     # fan-out if the reviewer deployment rate-limits (429s). ``1`` = sequential.
     plan_review_parallelism: int = Field(default=0, ge=0)
 
+    # ── Deterministic plan-hygiene passes (post-generation / post-review) ──────
+    # Drop structurally invalid / duplicate links (links under two hubs or with an
+    # unresolved FK hash key) that the LLM over-produces. Only removes links the
+    # conformance rules already flag, so a well-formed plan is byte-identical.
+    link_parsimony_enabled: bool = Field(default=True)
+    # Restore a hub's grounded (source-read) business key when the reviewer re-keyed
+    # it onto a surrogate — the Experiment 4 regression. Preserves every other
+    # reviewer change; only the swapped key is reverted.
+    reviewer_preserve_business_keys: bool = Field(default=True)
+
     # Opt-in flag for the DV2 Planning Agent (a richer pre-step that emits
     # hub/link/satellite-split decisions, BV proposals, PIT volume
     # estimates, and human-review flags as one structured JSON document).
