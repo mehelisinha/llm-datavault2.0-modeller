@@ -46,6 +46,11 @@ from dbt_builder.src.ai.evaluation.gold import (
     load_gold_models,
 )
 from dbt_builder.src.ai.evaluation.grounding import GroundingReport, check_grounding
+from dbt_builder.src.ai.evaluation.recommend import (
+    ApprovalRecommendation,
+    ApprovalVerdict,
+    recommend_approval,
+)
 from dbt_builder.src.ai.evaluation.stats import (
     bootstrap_ci,
     cohens_kappa,
@@ -70,6 +75,8 @@ from dbt_builder.src.ai.evaluation.study import (
 
 __all__ = [
     "AblationArm",
+    "ApprovalRecommendation",
+    "ApprovalVerdict",
     "BlastRadiusReport",
     "Condition",
     "CorrectionReport",
@@ -105,6 +112,7 @@ __all__ = [
     "load_gold_models",
     "parse_condition",
     "plan_blast_radius",
+    "recommend_approval",
     "resolve_payload_path",
     "run_ablation",
     "run_condition",

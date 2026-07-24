@@ -64,8 +64,26 @@ def _technical_columns() -> frozenset[str]:
         return frozenset()
 
 
-def _print_scorecard(plan, *, source_tables, gold, technical) -> None:
-    """Print the conformance + gold scorecard for one plan (shared by score/generate)."""
+def _recommendation_for(plan, *, gold, payload, technical):
+    """Build the approval recommendation from the plan's objective checks (shared)."""
+    from dbt_builder.src.ai.evaluation.grounding import check_grounding
+    from dbt_builder.src.ai.evaluation.recommend import recommend_approval
+
+    grounding = check_grounding(plan, payload) if payload is not None else None
+    gold_score = grade_against_gold(plan, gold) if gold is not None else None
+    return recommend_approval(
+        conformance=score_plan(plan, technical_columns=technical),
+        grounding=grounding,
+        gold=gold_score,
+    ), grounding
+
+
+def _print_scorecard(plan, *, source_tables, gold, technical, payload=None) -> None:
+    """Print the conformance + gold scorecard for one plan (shared by score/generate).
+
+    When ``payload`` is supplied the scorecard also reports the source-grounding
+    (hallucination) check and a plain-language approve/review/reject recommendation.
+    """
     report = score_plan(plan, technical_columns=technical)
     metrics = evaluate_plan(
         plan, source_tables=source_tables, gold=gold, technical_columns=technical
@@ -106,6 +124,22 @@ def _print_scorecard(plan, *, source_tables, gold, technical) -> None:
             print(f"  [{issue.type.value}] {where}: {issue.message}")
     else:
         print("\nno conformance issues.")
+
+    if payload is not None:
+        recommendation, grounding = _recommendation_for(
+            plan, gold=gold, payload=payload, technical=technical
+        )
+        print(
+            f"\nsource grounding      : {grounding.grounding_rate:.3f} "
+            f"({grounding.fabricated_references}/{grounding.total_references} references fabricated)"
+        )
+        print(f"\n>>> RECOMMENDATION: {recommendation.verdict.value.upper()}")
+        for reason in recommendation.blocking_reasons:
+            print(f"    [blocking] {reason}")
+        for reason in recommendation.review_reasons:
+            print(f"    [review]   {reason}")
+        if recommendation.verdict.value == "approve":
+            print("    nothing flagged — safe to approve.")
 
 
 def _cmd_score(args: argparse.Namespace) -> int:
@@ -174,6 +208,19 @@ def _cmd_reject(args: argparse.Namespace) -> int:
 
     plan = ModelingPlan.model_validate_json(Path(args.plan).read_text(encoding="utf-8"))
     payload = discover_from_yaml(args.payload)
+    gold = load_gold_models().get(args.gold or payload.system.system_id)
+
+    # When no explicit comment is given, auto-generate a meaningful one from the
+    # same objective checks the scorecard shows — so a non-expert rejection still
+    # records *why* (fabricated references, convention issues, missed entities …).
+    comment = args.comment
+    if not comment:
+        recommendation, _ = _recommendation_for(
+            plan, gold=gold, payload=payload, technical=_technical_columns()
+        )
+        comment = f"auto: {recommendation.rejection_message}"
+        print(f"(auto-generated reason) {comment}")
+
     service = DwaService()
     bv = service.architect_bv(plan)
     rendered = render_v3(plan, payload.system, bv)
@@ -181,7 +228,7 @@ def _cmd_reject(args: argparse.Namespace) -> int:
     service.submit_for_review(
         plan=plan, rendered_yaml=rendered, validation=validation, actor=args.actor
     )
-    record = service.reject(plan_id=validation.plan_id, actor=args.actor, comment=args.comment)
+    record = service.reject(plan_id=validation.plan_id, actor=args.actor, comment=comment)
     print(
         f"[REJECTED] plan_id={record.plan_id} by {args.actor} — logged in the approval "
         "audit trail; NOT added to the learning corpus."
@@ -212,7 +259,8 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     gold = load_gold_models().get(args.gold or payload.system.system_id)
     source_tables = tuple(t.name for t in payload.tables)
     _print_scorecard(
-        plan, source_tables=source_tables, gold=gold, technical=cfg.technical_payload_column_set()
+        plan, source_tables=source_tables, gold=gold,
+        technical=cfg.technical_payload_column_set(), payload=payload,
     )
 
     if args.out:
@@ -459,7 +507,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_rej.add_argument("--payload", required=True, help="the discovery YAML used to generate it")
     p_rej.add_argument("--actor", default="evaluator@local", help="reviewer identity")
-    p_rej.add_argument("--comment", default="rejected via CLI", help="reason for rejection")
+    p_rej.add_argument("--gold", default=None, help="gold system_id (defaults to the payload's)")
+    p_rej.add_argument(
+        "--comment", default="",
+        help="reason for rejection (auto-generated from the checks when omitted)",
+    )
     p_rej.set_defaults(func=_cmd_reject)
 
     p_abl = sub.add_parser("ablation", help="run the learning OFF-vs-ON study")
