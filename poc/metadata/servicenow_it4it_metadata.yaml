@@ -1,0 +1,1907 @@
+system:
+  system_id: SNOW_IT4IT_001
+  system_name: ServiceNow_IT4IT
+  source_type: delta
+  catalog: edh_unreg_consumption_dev
+  schema: it4it_servicenow
+  load_frequency: daily
+  record_source: SERVICENOW_IT4IT_v1
+  record_source_column: RECORD_SOURCE
+  default_ldts: LOAD_DATE
+packages:
+- package: dbt-labs/dbt_utils
+  version: 1.3.3
+- package: metaplane/dbt_expectations
+  version: 0.10.10
+- package: Datavault-UK/automate_dv
+  version: 0.10.2
+macros:
+- name: generate_schema_name
+  description: Generates the schema name by overwriting the AutomateDV default behavior.
+hubs:
+- name: hub_cmn_department
+  source_table: cmn_department
+  staging_model: stg_cmn_department
+  business_key: sys_id
+  hash_key: HK_CMN_DEPARTMENT
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT,LOAD_DATE
+- name: hub_cmn_location
+  source_table: cmn_location
+  staging_model: stg_cmn_location
+  business_key: sys_id
+  hash_key: HK_CMN_LOCATION
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION,LOAD_DATE
+- name: hub_contract_sla
+  source_table: contract_sla
+  staging_model: stg_contract_sla
+  business_key: sys_id
+  hash_key: HK_CONTRACT_SLA
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA,LOAD_DATE
+- name: hub_core_company
+  source_table: core_company
+  staging_model: stg_core_company
+  business_key: sys_id
+  hash_key: HK_CORE_COMPANY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY,LOAD_DATE
+- name: hub_core_country
+  source_table: core_country
+  staging_model: stg_core_country
+  business_key: iso3166_3
+  hash_key: HK_CORE_COUNTRY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COUNTRY
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COUNTRY,LOAD_DATE
+- name: hub_sys_user
+  source_table: sys_user_grmember
+  staging_model: stg_sys_user_grmember
+  business_key: user
+  hash_key: HK_SYS_USER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_SYS_USER
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_SYS_USER,LOAD_DATE
+- name: hub_sys_user_group
+  source_table: sys_user_grmember
+  staging_model: stg_sys_user_grmember
+  business_key: group
+  hash_key: HK_SYS_USER_GROUP
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_SYS_USER_GROUP
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_SYS_USER_GROUP,LOAD_DATE
+- name: hub_task
+  source_table: task_sla
+  staging_model: stg_task_sla
+  business_key: task
+  hash_key: HK_TASK
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_TASK
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_TASK,LOAD_DATE
+satellites:
+- name: sat_cmn_department_details
+  description: Details attributes for hub_cmn_department (static change velocity).
+  parent_hub: hub_cmn_department
+  source_model: stg_cmn_department
+  hash_key: HK_CMN_DEPARTMENT
+  hashdiff: HD_CMN_DEPARTMENT_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - name
+  - id
+  - business_unit
+  - cost_center
+  - description
+  - head_count
+  - sys_domain
+  - u_short_name
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT,LOAD_DATE,HD_CMN_DEPARTMENT_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_cmn_location_details
+  description: Details attributes for hub_cmn_location (static change velocity).
+  parent_hub: hub_cmn_location
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION
+  hashdiff: HD_CMN_LOCATION_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - name
+  - full_name
+  - city
+  - state
+  - street
+  - zip
+  - phone
+  - phone_territory
+  - fax_phone
+  - time_zone
+  - latitude
+  - longitude
+  - lat_long_error
+  - coordinates_retrieved_on
+  - cmn_location_source
+  - cmn_location_type
+  - primary_location
+  - stock_room
+  - u_accountable_bu
+  - u_additional_bus
+  - u_alternative_site_access_3_email
+  - u_alternative_site_access_3_landline
+  - u_alternative_site_access_3_mobile
+  - u_alternative_site_access_3_name
+  - u_bit_cluster
+  - u_bit_coordinator_name
+  - u_closure_date
+  - u_comment
+  - u_contract_mcs
+  - u_contract_mwp
+  - u_country
+  - u_eon_internal_name
+  - u_expected_closure_date
+  - u_itc_room
+  - u_lan_site_type
+  - u_location_id
+  - u_location_type
+  - u_number
+  - u_post_office_box
+  - u_security_requirements
+  - u_site_access_1_availability
+  - u_site_access_1_name
+  - u_site_access_2_availability
+  - u_site_access_2_name
+  - u_site_access_3_availability
+  - u_site_access_3_name
+  - u_site_access_instructions
+  - u_site_classification
+  - u_site_id
+  - u_status
+  - u_users_on_site
+  - u_vip_on_site
+  - u_wan_provider
+  - u_wan_site_type
+  - u_work_info
+  - life_cycle_stage
+  - life_cycle_stage_status
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION,LOAD_DATE,HD_CMN_LOCATION_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_contract_sla_details
+  description: Details attributes for hub_contract_sla (static change velocity).
+  parent_hub: hub_contract_sla
+  source_model: stg_contract_sla
+  hash_key: HK_CONTRACT_SLA
+  hashdiff: HD_CONTRACT_SLA_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - name
+  - type
+  - target
+  - collection
+  - active
+  - duration
+  - duration_type
+  - schedule
+  - schedule_source
+  - schedule_source_field
+  - timezone
+  - timezone_source
+  - workflow
+  - flow
+  - adv_condition_type
+  - condition_class
+  - start_condition
+  - stop_condition
+  - pause_condition
+  - resume_condition
+  - cancel_condition
+  - reset_condition
+  - reset_action
+  - when_to_cancel
+  - when_to_resume
+  - set_start_to
+  - relative_duration_works_on
+  - retroactive
+  - retroactive_pause
+  - enable_logging
+  - sys_overrides
+  - sys_domain
+  - sys_domain_path
+  - u_actual_duration
+  - u_module
+  - u_service_contract
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA,LOAD_DATE,HD_CONTRACT_SLA_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_core_company_details
+  description: Details attributes for hub_core_company (static change velocity).
+  parent_hub: hub_core_company
+  source_model: stg_core_company
+  hash_key: HK_CORE_COMPANY
+  hashdiff: HD_CORE_COMPANY_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - name
+  - sys_class_name
+  - customer
+  - vendor
+  - vendor_type
+  - manufacturer
+  - primary
+  - state
+  - city
+  - street
+  - zip
+  - phone
+  - fax_phone
+  - latitude
+  - longitude
+  - lat_long_error
+  - coordinates_retrieved_on
+  - website
+  - notes
+  - stock_symbol
+  - stock_price
+  - market_cap
+  - revenue_per_year
+  - profits
+  - discount
+  - num_employees
+  - publicly_traded
+  - fiscal_year
+  - rank_tier
+  - theme
+  - apple_icon
+  - banner_image
+  - banner_image_light
+  - banner_text
+  - sso_source
+  - u_active
+  - u_checked_in
+  - u_export_restricted
+  - u_id
+  - u_market_unit
+  - u_preferred_language
+  - u_short_name
+  - u_l1_approval
+  - u_invoice_recipient
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY,LOAD_DATE,HD_CORE_COMPANY_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_core_country_details
+  description: Details attributes for hub_core_country (static change velocity).
+  parent_hub: hub_core_country
+  source_model: stg_core_country
+  hash_key: HK_CORE_COUNTRY
+  hashdiff: HD_CORE_COUNTRY_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - name
+  - iso3166_2
+  - iana
+  - un_numeric
+  - order
+  - population
+  - active
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COUNTRY
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COUNTRY,LOAD_DATE,HD_CORE_COUNTRY_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_sys_user_grmember_details
+  description: Details attributes for hub_sys_user_group (static change velocity).
+  parent_hub: hub_sys_user_group
+  source_model: stg_sys_user_grmember
+  hash_key: HK_SYS_USER_GROUP
+  hashdiff: HD_SYS_USER_GRMEMBER_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - scrum_role
+  - points
+  - u_expiry_date
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_SYS_USER_GROUP
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_SYS_USER_GROUP,LOAD_DATE,HD_SYS_USER_GRMEMBER_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_task_sla_details
+  description: Details attributes for hub_task (static change velocity).
+  parent_hub: hub_task
+  source_model: stg_task_sla
+  hash_key: HK_TASK
+  hashdiff: HD_TASK_SLA_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - stage
+  - active
+  - has_breached
+  - start_time
+  - end_time
+  - pause_time
+  - planned_end_time
+  - original_breach_time
+  - duration
+  - business_duration
+  - business_pause_duration
+  - business_time_left
+  - business_percentage
+  - pause_duration
+  - percentage
+  - time_left
+  - schedule
+  - timezone
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_TASK
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_TASK,LOAD_DATE,HD_TASK_SLA_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_u_mcs_company_and_approval_group_mapping_details
+  description: Details attributes for hub_core_company (static change velocity).
+  parent_hub: hub_core_company
+  source_model: stg_u_mcs_company_and_approval_group_mapping
+  hash_key: HK_CORE_COMPANY
+  hashdiff: HD_U_MCS_COMPANY_AND_APPROVAL_GROUP_MAPPING_DETAILS
+  effective_from: EFFECTIVE_FROM
+  payload:
+  - u_approval_level
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY,LOAD_DATE,HD_U_MCS_COMPANY_AND_APPROVAL_GROUP_MAPPING_DETAILS
+  subgroup: details
+  change_velocity: static
+links:
+- name: link_cmn_department_company
+  source_model: stg_cmn_department
+  hash_key: HK_CMN_DEPARTMENT_COMPANY
+  fk_columns:
+  - HK_CMN_DEPARTMENT
+  - HK_CORE_COMPANY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT_COMPANY
+    - HK_CMN_DEPARTMENT
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT_COMPANY,HK_CMN_DEPARTMENT,LOAD_DATE
+- name: link_cmn_department_dept_head
+  source_model: stg_cmn_department
+  hash_key: HK_CMN_DEPARTMENT_DEPT_HEAD
+  fk_columns:
+  - HK_CMN_DEPARTMENT
+  - HK_SYS_USER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT_DEPT_HEAD
+    - HK_CMN_DEPARTMENT
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT_DEPT_HEAD,HK_CMN_DEPARTMENT,LOAD_DATE
+- name: link_cmn_location_company
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_COMPANY
+  fk_columns:
+  - HK_CMN_LOCATION
+  - HK_CORE_COMPANY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_COMPANY
+    - HK_CMN_LOCATION
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_COMPANY,HK_CMN_LOCATION,LOAD_DATE
+- name: link_cmn_location_contact
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_CONTACT
+  fk_columns:
+  - HK_CMN_LOCATION
+  - HK_SYS_USER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_CONTACT
+    - HK_CMN_LOCATION
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_CONTACT,HK_CMN_LOCATION,LOAD_DATE
+- name: link_cmn_location_country
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_COUNTRY
+  fk_columns:
+  - HK_CMN_LOCATION
+  - HK_CORE_COUNTRY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_COUNTRY
+    - HK_CMN_LOCATION
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_COUNTRY,HK_CMN_LOCATION,LOAD_DATE
+- name: link_cmn_location_managed_by_group
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_MANAGED_BY_GROUP
+  fk_columns:
+  - HK_CMN_LOCATION
+  - HK_SYS_USER_GROUP
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_MANAGED_BY_GROUP
+    - HK_CMN_LOCATION
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_MANAGED_BY_GROUP,HK_CMN_LOCATION,LOAD_DATE
+- name: link_contract_sla_u_sla_owner
+  source_model: stg_contract_sla
+  hash_key: HK_CONTRACT_SLA_U_SLA_OWNER
+  fk_columns:
+  - HK_CONTRACT_SLA
+  - HK_SYS_USER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA_U_SLA_OWNER
+    - HK_CONTRACT_SLA
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA_U_SLA_OWNER,HK_CONTRACT_SLA,LOAD_DATE
+- name: link_contract_sla_vendor
+  source_model: stg_contract_sla
+  hash_key: HK_CONTRACT_SLA_VENDOR
+  fk_columns:
+  - HK_CONTRACT_SLA
+  - HK_CORE_COMPANY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA_VENDOR
+    - HK_CONTRACT_SLA
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA_VENDOR,HK_CONTRACT_SLA,LOAD_DATE
+- name: link_core_company_contact
+  source_model: stg_core_company
+  hash_key: HK_CORE_COMPANY_CONTACT
+  fk_columns:
+  - HK_CORE_COMPANY
+  - HK_SYS_USER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY_CONTACT
+    - HK_CORE_COMPANY
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY_CONTACT,HK_CORE_COMPANY,LOAD_DATE
+- name: link_core_company_country
+  source_model: stg_core_company
+  hash_key: HK_CORE_COMPANY_COUNTRY
+  fk_columns:
+  - HK_CORE_COMPANY
+  - HK_CORE_COUNTRY
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY_COUNTRY
+    - HK_CORE_COMPANY
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY_COUNTRY,HK_CORE_COMPANY,LOAD_DATE
+- name: link_sys_user_group_user
+  source_model: stg_sys_user_grmember
+  hash_key: HK_SYS_USER_GROUP_USER
+  fk_columns:
+  - HK_SYS_USER
+  - HK_SYS_USER_GROUP
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_SYS_USER_GROUP_USER
+    - HK_SYS_USER
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_SYS_USER_GROUP_USER,HK_SYS_USER,LOAD_DATE
+- name: link_task_sla_contract_sla
+  source_model: stg_task_sla
+  hash_key: HK_TASK_SLA_CONTRACT_SLA
+  fk_columns:
+  - HK_TASK
+  - HK_CONTRACT_SLA
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_TASK_SLA_CONTRACT_SLA
+    - HK_TASK
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_TASK_SLA_CONTRACT_SLA,HK_TASK,LOAD_DATE
+eff_sats:
+- name: eff_sat_link_cmn_department_company
+  parent_link: link_cmn_department_company
+  source_model: stg_cmn_department
+  hash_key: HK_CMN_DEPARTMENT_COMPANY
+  driving_fk: HK_CMN_DEPARTMENT
+  secondary_fk:
+  - HK_CORE_COMPANY
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_DEPARTMENT_COMPANY
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT_COMPANY
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT_COMPANY,END_DATE,LOAD_DATE
+- name: eff_sat_link_cmn_department_dept_head
+  parent_link: link_cmn_department_dept_head
+  source_model: stg_cmn_department
+  hash_key: HK_CMN_DEPARTMENT_DEPT_HEAD
+  driving_fk: HK_CMN_DEPARTMENT
+  secondary_fk:
+  - HK_SYS_USER
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_DEPARTMENT_DEPT_HEAD
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_DEPARTMENT_DEPT_HEAD
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_DEPARTMENT_DEPT_HEAD,END_DATE,LOAD_DATE
+- name: eff_sat_link_cmn_location_company
+  parent_link: link_cmn_location_company
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_COMPANY
+  driving_fk: HK_CMN_LOCATION
+  secondary_fk:
+  - HK_CORE_COMPANY
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_LOCATION_COMPANY
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_COMPANY
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_COMPANY,END_DATE,LOAD_DATE
+- name: eff_sat_link_cmn_location_contact
+  parent_link: link_cmn_location_contact
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_CONTACT
+  driving_fk: HK_CMN_LOCATION
+  secondary_fk:
+  - HK_SYS_USER
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_LOCATION_CONTACT
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_CONTACT
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_CONTACT,END_DATE,LOAD_DATE
+- name: eff_sat_link_cmn_location_country
+  parent_link: link_cmn_location_country
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_COUNTRY
+  driving_fk: HK_CMN_LOCATION
+  secondary_fk:
+  - HK_CORE_COUNTRY
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_LOCATION_COUNTRY
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_COUNTRY
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_COUNTRY,END_DATE,LOAD_DATE
+- name: eff_sat_link_cmn_location_managed_by_group
+  parent_link: link_cmn_location_managed_by_group
+  source_model: stg_cmn_location
+  hash_key: HK_CMN_LOCATION_MANAGED_BY_GROUP
+  driving_fk: HK_CMN_LOCATION
+  secondary_fk:
+  - HK_SYS_USER_GROUP
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CMN_LOCATION_MANAGED_BY_GROUP
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CMN_LOCATION_MANAGED_BY_GROUP
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CMN_LOCATION_MANAGED_BY_GROUP,END_DATE,LOAD_DATE
+- name: eff_sat_link_contract_sla_u_sla_owner
+  parent_link: link_contract_sla_u_sla_owner
+  source_model: stg_contract_sla
+  hash_key: HK_CONTRACT_SLA_U_SLA_OWNER
+  driving_fk: HK_CONTRACT_SLA
+  secondary_fk:
+  - HK_SYS_USER
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CONTRACT_SLA_U_SLA_OWNER
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA_U_SLA_OWNER
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA_U_SLA_OWNER,END_DATE,LOAD_DATE
+- name: eff_sat_link_contract_sla_vendor
+  parent_link: link_contract_sla_vendor
+  source_model: stg_contract_sla
+  hash_key: HK_CONTRACT_SLA_VENDOR
+  driving_fk: HK_CONTRACT_SLA
+  secondary_fk:
+  - HK_CORE_COMPANY
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CONTRACT_SLA_VENDOR
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CONTRACT_SLA_VENDOR
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CONTRACT_SLA_VENDOR,END_DATE,LOAD_DATE
+- name: eff_sat_link_core_company_contact
+  parent_link: link_core_company_contact
+  source_model: stg_core_company
+  hash_key: HK_CORE_COMPANY_CONTACT
+  driving_fk: HK_CORE_COMPANY
+  secondary_fk:
+  - HK_SYS_USER
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CORE_COMPANY_CONTACT
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY_CONTACT
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY_CONTACT,END_DATE,LOAD_DATE
+- name: eff_sat_link_core_company_country
+  parent_link: link_core_company_country
+  source_model: stg_core_company
+  hash_key: HK_CORE_COMPANY_COUNTRY
+  driving_fk: HK_CORE_COMPANY
+  secondary_fk:
+  - HK_CORE_COUNTRY
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CORE_COMPANY_COUNTRY
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CORE_COMPANY_COUNTRY
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CORE_COMPANY_COUNTRY,END_DATE,LOAD_DATE
+- name: eff_sat_link_sys_user_group_user
+  parent_link: link_sys_user_group_user
+  source_model: stg_sys_user_grmember
+  hash_key: HK_SYS_USER_GROUP_USER
+  driving_fk: HK_SYS_USER
+  secondary_fk:
+  - HK_SYS_USER_GROUP
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_SYS_USER_GROUP_USER
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_SYS_USER_GROUP_USER
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_SYS_USER_GROUP_USER,END_DATE,LOAD_DATE
+- name: eff_sat_link_task_sla_contract_sla
+  parent_link: link_task_sla_contract_sla
+  source_model: stg_task_sla
+  hash_key: HK_TASK_SLA_CONTRACT_SLA
+  driving_fk: HK_TASK
+  secondary_fk:
+  - HK_CONTRACT_SLA
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_TASK_SLA_CONTRACT_SLA
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_TASK_SLA_CONTRACT_SLA
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_TASK_SLA_CONTRACT_SLA,END_DATE,LOAD_DATE
+staging:
+- name: stg_cmn_department
+  source_table: cmn_department
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CMN_DEPARTMENT:
+    - sys_id
+    HK_CORE_COMPANY:
+    - sys_id
+    HK_SYS_USER:
+    - user
+    HK_CMN_DEPARTMENT_COMPANY:
+    - HK_CMN_DEPARTMENT
+    - HK_CORE_COMPANY
+    HK_CMN_DEPARTMENT_DEPT_HEAD:
+    - HK_CMN_DEPARTMENT
+    - HK_SYS_USER
+    HD_CMN_DEPARTMENT_DETAILS:
+      is_hashdiff: true
+      columns:
+      - name
+      - id
+      - business_unit
+      - cost_center
+      - description
+      - head_count
+      - sys_domain
+      - u_short_name
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: sys_id
+      order_by: load_dts
+- name: stg_cmn_location
+  source_table: cmn_location
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CMN_LOCATION:
+    - sys_id
+    HK_CORE_COMPANY:
+    - sys_id
+    HK_SYS_USER:
+    - user
+    HK_CORE_COUNTRY:
+    - iso3166_3
+    HK_SYS_USER_GROUP:
+    - group
+    HK_CMN_LOCATION_COMPANY:
+    - HK_CMN_LOCATION
+    - HK_CORE_COMPANY
+    HK_CMN_LOCATION_CONTACT:
+    - HK_CMN_LOCATION
+    - HK_SYS_USER
+    HK_CMN_LOCATION_COUNTRY:
+    - HK_CMN_LOCATION
+    - HK_CORE_COUNTRY
+    HK_CMN_LOCATION_MANAGED_BY_GROUP:
+    - HK_CMN_LOCATION
+    - HK_SYS_USER_GROUP
+    HD_CMN_LOCATION_DETAILS:
+      is_hashdiff: true
+      columns:
+      - name
+      - full_name
+      - city
+      - state
+      - street
+      - zip
+      - phone
+      - phone_territory
+      - fax_phone
+      - time_zone
+      - latitude
+      - longitude
+      - lat_long_error
+      - coordinates_retrieved_on
+      - cmn_location_source
+      - cmn_location_type
+      - primary_location
+      - stock_room
+      - u_accountable_bu
+      - u_additional_bus
+      - u_alternative_site_access_3_email
+      - u_alternative_site_access_3_landline
+      - u_alternative_site_access_3_mobile
+      - u_alternative_site_access_3_name
+      - u_bit_cluster
+      - u_bit_coordinator_name
+      - u_closure_date
+      - u_comment
+      - u_contract_mcs
+      - u_contract_mwp
+      - u_country
+      - u_eon_internal_name
+      - u_expected_closure_date
+      - u_itc_room
+      - u_lan_site_type
+      - u_location_id
+      - u_location_type
+      - u_number
+      - u_post_office_box
+      - u_security_requirements
+      - u_site_access_1_availability
+      - u_site_access_1_name
+      - u_site_access_2_availability
+      - u_site_access_2_name
+      - u_site_access_3_availability
+      - u_site_access_3_name
+      - u_site_access_instructions
+      - u_site_classification
+      - u_site_id
+      - u_status
+      - u_users_on_site
+      - u_vip_on_site
+      - u_wan_provider
+      - u_wan_site_type
+      - u_work_info
+      - life_cycle_stage
+      - life_cycle_stage_status
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: sys_id
+      order_by: load_dts
+- name: stg_contract_sla
+  source_table: contract_sla
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CONTRACT_SLA:
+    - sys_id
+    HK_SYS_USER:
+    - user
+    HK_CORE_COMPANY:
+    - sys_id
+    HK_CONTRACT_SLA_U_SLA_OWNER:
+    - HK_CONTRACT_SLA
+    - HK_SYS_USER
+    HK_CONTRACT_SLA_VENDOR:
+    - HK_CONTRACT_SLA
+    - HK_CORE_COMPANY
+    HD_CONTRACT_SLA_DETAILS:
+      is_hashdiff: true
+      columns:
+      - name
+      - type
+      - target
+      - collection
+      - active
+      - duration
+      - duration_type
+      - schedule
+      - schedule_source
+      - schedule_source_field
+      - timezone
+      - timezone_source
+      - workflow
+      - flow
+      - adv_condition_type
+      - condition_class
+      - start_condition
+      - stop_condition
+      - pause_condition
+      - resume_condition
+      - cancel_condition
+      - reset_condition
+      - reset_action
+      - when_to_cancel
+      - when_to_resume
+      - set_start_to
+      - relative_duration_works_on
+      - retroactive
+      - retroactive_pause
+      - enable_logging
+      - sys_overrides
+      - sys_domain
+      - sys_domain_path
+      - u_actual_duration
+      - u_module
+      - u_service_contract
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: sys_id
+      order_by: load_dts
+- name: stg_core_company
+  source_table: core_company
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CORE_COMPANY:
+    - sys_id
+    HK_SYS_USER:
+    - user
+    HK_CORE_COUNTRY:
+    - iso3166_3
+    HK_CORE_COMPANY_CONTACT:
+    - HK_CORE_COMPANY
+    - HK_SYS_USER
+    HK_CORE_COMPANY_COUNTRY:
+    - HK_CORE_COMPANY
+    - HK_CORE_COUNTRY
+    HD_CORE_COMPANY_DETAILS:
+      is_hashdiff: true
+      columns:
+      - name
+      - sys_class_name
+      - customer
+      - vendor
+      - vendor_type
+      - manufacturer
+      - primary
+      - state
+      - city
+      - street
+      - zip
+      - phone
+      - fax_phone
+      - latitude
+      - longitude
+      - lat_long_error
+      - coordinates_retrieved_on
+      - website
+      - notes
+      - stock_symbol
+      - stock_price
+      - market_cap
+      - revenue_per_year
+      - profits
+      - discount
+      - num_employees
+      - publicly_traded
+      - fiscal_year
+      - rank_tier
+      - theme
+      - apple_icon
+      - banner_image
+      - banner_image_light
+      - banner_text
+      - sso_source
+      - u_active
+      - u_checked_in
+      - u_export_restricted
+      - u_id
+      - u_market_unit
+      - u_preferred_language
+      - u_short_name
+      - u_l1_approval
+      - u_invoice_recipient
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: sys_id
+      order_by: load_dts
+- name: stg_core_country
+  source_table: core_country
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CORE_COUNTRY:
+    - iso3166_3
+    HD_CORE_COUNTRY_DETAILS:
+      is_hashdiff: true
+      columns:
+      - name
+      - iso3166_2
+      - iana
+      - un_numeric
+      - order
+      - population
+      - active
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: iso3166_3
+      order_by: load_dts
+- name: stg_sys_user_grmember
+  source_table: sys_user_grmember
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_SYS_USER:
+    - user
+    HK_SYS_USER_GROUP:
+    - group
+    HK_SYS_USER_GROUP_USER:
+    - HK_SYS_USER
+    - HK_SYS_USER_GROUP
+    HD_SYS_USER_GRMEMBER_DETAILS:
+      is_hashdiff: true
+      columns:
+      - scrum_role
+      - points
+      - u_expiry_date
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: user
+      order_by: load_dts
+- name: stg_task_sla
+  source_table: task_sla
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_TASK:
+    - task
+    HK_CONTRACT_SLA:
+    - sys_id
+    HK_TASK_SLA_CONTRACT_SLA:
+    - HK_TASK
+    - HK_CONTRACT_SLA
+    HD_TASK_SLA_DETAILS:
+      is_hashdiff: true
+      columns:
+      - stage
+      - active
+      - has_breached
+      - start_time
+      - end_time
+      - pause_time
+      - planned_end_time
+      - original_breach_time
+      - duration
+      - business_duration
+      - business_pause_duration
+      - business_time_left
+      - business_percentage
+      - pause_duration
+      - percentage
+      - time_left
+      - schedule
+      - timezone
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: task
+      order_by: load_dts
+- name: stg_u_mcs_company_and_approval_group_mapping
+  source_table: u_mcs_company_and_approval_group_mapping
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CORE_COMPANY:
+    - sys_id
+    HD_U_MCS_COMPANY_AND_APPROVAL_GROUP_MAPPING_DETAILS:
+      is_hashdiff: true
+      columns:
+      - u_approval_level
+dim_tables:
+- name: dim_cmn_department
+  description: Current state of cmn_department (hub + PIT + satellites).
+  hub: hub_cmn_department
+  src_pk: HK_CMN_DEPARTMENT
+  business_key: sys_id
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_cmn_department_details
+    columns:
+    - name
+    - id
+    - business_unit
+    - cost_center
+    - description
+    - head_count
+    - sys_domain
+    - u_short_name
+- name: dim_cmn_location
+  description: Current state of cmn_location (hub + PIT + satellites).
+  hub: hub_cmn_location
+  src_pk: HK_CMN_LOCATION
+  business_key: sys_id
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_cmn_location_details
+    columns:
+    - name
+    - full_name
+    - city
+    - state
+    - street
+    - zip
+    - phone
+    - phone_territory
+    - fax_phone
+    - time_zone
+    - latitude
+    - longitude
+    - lat_long_error
+    - coordinates_retrieved_on
+    - cmn_location_source
+    - cmn_location_type
+    - primary_location
+    - stock_room
+    - u_accountable_bu
+    - u_additional_bus
+    - u_alternative_site_access_3_email
+    - u_alternative_site_access_3_landline
+    - u_alternative_site_access_3_mobile
+    - u_alternative_site_access_3_name
+    - u_bit_cluster
+    - u_bit_coordinator_name
+    - u_closure_date
+    - u_comment
+    - u_contract_mcs
+    - u_contract_mwp
+    - u_country
+    - u_eon_internal_name
+    - u_expected_closure_date
+    - u_itc_room
+    - u_lan_site_type
+    - u_location_id
+    - u_location_type
+    - u_number
+    - u_post_office_box
+    - u_security_requirements
+    - u_site_access_1_availability
+    - u_site_access_1_name
+    - u_site_access_2_availability
+    - u_site_access_2_name
+    - u_site_access_3_availability
+    - u_site_access_3_name
+    - u_site_access_instructions
+    - u_site_classification
+    - u_site_id
+    - u_status
+    - u_users_on_site
+    - u_vip_on_site
+    - u_wan_provider
+    - u_wan_site_type
+    - u_work_info
+    - life_cycle_stage
+    - life_cycle_stage_status
+- name: dim_contract_sla
+  description: Current state of contract_sla (hub + PIT + satellites).
+  hub: hub_contract_sla
+  src_pk: HK_CONTRACT_SLA
+  business_key: sys_id
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_contract_sla_details
+    columns:
+    - name
+    - type
+    - target
+    - collection
+    - active
+    - duration
+    - duration_type
+    - schedule
+    - schedule_source
+    - schedule_source_field
+    - timezone
+    - timezone_source
+    - workflow
+    - flow
+    - adv_condition_type
+    - condition_class
+    - start_condition
+    - stop_condition
+    - pause_condition
+    - resume_condition
+    - cancel_condition
+    - reset_condition
+    - reset_action
+    - when_to_cancel
+    - when_to_resume
+    - set_start_to
+    - relative_duration_works_on
+    - retroactive
+    - retroactive_pause
+    - enable_logging
+    - sys_overrides
+    - sys_domain
+    - sys_domain_path
+    - u_actual_duration
+    - u_module
+    - u_service_contract
+- name: dim_core_company
+  description: Current state of core_company (hub + PIT + satellites).
+  hub: hub_core_company
+  src_pk: HK_CORE_COMPANY
+  business_key: sys_id
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_core_company_details
+    columns:
+    - name
+    - sys_class_name
+    - customer
+    - vendor
+    - vendor_type
+    - manufacturer
+    - primary
+    - state
+    - city
+    - street
+    - zip
+    - phone
+    - fax_phone
+    - latitude
+    - longitude
+    - lat_long_error
+    - coordinates_retrieved_on
+    - website
+    - notes
+    - stock_symbol
+    - stock_price
+    - market_cap
+    - revenue_per_year
+    - profits
+    - discount
+    - num_employees
+    - publicly_traded
+    - fiscal_year
+    - rank_tier
+    - theme
+    - apple_icon
+    - banner_image
+    - banner_image_light
+    - banner_text
+    - sso_source
+    - u_active
+    - u_checked_in
+    - u_export_restricted
+    - u_id
+    - u_market_unit
+    - u_preferred_language
+    - u_short_name
+    - u_l1_approval
+    - u_invoice_recipient
+  - name: sat_u_mcs_company_and_approval_group_mapping_details
+    columns:
+    - u_approval_level
+- name: dim_core_country
+  description: Current state of core_country (hub + PIT + satellites).
+  hub: hub_core_country
+  src_pk: HK_CORE_COUNTRY
+  business_key: iso3166_3
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_core_country_details
+    columns:
+    - name
+    - iso3166_2
+    - iana
+    - un_numeric
+    - order
+    - population
+    - active
+- name: dim_sys_user_group
+  description: Current state of sys_user_grmember (hub + PIT + satellites).
+  hub: hub_sys_user_group
+  src_pk: HK_SYS_USER_GROUP
+  business_key: group
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_sys_user_grmember_details
+    columns:
+    - scrum_role
+    - points
+    - u_expiry_date
+- name: dim_task
+  description: Current state of task_sla (hub + PIT + satellites).
+  hub: hub_task
+  src_pk: HK_TASK
+  business_key: task
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_task_sla_details
+    columns:
+    - stage
+    - active
+    - has_breached
+    - start_time
+    - end_time
+    - pause_time
+    - planned_end_time
+    - original_breach_time
+    - duration
+    - business_duration
+    - business_pause_duration
+    - business_time_left
+    - business_percentage
+    - pause_duration
+    - percentage
+    - time_left
+    - schedule
+    - timezone
+databricks_optimization:
+  default_file_size: 134217728
+  log_retention: interval 30 days
+  deleted_file_retention: interval 7 days
+  auto_optimize:
+    optimize_write: true
+    auto_compact: true
+  liquid_clustering:
+    enabled: true
+    preferred_over_zorder: true
+  skipping_indexed_cols: 8
+  incremental_strategy_defaults:
+    hub: append
+    satellite_raw: append
+    satellite_bv: append
+    link: append
+    eff_sat: merge
+    pit: insert_overwrite
+    bridge: table
+    staging: view
+    as_of_dates: view
+    dim: view
+    fact: view

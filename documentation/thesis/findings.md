@@ -218,14 +218,27 @@ end-to-end, including the effectivity satellite, incremental-merge hubs/links/sa
 and every AutomateDV macro call. That closes the loop from "structurally valid
 artifact" to "deployable artifact".
 
-**Scope of this result.** The evidence is a single confirmed *compile* of one
-representative project — not a compile-pass *rate* across many projects, and not an
-*execution* (`run`/`test`) that materialises the models and runs the 42 data tests.
-The compile-pass rate over a project population, and the execution pass counts, are
-computed by the reproducible sweep in §5 (`build_projects.py` → `dbt_sweep.py`, parsing
-`run_results.json`); the figure reported here is the single CIM project (1/1 compiling
-clean). Both are matters of scope — the number of distinct projects and a warehouse
-`run` — rather than instrumentation (§6).
+**Compile-pass rate across projects = 1.00 (2/2).** The compile check spans two
+independent systems: the hand-authored CIM project (12 models) and a ServiceNow IT4IT
+project generated end-to-end by the pipeline (gpt-4.1 plan → `render_v3` metadata →
+dbt project; 48 models — 8 staging, 8 hubs, 12 links, 8 satellites, 12 effectivity
+satellites). Both compile cleanly against live Databricks, ServiceNow introspecting its
+real sources in `edh_unreg_consumption_dev.it4it_servicenow`. The generator and emitter
+therefore produce warehouse-valid projects across two schemas of very different shape,
+one authored by hand and one produced by the AI.
+
+**Execution (`dbt run` + `dbt test`) — the stronger check, and what it exposes.**
+Compile validates SQL; execution materialises the models and runs the data tests. On
+the CIM project, `dbt test` passed **38 of 42 (0.905)** against the materialised
+objects. `dbt run` re-materialisation, however, exposed a defect that compile did not:
+`stg_terminals` derives `END_DATE` / `IS_DELETED` from an `OPERATION_TYPE` CDC column
+that the live `terminals` bronze table does not contain (`UNRESOLVED_COLUMN`), so 3
+models error and the 9 downstream models skip. (Two of the three errors are instead
+`PERMISSION_DENIED` on pre-existing staging views — an environment grant, not a code
+defect — but the `OPERATION_TYPE` error is intrinsic.) The lesson is the finding:
+**compile-pass does not imply run-pass** — a derived-column expression can name a source
+column that does not exist, compile without complaint, and fail only at execution.
+Executing, not just compiling, is what catches it.
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -347,7 +360,11 @@ reported as directional, never as established.
 `experiment --out` JSON. The result reported here is the single contrast for which
 per-seed values are on record (CIM naming); a full table across every contrast (entity
 F1, link ratio, correction steps) is a matter of persisting the per-seed JSON for the
-remaining experiments, not of further method.
+remaining experiments, not of further method. The learning **off-vs-on** contrasts
+additionally require the approved-example corpus (the Databricks SQL warehouse), which
+is reachable only from an authenticated session; without it the *on* arm retrieves no
+examples and the contrast degenerates, so the off-vs-on significance table is produced
+by running the experiment matrix with `--out` under that session (§5).
 
 **Supports.** Statistical rigour; directly addresses the small-n threat to validity.
 
@@ -721,12 +738,10 @@ documentation/thesis/data/audit.json` reads the approval store through the app's
 factory and prints audit-trail completeness, the approval rate and the cumulative
 trajectory. Logic unit-tested in `tests/ai/test_audit_metrics.py`.
 
-**Single clean compile confirmed; a *rate* is not claimed.** A dbt profile
-(`~/.dbt/profiles.yml`, Databricks OAuth) plus `dbt deps` was configured and the
-generated CIM project compiled cleanly against live Databricks — 12 models, 42 tests,
-zero emitter warnings (§2.4). What is *not* claimed is a compile-pass *rate* across
-many generated projects, nor an execution-pass figure — both are produced by the
-harness above once more projects and a live `run`/`test` are supplied. Inter-rater
+**Compile-pass rate and execution.** With a Databricks OAuth profile per project in
+`~/.dbt/profiles.yml`, the sweep compiles both the CIM and ServiceNow projects
+(compile-pass rate 2/2) and executes CIM (`run`/`test`); the ServiceNow project is
+produced from a generated plan via `plan_to_metadata.py` (§2.4). Inter-rater
 reliability still requires a second human annotator.
 
 ---
@@ -743,20 +758,23 @@ instrumentation:
    between two independent human annotators. A second annotator would establish
    inter-rater reliability; the solo substitute is intra-rater test–retest, an
    independent LLM annotator, and a documented codebook.
-2. **dbt compile-pass *rate*** — the generated CIM project compiles cleanly against the
-   live warehouse (§2.4), but this is one project, not a rate. A rate requires a
-   population of generated projects, which is a breadth question (item 6).
-3. **dbt execution (`run` + `test`)** — compile validates the SQL; materialising the
-   models and running the 42 data tests against the warehouse is outside the reported
-   results.
+2. **A fully clean `dbt run`** — compile-pass rate is 2/2 and `dbt test` passes 38/42
+   (§2.4), but a clean *materialisation* of the CIM project is blocked by a metadata
+   defect (`stg_terminals` derives from an `OPERATION_TYPE` column absent from the live
+   `terminals` bronze table) and by warehouse `MANAGE` grants on pre-existing staging
+   views. Fixing the derived-column definition and the grants would close it; the defect
+   itself is a reported finding.
 4. **The successive-runs approval effect (H1c)** — the approval rate is reported
    (0.667, §3C), but the claim that approval improves over successive runs as the corpus
    grows is not established, because the decisions span only two catalogs and one
    reviewer. Establishing it requires repeated runs on the same system with the corpus
    growing between them.
 5. **Full significance table** — the paired permutation test and effect size (§2.8) are
-   reported for the one contrast with per-seed values on record; a table across every
-   contrast requires the per-seed data for the remaining experiments.
+   reported for the one contrast with per-seed values on record. A table across the
+   learning **off-vs-on** contrasts requires re-running the experiment matrix with
+   `--out` under an authenticated session, because the *on* arm needs the approved-example
+   corpus (Databricks SQL warehouse); without that session the *on* arm loses its
+   examples and the contrast degenerates.
 6. **Breadth** — two source systems and small seed counts. The transferable claims are
    the *patterns* (AI advantage scales with schema difficulty; naming is unstable while
    entity identification is stable), not the absolute figures. Model-ablation (§3B.3)
