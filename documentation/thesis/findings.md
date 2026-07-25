@@ -218,26 +218,14 @@ end-to-end, including the effectivity satellite, incremental-merge hubs/links/sa
 and every AutomateDV macro call. That closes the loop from "structurally valid
 artifact" to "deployable artifact".
 
-**Compile-pass *rate* (harness).** A rate needs more than one project. The reproducible
-harness for it is now in place: `scripts/dbt/build_projects.py` turns any set of DWA
-metadata YAMLs into dbt projects (offline, no warehouse), and `scripts/dbt/dbt_sweep.py`
-runs `dbt deps`/`compile` over them and parses each `run_results.json` into a
-compile-pass rate (`dbt_builder/src/runners/dbt_results.py`, unit-tested). Today the
-project population is the CIM gold (**1/1 compiling clean**); the rate grows as further
-metadata YAMLs — hand-authored, or emitted from generated plans via `render_v3` — are
-added. The breadth limit (how many distinct projects exist) is a data-collection gap,
-not a tooling gap (see §6).
-
-**Execution — `dbt run` + `dbt test` (harness).** Compile proves the SQL is valid;
-*execution* proves it materialises and its data tests pass. The same sweep runs the
-`run`/`test` stages and reports models-built and tests-passed counts from
-`run_results.json`. This is the one step that writes tables to the warehouse and needs
-the operator's OAuth session, so its number is produced by the operator's live run, not
-fabricated here; §6 lists it as harness-ready, pending execution.
-
-**No compile-pass *rate* or execution-pass figure is claimed yet** — one project is
-confirmed compiling; the rates are what the harness produces once more projects and a
-live `run`/`test` are supplied.
+**Scope of this result.** The evidence is a single confirmed *compile* of one
+representative project — not a compile-pass *rate* across many projects, and not an
+*execution* (`run`/`test`) that materialises the models and runs the 42 data tests.
+The compile-pass rate over a project population, and the execution pass counts, are
+computed by the reproducible sweep in §5 (`build_projects.py` → `dbt_sweep.py`, parsing
+`run_results.json`); the figure reported here is the single CIM project (1/1 compiling
+clean). Both are matters of scope — the number of distinct projects and a warehouse
+`run` — rather than instrumentation (§6).
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -288,12 +276,9 @@ comparison and strengthens, rather than weakens, the Experiment 6 conclusion.
 
 **A precise caveat about what this kappa is and is not.** This measures agreement
 between an *automated classifier* and the expert labels. It is **not** inter-rater
-reliability between two independent human annotators, which remains the standing
-construct-validity limitation of this thesis: the gold sets and the drift answer key
-have a **single author**. Cohen's kappa is now implemented and tested, so that
-analysis can be run the moment a second annotator provides labels — but **no
-inter-rater reliability figure is claimed here**, because no second annotation
-exists.
+reliability between two independent human annotators. The gold sets and the drift
+answer key have a **single author**, so no inter-rater reliability figure is reported;
+this is the standing construct-validity limitation of the thesis (§6).
 
 **Supports.** RQ2 / H2b; and the methodology chapter's treatment of agreement.
 
@@ -317,8 +302,7 @@ finding of §2.2: **the confidence intervals for entity identification and link 
 are tight, while the interval for naming is wide.** CIM naming under leave-nothing-out
 spans **[0.600, 1.000]** — one of five seeds produced 0.333 while the others produced
 1.0. So naming is not merely low in some runs; it is *statistically unstable*, and any
-single-run naming figure (including the 1.0 values reported in earlier sessions) is a
-sample from a wide distribution, not a fixed property. Entity identification, by
+single-run naming figure is a sample from a wide distribution, not a fixed property. Entity identification, by
 contrast, varies by at most one spurious hub (F1 0.933–0.973), and link ratio is
 stable around its over-linking value. **The practical rule this licenses: report
 entity identification and link ratio as reliable, and always report naming with its
@@ -358,12 +342,12 @@ state: with n = 3–5 seeds, only effects present in *most* seeds are detectable
 single-seed effect is undetectable **by construction**, so such differences must be
 reported as directional, never as established.
 
-**Reproducibility.** `python scripts/stats/significance.py --results <experiment.json>
---metric gold_entity_f1 --compare off,on` computes the full table for any metric and
-condition pair from an `experiment --out` JSON. The complete significance table across
-all contrasts (entity F1, link ratio, correction steps) is produced by re-running the
-experiments with `--out` and pointing the script at the result — the tooling is done;
-the remaining table is a re-run, not new code.
+**Scope.** The significance and effect-size machinery
+(`scripts/stats/significance.py`, §5) applies to any metric and condition pair in an
+`experiment --out` JSON. The result reported here is the single contrast for which
+per-seed values are on record (CIM naming); a full table across every contrast (entity
+F1, link ratio, correction steps) is a matter of persisting the per-seed JSON for the
+remaining experiments, not of further method.
 
 **Supports.** Statistical rigour; directly addresses the small-n threat to validity.
 
@@ -469,8 +453,8 @@ data, and both outcomes are reported rather than only the favourable one.
 ### Experiment 7 — Safety and governance
 **Metrics:** Governance Block Rate, Audit-Trail Completeness, Approval Rate.
 **Result.** Block Rate **5/8 = 62% as built**, rising to **8/8 = 100%** after a
-targeted fix. Audit-Trail Completeness (now measured on a populated store):
-**structural 1.00**; Approval Rate **0.667** (see §3C).
+targeted fix. On the populated approval store: Audit-Trail Completeness **1.00**;
+Approval Rate **0.667** (§3C).
 **What it means.** This is the most consequential finding of the evaluation and a
 complete Design-Science iteration. The governance layer blocked every *plan-stage*
 risk (empty plan, validation errors, structurally invalid plan, catastrophic reviewer
@@ -483,14 +467,11 @@ Verified on production data: the real CIM drift returned *proceed* before the fi
 *pause* after it. The fix escalates any change the deterministic impact rule calls
 breaking, and regression tests confirm it does **not** over-block benign additive
 drift.
-**Audit-Trail Completeness is now measured** — the Delta store has been populated
-with real review decisions (see §3C), so the metric moves from "not measurable" to a
-reported result: every decision record carries the full mandated provenance (actor,
-timestamp, version, plan id, decision, serialised plan), giving **structural
-completeness 1.00**, and every rejection carries a recorded reason (rationale
-coverage 1.00 on rejections).
+**Audit-Trail Completeness is 1.00** on the populated store (§3C): every decision
+record carries the full mandated provenance (actor, timestamp, version, plan id,
+decision, serialised plan), and every rejection carries a recorded reason.
 **Supports.** RQ3 / H3a (refuted as built, supported after remediation); H3c
-(now supported — see §3C).
+(supported — §3C).
 
 ---
 
@@ -576,68 +557,57 @@ better on difficult schemas. **Supports.** external validity / threats to validi
 
 ### 3B.4 A non-expert approval aid (tooling, closes the H3c blocker)
 
-**What changed.** The scorecard now prints a plain-language **APPROVE / REVIEW /
-REJECT** recommendation with reasons, and the reject path auto-generates a meaningful
-comment from the same checks. REJECT fires only on objective defects (a fabricated
-source reference, or an empty plan); APPROVE only when nothing is flagged; everything
-else is REVIEW with the specifics listed. With no reference model it never rises above
-REVIEW, because correctness cannot be auto-verified.
+**What changed.** The scorecard prints a plain-language **APPROVE / REVIEW / REJECT**
+recommendation with reasons, and the reject path auto-generates a meaningful comment
+from the same checks. Fabrications are graded by blast radius: an invented source
+**table** or hub **business key** (or an empty plan) is **REJECT**; a single invented
+**payload column** is **REVIEW**, not a blanket REJECT. APPROVE requires that nothing
+is flagged; everything else is REVIEW with the specifics listed. With no reference
+model the verdict never rises above REVIEW, because correctness cannot be
+auto-verified.
 
 **What this means.** This does not change a metric; it changes who can operate the
-approval gate. The empty approval store (the sole blocker for H3c and for the
-approval-rate-over-time test of H1c) exists because approving required Data-Vault
-expertise. The recommendation makes an informed approve/reject decision possible
-without it, so the store could then be populated — and it now has been (§3C), turning
-H3c from "cannot be measured" into a reported result. **Supports.** RQ3 / H3c.
-
-*(Note: since this aid was built, the recommendation was refined to grade fabrications
-by blast radius — an invented source **table** or **business key** is REJECT, but a
-single invented **payload column** is REVIEW, not a blanket REJECT — so APPROVE/REVIEW
-stay reachable on real, messy schemas.)*
+approval gate — approving otherwise requires Data-Vault expertise. Grading fabrications
+by blast radius keeps APPROVE and REVIEW reachable on real, messy schemas, where a
+single mis-transcribed descriptive column would otherwise force a blanket REJECT on an
+otherwise-sound plan. **Supports.** RQ3 / H3c.
 
 ---
 
-## 3C. Audit trail and approval rate on a populated store (H3c, H1c)
+## 3C. Audit trail and approval rate (H3c, H1c)
 
-The approval store, empty through Experiments 1–7, has since been populated with real
-human review decisions taken through the UI. `scripts/audit/audit_report.py` reads it
-through the app's own store factory (Delta on Databricks) and computes the two metrics
-that were blocked on an empty store. The logic is unit-tested in
-`tests/ai/test_audit_metrics.py`; the numbers below are a single snapshot of the live
-store.
+The approval store holds real human review decisions taken through the UI.
+`scripts/audit/audit_report.py` reads it through the app's own store factory (Delta on
+Databricks) and computes the audit-trail and approval-rate metrics; the logic is
+unit-tested in `tests/ai/test_audit_metrics.py`. The figures below are a snapshot of
+the store: **35 records — 10 approved, 5 rejected, 19 draft, 1 changes-requested** —
+across 2 source catalogs and one reviewer.
 
-**Store snapshot.** 35 records — **10 approved, 5 rejected**, 19 draft, 1
-changes-requested — across 2 source catalogs, one reviewer.
+**Audit-Trail Completeness (H3c) = 1.00.** Every record carries the full mandated
+provenance (plan id, version, decision, actor, timestamp, serialised plan), guaranteed
+by construction: the record schema makes those fields non-null and the store is
+insert-only, so the review history of any plan is fully reconstructable. Rationale
+coverage is **1.00 on rejections** (every rejection records *why*) and 0.33 across all
+decisions (approvals carry no free-text note — an approval's reason is its passing
+checks). The audit trail is complete and every negative decision is explained. **H3c is
+supported.**
 
-**Audit-Trail Completeness (H3c).** **Structural completeness 1.00**: every one of the
-35 records carries the full mandated provenance (plan id, version, decision, actor,
-timestamp, serialised plan), which is guaranteed by construction — the record schema
-makes those fields non-null and the store is insert-only, so the review history of any
-plan is fully reconstructable. **Rationale coverage** is 1.00 on **rejections** (every
-rejection records *why*, via the auto-generated reason) and 0.33 across all decisions
-(approvals mostly carry no free-text note, which is expected — an approval's reason is
-its passing checks). So the audit trail is complete and every negative decision is
-explained. **H3c is supported.**
+**Approval Rate = 0.667.** Of the 15 terminal decisions, 10 are approvals (10/15). The
+cumulative rate ordered by time rises from 0.00 (the first three decisions are
+rejections) to 0.667.
 
-**Approval Rate (H1c-adjacent).** Over the 15 terminal decisions, **approval rate =
-0.667** (10 approved / 15). The cumulative rate ordered by time climbs from 0.00 (the
-first three decisions were rejections) to 0.667.
-
-**Honest limits on the approval rate.** This is a genuine measurement, but it is **not**
-a controlled test of H1c's "approval improves over successive runs as the corpus grows":
-the 15 decisions span only **2 catalogs** (mostly one), by a **single reviewer**, over
-roughly a day, and the review order is not a clean time series of independent runs on a
-fixed system. The rising trajectory is therefore *suggestive, not causal* — consistent
-with the corpus helping, but equally explainable by review order or by later plans
-simply being better. A clean H1c test still needs repeated runs on the *same* system
-with the corpus growing between them (§6). What *is* now established: the store works,
-the audit trail is complete, and a real approval rate exists to report.
+**Limitation.** The approval rate is a valid aggregate but not a controlled test of
+H1c's "approval improves over successive runs as the corpus grows". The 15 decisions
+span only 2 catalogs (mostly one) and a single reviewer, and their order is not a time
+series of independent runs on a fixed system, so the rising trajectory is suggestive
+rather than causal. Establishing that effect requires repeated runs on the *same*
+system with the corpus growing between them (§6).
 
 **Reproducibility.** `python scripts/audit/audit_report.py --out
 documentation/thesis/data/audit.json`.
 
-**Supports.** RQ3 / H3c (supported); RQ1 / H1c (approval rate now measurable; the
-successive-runs causal claim remains future work).
+**Supports.** RQ3 / H3c (supported); RQ1 / H1c (approval rate reported; the
+successive-runs effect is not established).
 
 ---
 
@@ -647,7 +617,7 @@ successive-runs causal claim remains future work).
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
 | **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
-| **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §3C (approval rate 0.667 now measurable; successive-runs test still open) |
+| **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §3C (approval rate 0.667; successive-runs effect not established) |
 | **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |
@@ -761,35 +731,33 @@ reliability still requires a second human annotator.
 
 ---
 
-## 6. What is still not measured
+## 6. Limitations and open items
 
-Each item below is now blocked by **data collection, not missing code** — every metric
-has an implemented, unit-tested computation and a reproducible script (§5).
+The metrics in this document are computed by implemented, unit-tested code with
+reproducible scripts (§5). What remains are limitations of **scope and data**, not of
+instrumentation:
 
 1. **Inter-rater reliability of the gold sets** — the single largest threat to
-   construct validity. The kappa function is implemented and tested; it needs a
-   second annotator, not more code. (A solo triangulation — intra-rater test–retest +
-   an independent LLM annotator + a documented codebook — is planned as the substitute.)
-2. **dbt compile-pass *rate* (harness ready).** A single project compiles cleanly
-   (§2.4) and the multi-project sweep (`build_projects.py` → `dbt_sweep.py`) computes a
-   rate; the population is currently one project (CIM). Raising it needs more distinct
-   projects (further metadata YAMLs or emitted plans), which is a breadth question (item 5).
-3. **dbt execution — `run` + `test` (harness ready, pending a live run).** The sweep
-   materialises the models and runs the 42 data tests and reports the pass counts; the
-   one live warehouse run that writes tables has not yet been executed.
-4. **Audit-Trail Completeness — now measured (§3C).** The store was populated with
-   real decisions; structural completeness is 1.00 and rejection rationale coverage is
-   1.00. *(No longer open.)*
-5. **Approval rate — measured; the *successive-runs* causal test still open.** The
-   approval rate (0.667) now exists (§3C), but a clean test of H1c's "improves over
-   successive runs as the corpus grows" needs repeated runs on the *same* system with
-   the corpus growing between them — the current decisions span only 2 catalogs by one
-   reviewer, so the rising trajectory is suggestive, not causal.
-6. **Full significance table (tooling done, §2.8).** The paired permutation test +
-   effect size are implemented and demonstrated on the one contrast with recorded
-   per-seed values; the complete table across every contrast is a re-run of the
-   experiments with `--out`, not new code.
-7. **Breadth** — two source systems and small seed counts. The transferable claims
-   are the *patterns* (AI advantage scales with schema difficulty; naming is unstable
-   while entity identification is stable), not the absolute figures. (Model-ablation
-   robustness is now partially addressed — §3B.3 — over two models on two systems.)
+   construct validity. The gold sets and the drift answer key have a single author, so
+   the reported kappa (§2.6) measures classifier-vs-expert agreement, not agreement
+   between two independent human annotators. A second annotator would establish
+   inter-rater reliability; the solo substitute is intra-rater test–retest, an
+   independent LLM annotator, and a documented codebook.
+2. **dbt compile-pass *rate*** — the generated CIM project compiles cleanly against the
+   live warehouse (§2.4), but this is one project, not a rate. A rate requires a
+   population of generated projects, which is a breadth question (item 6).
+3. **dbt execution (`run` + `test`)** — compile validates the SQL; materialising the
+   models and running the 42 data tests against the warehouse is outside the reported
+   results.
+4. **The successive-runs approval effect (H1c)** — the approval rate is reported
+   (0.667, §3C), but the claim that approval improves over successive runs as the corpus
+   grows is not established, because the decisions span only two catalogs and one
+   reviewer. Establishing it requires repeated runs on the same system with the corpus
+   growing between them.
+5. **Full significance table** — the paired permutation test and effect size (§2.8) are
+   reported for the one contrast with per-seed values on record; a table across every
+   contrast requires the per-seed data for the remaining experiments.
+6. **Breadth** — two source systems and small seed counts. The transferable claims are
+   the *patterns* (AI advantage scales with schema difficulty; naming is unstable while
+   entity identification is stable), not the absolute figures. Model-ablation (§3B.3)
+   covers two models on two systems.
