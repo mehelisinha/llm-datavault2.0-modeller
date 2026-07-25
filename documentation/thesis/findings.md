@@ -467,9 +467,10 @@ data, and both outcomes are reported rather than only the favourable one.
 **Supports.** RQ2 / H2a, H2b, H2c.
 
 ### Experiment 7 — Safety and governance
-**Metrics:** Governance Block Rate, Audit-Trail Completeness.
+**Metrics:** Governance Block Rate, Audit-Trail Completeness, Approval Rate.
 **Result.** Block Rate **5/8 = 62% as built**, rising to **8/8 = 100%** after a
-targeted fix. Audit-Trail Completeness: **not measurable**.
+targeted fix. Audit-Trail Completeness (now measured on a populated store):
+**structural 1.00**; Approval Rate **0.667** (see §3C).
 **What it means.** This is the most consequential finding of the evaluation and a
 complete Design-Science iteration. The governance layer blocked every *plan-stage*
 risk (empty plan, validation errors, structurally invalid plan, catastrophic reviewer
@@ -482,13 +483,14 @@ Verified on production data: the real CIM drift returned *proceed* before the fi
 *pause* after it. The fix escalates any change the deterministic impact rule calls
 breaking, and regression tests confirm it does **not** over-block benign additive
 drift.
-**Audit-Trail Completeness could not be measured**: the approvals and YAML-version
-tables contain **zero rows**, because no approval has ever been persisted to the
-Delta store. Only a structural guarantee is claimed — the schema captures actor,
-timestamp, version, decision and rationale — and no completeness percentage is
-reported.
+**Audit-Trail Completeness is now measured** — the Delta store has been populated
+with real review decisions (see §3C), so the metric moves from "not measurable" to a
+reported result: every decision record carries the full mandated provenance (actor,
+timestamp, version, plan id, decision, serialised plan), giving **structural
+completeness 1.00**, and every rejection carries a recorded reason (rationale
+coverage 1.00 on rejections).
 **Supports.** RQ3 / H3a (refuted as built, supported after remediation); H3c
-(unmeasured).
+(now supported — see §3C).
 
 ---
 
@@ -585,8 +587,57 @@ REVIEW, because correctness cannot be auto-verified.
 approval gate. The empty approval store (the sole blocker for H3c and for the
 approval-rate-over-time test of H1c) exists because approving required Data-Vault
 expertise. The recommendation makes an informed approve/reject decision possible
-without it, so the store can now be populated — turning H3c from "cannot be measured"
-into "not yet measured". **Supports.** RQ3 / H3c (unblocks measurement).
+without it, so the store could then be populated — and it now has been (§3C), turning
+H3c from "cannot be measured" into a reported result. **Supports.** RQ3 / H3c.
+
+*(Note: since this aid was built, the recommendation was refined to grade fabrications
+by blast radius — an invented source **table** or **business key** is REJECT, but a
+single invented **payload column** is REVIEW, not a blanket REJECT — so APPROVE/REVIEW
+stay reachable on real, messy schemas.)*
+
+---
+
+## 3C. Audit trail and approval rate on a populated store (H3c, H1c)
+
+The approval store, empty through Experiments 1–7, has since been populated with real
+human review decisions taken through the UI. `scripts/audit/audit_report.py` reads it
+through the app's own store factory (Delta on Databricks) and computes the two metrics
+that were blocked on an empty store. The logic is unit-tested in
+`tests/ai/test_audit_metrics.py`; the numbers below are a single snapshot of the live
+store.
+
+**Store snapshot.** 35 records — **10 approved, 5 rejected**, 19 draft, 1
+changes-requested — across 2 source catalogs, one reviewer.
+
+**Audit-Trail Completeness (H3c).** **Structural completeness 1.00**: every one of the
+35 records carries the full mandated provenance (plan id, version, decision, actor,
+timestamp, serialised plan), which is guaranteed by construction — the record schema
+makes those fields non-null and the store is insert-only, so the review history of any
+plan is fully reconstructable. **Rationale coverage** is 1.00 on **rejections** (every
+rejection records *why*, via the auto-generated reason) and 0.33 across all decisions
+(approvals mostly carry no free-text note, which is expected — an approval's reason is
+its passing checks). So the audit trail is complete and every negative decision is
+explained. **H3c is supported.**
+
+**Approval Rate (H1c-adjacent).** Over the 15 terminal decisions, **approval rate =
+0.667** (10 approved / 15). The cumulative rate ordered by time climbs from 0.00 (the
+first three decisions were rejections) to 0.667.
+
+**Honest limits on the approval rate.** This is a genuine measurement, but it is **not**
+a controlled test of H1c's "approval improves over successive runs as the corpus grows":
+the 15 decisions span only **2 catalogs** (mostly one), by a **single reviewer**, over
+roughly a day, and the review order is not a clean time series of independent runs on a
+fixed system. The rising trajectory is therefore *suggestive, not causal* — consistent
+with the corpus helping, but equally explainable by review order or by later plans
+simply being better. A clean H1c test still needs repeated runs on the *same* system
+with the corpus growing between them (§6). What *is* now established: the store works,
+the audit trail is complete, and a real approval rate exists to report.
+
+**Reproducibility.** `python scripts/audit/audit_report.py --out
+documentation/thesis/data/audit.json`.
+
+**Supports.** RQ3 / H3c (supported); RQ1 / H1c (approval rate now measurable; the
+successive-runs causal claim remains future work).
 
 ---
 
@@ -596,14 +647,14 @@ into "not yet measured". **Supports.** RQ3 / H3c (unblocks measurement).
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
 | **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
-| **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert) |
+| **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §3C (approval rate 0.667 now measurable; successive-runs test still open) |
 | **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |
 | **H2c** lower drift-review effort | **Supported** | Exp 6c (36 → 1 → 0 actions) |
 | **H3a** zero unsafe promotions | **Refuted as built (62%); supported after fix (100%)** | Exp 7 |
 | **H3b** fewer manual correction steps | **Supported** | Exp 5 (29 / 25 / 9.5) |
-| **H3c** complete audit trail | **Not measurable** | Exp 7 (audit tables empty) |
+| **H3c** complete audit trail | **Supported** | §3C (populated store: structural completeness 1.00; rejection rationale 1.00 over 15 decisions) |
 
 ---
 
@@ -695,13 +746,17 @@ python scripts/dbt/dbt_sweep.py --project output/iec_dv2 \
 ```
 The `run_results.json` parser is unit-tested in `tests/ai/test_dbt_results.py`.
 
+**Audit trail + approval rate (§3C).** `python scripts/audit/audit_report.py --out
+documentation/thesis/data/audit.json` reads the approval store through the app's own
+factory and prints audit-trail completeness, the approval rate and the cumulative
+trajectory. Logic unit-tested in `tests/ai/test_audit_metrics.py`.
+
 **Single clean compile confirmed; a *rate* is not claimed.** A dbt profile
 (`~/.dbt/profiles.yml`, Databricks OAuth) plus `dbt deps` was configured and the
 generated CIM project compiled cleanly against live Databricks — 12 models, 42 tests,
 zero emitter warnings (§2.4). What is *not* claimed is a compile-pass *rate* across
 many generated projects, nor an execution-pass figure — both are produced by the
-harness above once more projects and a live `run`/`test` are supplied. Audit-Trail
-Completeness still requires real approvals to exist in the Delta store; inter-rater
+harness above once more projects and a live `run`/`test` are supplied. Inter-rater
 reliability still requires a second human annotator.
 
 ---
@@ -722,10 +777,14 @@ has an implemented, unit-tested computation and a reproducible script (§5).
 3. **dbt execution — `run` + `test` (harness ready, pending a live run).** The sweep
    materialises the models and runs the 42 data tests and reports the pass counts; the
    one live warehouse run that writes tables has not yet been executed.
-4. **Audit-Trail Completeness** — needs approvals to be performed (§3, Experiment 7).
-5. **Approval rate over time** — the most direct test of H1c's "successive runs"
-   wording; blocked by the same empty approval store (now unblocked for a non-expert
-   by the approval recommendation, §3B.4 — it needs the approvals to be *performed*).
+4. **Audit-Trail Completeness — now measured (§3C).** The store was populated with
+   real decisions; structural completeness is 1.00 and rejection rationale coverage is
+   1.00. *(No longer open.)*
+5. **Approval rate — measured; the *successive-runs* causal test still open.** The
+   approval rate (0.667) now exists (§3C), but a clean test of H1c's "improves over
+   successive runs as the corpus grows" needs repeated runs on the *same* system with
+   the corpus growing between them — the current decisions span only 2 catalogs by one
+   reviewer, so the rising trajectory is suggestive, not causal.
 6. **Full significance table (tooling done, §2.8).** The paired permutation test +
    effect size are implemented and demonstrated on the one contrast with recorded
    per-seed values; the complete table across every contrast is a re-run of the
