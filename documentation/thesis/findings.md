@@ -442,6 +442,22 @@ a real modelling ambiguity, not a labelling error. The lower model-vs-model κ (
 shows the annotation task carries some genuine ambiguity, yet the gold sits squarely
 within the range independent raters produce.
 
+**Sensitivity of the headline result to this ambiguity.** Because `terminals` is the one
+contested item, the CIM entity-identification score is recomputed for the *same*
+generated plan against both defensible golds
+(`scripts/audit/terminals_sensitivity.py`):
+
+| Gold | hubs | entity F1 (tp/fp/fn) |
+|---|---|---|
+| A — terminals = hub (shipped) | 3 | **1.00** (3/0/0) |
+| B — terminals = junction | 2 | **0.80** (2/1/0) |
+
+Under the alternative labelling the AI's `hub_terminal` becomes a single false positive,
+so entity F1 falls from 1.00 to 0.80 — both in the "strong" range, and the *entire*
+difference is that one entity. The qualitative conclusion (the AI identifies CIM
+entities correctly) does not flip, and the AI made the **same** defensible choice as the
+shipped gold. The headline is robust to the only annotation ambiguity in the CIM gold.
+
 **Honest limits.** An LLM panel is not a panel of *humans*; this is
 human-vs-independent-automated agreement and shares biases common to language models,
 and one panellist (gpt-4.1) is the pipeline modeller's model — so gpt-4o is the cleanest
@@ -829,9 +845,11 @@ trajectory. Logic unit-tested in `tests/ai/test_audit_metrics.py`.
 
 **Inter-rater reliability (§2.9).** `python scripts/audit/interrater.py --rater llm`
 labels every source table with an independent model and reports kappa vs the gold;
-`--emit-template <csv>` then `--rater human --labels <csv>` runs the intra-rater
-test–retest. Codebook: `annotation-codebook.md`; logic unit-tested in
-`tests/ai/test_interrater.py`.
+`--panel gpt-4o,gpt-4.1` runs the multi-annotator panel; `--emit-template <csv>` then
+`--rater human --labels <csv>` runs the intra-rater test–retest. `python
+scripts/audit/terminals_sensitivity.py --plan output/cim_plan.json` recomputes CIM
+entity F1 under both terminals labellings. Codebook: `annotation-codebook.md`; logic
+unit-tested in `tests/ai/test_interrater.py`.
 
 **Compile-pass rate and execution.** With a Databricks OAuth profile per project in
 `~/.dbt/profiles.yml`, the sweep compiles both the CIM and ServiceNow projects
