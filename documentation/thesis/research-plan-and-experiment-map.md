@@ -67,7 +67,7 @@ comparison, audit completeness). Those are the gaps the remaining experiments fi
 | RQ2 H2b | No AI impact classifier (additive/cosmetic/breaking) | **Exp 6b** | **Yes** | `ai/usecaseB-drift` |
 | RQ2 H2c | Drift-review effort not measured | **Exp 6c** | No | — |
 | RQ3 H3a | Safety gate never tested with unsafe inputs | **Exp 7a** | No (gates exist) | — |
-| RQ3 H3c | Audit completeness not measured | **Exp 7b** | No (store exists) | — |
+| RQ3 H3c | Audit completeness — measured via Exp 7 (findings §3C) | **Exp 7b** | No (store exists) | — |
 
 Use Case B design detail lives in `use-case-b-drift-design.md`.
 

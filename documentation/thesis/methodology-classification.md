@@ -121,7 +121,7 @@ hand-assigned.
 | Metric | What it means | Where | Hypothesis |
 |---|---|---|---|
 | **block rate** | Fraction of deliberately unsafe inputs the governance layer refuses to apply unattended (pause / reject). | Exp 7 suite | **H3a** |
-| **audit completeness** | Fraction of approved decisions carrying actor, timestamp, version, decision and rationale. **Currently unmeasurable — the store is empty.** | `approval_store` | **H3c** |
+| **audit completeness** | Fraction of decision records carrying actor, timestamp, version, decision and rationale. **Measured = 1.00** on the populated store (findings §3C). | `approval_store` | **H3c** |
 
 ## G. Operational
 

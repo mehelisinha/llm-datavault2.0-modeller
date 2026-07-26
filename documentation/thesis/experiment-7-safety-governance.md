@@ -7,9 +7,9 @@ unvalidated YAML accepted, no ERROR-severity plan promoted).
 **H3c** — every approved decision carries a complete, traceable audit record.
 
 **Headline.** H3a was **refuted as built (62%)**, the defect was diagnosed and
-fixed, and the fixed system reaches **100%**. H3c could **not be measured** — the
-audit tables are empty — so only a structural guarantee is claimed. Both outcomes
-are reported as found.
+fixed, and the fixed system reaches **100%**. H3c is **supported**: with the approval
+store since populated (35 records), audit-trail completeness is 1.00 and the approval
+rate 0.667 (§4). Both the refutation and the fix are reported as found.
 
 ## 1. Design
 
