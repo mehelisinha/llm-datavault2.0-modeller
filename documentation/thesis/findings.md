@@ -14,6 +14,38 @@
 
 ---
 
+## 0. Contribution and framing
+
+The contribution of this thesis is **not** a claim that an LLM automates Data Vault
+modelling well, nor that feedback learning makes it better — the evidence here does not
+support that framing, and says so. The contribution is twofold and evaluative:
+
+1. **A reusable, honesty-first evaluation methodology for LLM-generated data models.**
+   A suite of metrics — most of them **ground-truth-free** (hallucination /
+   source-grounding, self-consistency, idempotency, structural validation, live dbt
+   compile), the rest graded against a documented gold set with an explicit rubric and
+   codebook — combined with the statistical discipline the artifact's own behaviour
+   demands (multiple seeds, bootstrap intervals, exact permutation tests with effect
+   sizes, chance-corrected agreement, blast-radius weighting). This framework is the
+   transferable artifact; it is what lets any of these results be believed.
+
+2. **A characterisation of the boundary conditions of LLM-assisted DWA** — *where* the
+   AI helps and where it does not. The recurring result is that **schema difficulty is
+   the moderator**: on easy, already-concept-named schemas a deterministic rule baseline
+   matches the AI (the AI adds nothing); on difficult schemas the AI substantially beats
+   rules on entity identification, but naming collapses and it over-links, and the
+   feedback-learning mechanism is largely inert at the modelling stage (instance-copying,
+   not convention generalisation; cross-domain examples add nothing). The safety layer —
+   deterministic drift detection plus AI impact classification plus a governance gate —
+   is the most robust "it works" result.
+
+Read the rest of this document as evidence for those two claims. Several headline
+hypotheses are **partly refuted by our own measurements** (feedback learning; the
+reviewer as a scalar improvement; the governance gate as originally built), and those
+negative and boundary results are treated as the finding, not as failures to hide.
+
+---
+
 ## 1. How to read this document
 
 Metrics are given by their full names, not code identifiers. Each entry states:
@@ -293,8 +325,9 @@ comparison and strengthens, rather than weakens, the Experiment 6 conclusion.
 **A precise caveat about what this kappa is and is not.** This measures agreement
 between an *automated classifier* and the expert labels. It is **not** inter-rater
 reliability between two independent human annotators. The gold sets and the drift
-answer key have a **single author**, so no inter-rater reliability figure is reported;
-this is the standing construct-validity limitation of the thesis (§6).
+answer key have a **single author**; that construct-validity threat is triangulated in
+§2.9 (independent-annotator kappa 0.84 against a documented codebook), with a full
+human inter-rater figure still open (§6).
 
 **Supports.** RQ2 / H2b; and the methodology chapter's treatment of agreement.
 
@@ -373,6 +406,50 @@ metric/condition pair from an `experiment --out` JSON. The binding limit here is
 the seed count, not by further instrumentation.
 
 **Supports.** Statistical rigour; directly addresses the small-n threat to validity.
+
+### 2.9 Inter-Rater Reliability of the Gold Sets (single-author triangulation)
+
+**What it measures.** Whether the gold sets — the reference answers the accuracy
+metrics are graded against — are reproducible rather than one author's idiosyncrasy.
+A second human annotator was not available, so reliability is **triangulated** three
+ways against a documented annotation codebook (`annotation-codebook.md`): (i) an
+**independent LLM annotator**, (ii) an **intra-rater test–retest** instrument for the
+author to re-label after a washout, and (iii) the codebook itself, which makes the
+protocol explicit so any of these can be re-run. The annotation item is one source
+table; the label is the core entity decision — **hub / split / exclude**.
+
+**Result — independent LLM annotator vs gold.** A model *different from the pipeline
+modeller* (gpt-4o, seeing only the source schema and the codebook — never the gold or
+the pipeline output) labelled all 12 source tables across both systems:
+
+| Comparison | Items | Raw agreement | Cohen's kappa | Disagreements |
+|---|---|---|---|---|
+| Independent LLM annotator vs gold | 12 | 0.917 | **0.84** | 1 |
+
+**What this means.** Kappa of **0.84** is "almost perfect" agreement (Landis–Koch
+0.81–1.00): an independent rater, held only to the written codebook, reproduces the
+gold's entity decisions on 11 of 12 tables. That materially weakens — though does not
+eliminate — the single-author threat: the gold is substantially protocol-driven, not
+arbitrary. The **single disagreement is itself informative and defensible**:
+`terminals` (CIM), which the gold labels `hub` and the annotator labels
+`exclude`-as-junction. `terminals` is genuinely both — a real entity *and* the junction
+between conducting-equipment and connectivity-node — exactly the Tier-2 "acceptable
+alternative" the scoring rubric anticipates. So the one point of disagreement is a
+known modelling ambiguity, not a labelling error.
+
+**Honest limits.** An LLM annotator is not a second *human* annotator; this is
+human-vs-independent-automated agreement, and it shares any biases common to language
+models. The intra-rater test–retest (a genuinely human second labelling, by the author
+after a washout) is prepared — a 12-item blank template is emitted by the same script —
+but not yet completed, so no human–human or test–retest kappa is reported. The claim
+made is bounded accordingly: the gold is reproducible by an independent rater to
+kappa 0.84; a full human inter-rater figure remains open (§6).
+
+**Reproducibility.** `python scripts/audit/interrater.py --rater llm` (LLM annotator
+kappa); `--emit-template <csv>` then `--rater human --labels <csv>` (test–retest).
+Logic unit-tested in `tests/ai/test_interrater.py`.
+
+**Supports.** Construct validity of every gold-based accuracy metric (Exp 1, 3, 4, 5).
 
 ---
 
@@ -744,6 +821,12 @@ documentation/thesis/data/audit.json` reads the approval store through the app's
 factory and prints audit-trail completeness, the approval rate and the cumulative
 trajectory. Logic unit-tested in `tests/ai/test_audit_metrics.py`.
 
+**Inter-rater reliability (§2.9).** `python scripts/audit/interrater.py --rater llm`
+labels every source table with an independent model and reports kappa vs the gold;
+`--emit-template <csv>` then `--rater human --labels <csv>` runs the intra-rater
+test–retest. Codebook: `annotation-codebook.md`; logic unit-tested in
+`tests/ai/test_interrater.py`.
+
 **Compile-pass rate and execution.** With a Databricks OAuth profile per project in
 `~/.dbt/profiles.yml`, the sweep compiles both the CIM and ServiceNow projects
 (compile-pass rate 2/2) and executes CIM (`run`/`test`); the ServiceNow project is
@@ -758,12 +841,12 @@ The metrics in this document are computed by implemented, unit-tested code with
 reproducible scripts (§5). What remains are limitations of **scope and data**, not of
 instrumentation:
 
-1. **Inter-rater reliability of the gold sets** — the single largest threat to
-   construct validity. The gold sets and the drift answer key have a single author, so
-   the reported kappa (§2.6) measures classifier-vs-expert agreement, not agreement
-   between two independent human annotators. A second annotator would establish
-   inter-rater reliability; the solo substitute is intra-rater test–retest, an
-   independent LLM annotator, and a documented codebook.
+1. **Inter-rater reliability of the gold sets** — the standing construct-validity
+   threat, now *partly* addressed (§2.9): a documented codebook plus an independent LLM
+   annotator give kappa 0.84 ("almost perfect"). What remains open is a genuinely
+   *human* second labelling — either a second annotator or the author's intra-rater
+   test–retest after a washout (the 12-item template is prepared) — to report a
+   human inter-rater kappa rather than a human-vs-automated one.
 2. **A fully clean `dbt run`** — compile-pass rate is 2/2 and `dbt test` passes 38/42
    (§2.4). The one metadata defect execution exposed (`stg_terminals`' `OPERATION_TYPE`)
    is fixed; the remaining barrier to a fully clean materialisation is a warehouse
