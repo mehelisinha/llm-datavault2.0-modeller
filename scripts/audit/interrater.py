@@ -77,7 +77,11 @@ def _schema_text(payload) -> str:
 
 
 def _annotate_llm(payload, *, deployment: str) -> dict[str, str]:
-    """Independent LLM annotator: label every table hub/split/exclude from schema only."""
+    """Independent LLM annotator: label every table hub/split/exclude from schema only.
+
+    Robust to model quirks: some reasoning deployments reject ``temperature=0`` or
+    ``response_format``; on such an error the call is retried without those options.
+    """
     from openai import AzureOpenAI
 
     from dbt_builder.src.ai.settings import get_settings
@@ -94,21 +98,78 @@ def _annotate_llm(payload, *, deployment: str) -> dict[str, str]:
         f"Return ONLY a JSON object mapping every table name to its label, e.g. "
         f'{{"{tables[0]}": "hub"}}. Tables to label: {tables}.'
     )
-    resp = client.chat.completions.create(
-        model=deployment,
-        messages=[
-            {"role": "system", "content": "You are a Data Vault 2.0 data modeller. Follow the rules exactly."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
-    raw = json.loads(resp.choices[0].message.content)
+    messages = [
+        {"role": "system", "content": "You are a Data Vault 2.0 data modeller. Follow the rules exactly. Reply with JSON only."},
+        {"role": "user", "content": prompt},
+    ]
+    try:
+        resp = client.chat.completions.create(
+            model=deployment, messages=messages, temperature=0,
+            response_format={"type": "json_object"},
+        )
+    except Exception:
+        resp = client.chat.completions.create(model=deployment, messages=messages)
+    content = resp.choices[0].message.content or "{}"
+    start, end = content.find("{"), content.rfind("}")
+    raw = json.loads(content[start : end + 1]) if start >= 0 else {}
     labels = {t: str(raw.get(t, "exclude")).strip().lower() for t in tables}
     for t, lab in labels.items():
         if lab not in ENTITY_LABELS:
             labels[t] = "exclude"
     return labels
+
+
+def _annotator_labeling(systems: list[str], deployment: str) -> dict[str, str]:
+    """Run one annotator model across systems; return labels keyed ``system::table``."""
+    golds = load_gold_models()
+    out: dict[str, str] = {}
+    for sid in systems:
+        payload = _discover(sid, golds[sid])
+        for t, lab in _annotate_llm(payload, deployment=deployment).items():
+            out[f"{sid}::{t}"] = lab
+    return out
+
+
+def _majority(labelings: list[dict[str, str]]) -> dict[str, str]:
+    """Per-item majority vote across annotator labelings (ties -> first-seen order)."""
+    from collections import Counter
+
+    keys = set().union(*labelings)
+    out: dict[str, str] = {}
+    for k in keys:
+        votes = Counter(lbl[k] for lbl in labelings if k in lbl)
+        out[k] = votes.most_common(1)[0][0]
+    return out
+
+
+def _cmd_panel(deployments: list[str], systems: list[str], gold_keyed: dict[str, str], out: str | None) -> int:
+    """A panel of independent annotator models: each vs gold + model-vs-model agreement."""
+    labelings = {d: _annotator_labeling(systems, d) for d in deployments}
+    print(f"(panel: {deployments})\n")
+    result: dict[str, object] = {"deployments": deployments, "vs_gold": {}, "model_vs_model": {}}
+    print("-- each annotator vs gold --")
+    for d, lab in labelings.items():
+        r = kappa_and_agreement(gold_keyed, lab)
+        result["vs_gold"][d] = {"kappa": r["cohens_kappa"], "agreement": r["raw_agreement"]}
+        print(f"  {d:10} kappa={r['cohens_kappa']}  agreement={r['raw_agreement']}")
+    print("-- annotator vs annotator (task objectivity) --")
+    for i in range(len(deployments)):
+        for j in range(i + 1, len(deployments)):
+            di, dj = deployments[i], deployments[j]
+            r = kappa_and_agreement(labelings[di], labelings[dj])
+            result["model_vs_model"][f"{di} vs {dj}"] = {"kappa": r["cohens_kappa"], "agreement": r["raw_agreement"]}
+            print(f"  {di} vs {dj}: kappa={r['cohens_kappa']}  agreement={r['raw_agreement']}")
+    maj = _majority(list(labelings.values()))
+    rm = kappa_and_agreement(gold_keyed, maj)
+    result["majority_vs_gold"] = {"kappa": rm["cohens_kappa"], "agreement": rm["raw_agreement"], "disagreements": rm["disagreements"]}
+    print(f"-- panel majority vs gold: kappa={rm['cohens_kappa']}  agreement={rm['raw_agreement']} --")
+    for d in rm["disagreements"]:
+        print(f"   {d['item']}: gold={d['rater_a']}  majority={d['rater_b']}")
+    if out:
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        print(f"\nwrote {out}")
+    return 0
 
 
 def _all_items(systems: list[str]) -> list[tuple[str, str, str]]:
@@ -174,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rater", choices=("llm", "human"), default="llm", help="second rater to score vs gold")
     p.add_argument("--labels", default=None, help="filled template CSV (with --rater human)")
     p.add_argument("--deployment", default=None, help="LLM annotator deployment (default: gpt-4o, != modeller)")
+    p.add_argument("--panel", default=None, help="comma-separated deployments for a multi-annotator panel, e.g. gpt-4o,gpt-5")
     p.add_argument("--emit-template", default=None, help="write a blank annotation template CSV and exit")
     p.add_argument("--out", default=None, help="write the result JSON here")
     args = p.parse_args(argv)
@@ -185,6 +247,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = _all_items(systems)
     gold_keyed = {f"{sid}::{t}": lab for sid, t, lab in rows}
+
+    if args.panel:
+        deployments = [d.strip() for d in args.panel.split(",") if d.strip()]
+        return _cmd_panel(deployments, systems, gold_keyed, args.out)
 
     if args.rater == "human":
         if not args.labels:
