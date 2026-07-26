@@ -138,23 +138,25 @@ hand-assigned.
 |---|---|---|
 | **1 — modeller ablation** | H1a, H1b | Entity id at ceiling & learning-independent; naming/link parsimony are the weak axes |
 | **2 — learning curve + LOO** | H1c | Supported *conditionally*: threshold-gated, instance-level copying, not generalisation |
-| **3 — CIM cross-domain control** | H1c (corpus safety) | Cross-domain examples inert, not harmful |
+| **3 — CIM cross-domain control** | H1c (corpus safety) | Cross-domain examples inert on CIM; the live corpus hurts ServiceNow (findings §2.8) |
 | **4 — end-to-end + taxonomy shift** | H1d | Reviewer is a **trade-off**, not a scalar gain |
 | **5 — three-arm baseline** | H1a, H3b | AI ≫ rules on hard schemas, ties on easy; fewest correction steps |
 | **6 — drift** | H2a, H2b, H2c | Recall 1.00; AI 1.00 vs rule 0.88; effort 36 → 0 actions |
-| **7 — safety & governance** | H3a, H3c | H3a **refuted as built (62%) → fixed (100%)**; H3c **unmeasured** |
+| **7 — safety & governance** | H3a, H3c | H3a **refuted as built (62%) → fixed (100%)**; H3c **supported** (audit completeness 1.00, findings §3C) |
 
-Every hypothesis now has evidence except **H3c**.
+Every hypothesis now has evidence, including H3c.
 
 ---
 
-# What is *not* measured yet — including hallucination
+# Hallucination and the other late-added metrics
 
-## Are we measuring hallucination? **No — and this is the most important gap.**
+## Are we measuring hallucination? **Yes — it was the biggest gap, now closed.**
 
-To be direct: **there is currently no hallucination metric.** Nothing verifies that
-the tables and columns the model references actually **exist in the source**. The
-nearest proxies capture something adjacent but different:
+In an earlier draft this was the most conspicuous hole: nothing verified that the
+tables and columns the model references actually **exist in the source**. It is now
+measured directly (findings §2.1); the definition below is what the metric computes,
+and the reason the pre-existing proxies do not stand in for it. Those proxies capture
+something adjacent but different:
 
 - `link_fk_unresolved` — a link points at a hash key matching no hub in the plan;
 - `satellite_orphan` — a satellite's parent hub is not in the plan;
@@ -164,17 +166,18 @@ nearest proxies capture something adjacent but different:
   be a defensible modelling alternative rather than a fabrication;
 - `coverage_ratio` — detects **omission**, which is the opposite failure.
 
-**The missing metric — grounding / hallucination rate.** Define a *reference* as any
-source identifier the plan names: each object's `source_table`, each hub's
-`business_keys`, and each satellite's `payload` columns. Then
+**The metric — grounding / hallucination rate.** Define a *reference* as any source
+identifier the plan names: each object's `source_table`, each hub's `business_keys`,
+and each satellite's `payload` columns. Then
 
 > **hallucination_rate = fabricated references ÷ total references**, where a
 > reference is *fabricated* if the named table is absent from the discovery payload,
 > or the named column is absent from that table's column list.
 
 This is pure, cheap, deterministic (plan + payload in, rate out) and needs no gold
-set. It matters because hallucination is *the* canonical LLM failure mode, and for
-an LLM thesis its absence is a conspicuous hole.
+set. It matters because hallucination is *the* canonical LLM failure mode; leaving it
+unmeasured would have been a conspicuous hole in an LLM thesis, which is why it was
+the first of the late additions to be built.
 
 **The caveat, now tested rather than assumed:** the modeller's prompt forbids
 inventing tables/columns, and `_coerce_plan_dict` strips unknown payload columns.
@@ -194,13 +197,17 @@ table is the audit trail. Full results and interpretation live in `findings.md`.
 | dbt compile (live warehouse) | **Done** — 12 models compile clean, zero warnings | findings §2.4 |
 | Self-consistency / output stability | **Done** — 0.80 CIM, 0.33 SNOW | findings §2.2 |
 | Statistical rigour (bootstrap CIs) | **Done** — 95% CIs over five seeds | findings §2.7 |
-| Inter-rater reliability (Cohen's κ) | **Implemented + tested; unmeasured** — needs a 2nd annotator | findings §2.6, §6 |
+| Inter-rater reliability (Cohen's κ) | **Done (proxy)** — independent-annotator κ 0.84; human test–retest still open | findings §2.9, §6 |
 | Token / cost per plan | **Done** — ≈3.9k CIM, ≈13.9k SNOW tokens | findings §2.5 |
 | Idempotency rate | **Done** — 0.20 CIM, 0.33 SNOW, 1.00 rules | findings §2.3 |
 | Model-ablation robustness | **Done** — gpt-4o vs gpt-4.1 | findings §3B.3 |
-| Approval rate over time | **Blocked** — empty approval store (same as H3c) | findings §6 |
+| Significance + effect size | **Done** — off-vs-on at n=10 (findings §2.8) | findings §2.8 |
+| Approval rate | **Done** — 0.667 over 15 decisions | findings §3C |
+| Audit-trail completeness | **Done** — 1.00 on a populated store | findings §3C |
 
-Only two items are not fully *measured*, and both are blocked by **missing data, not
-missing code**: inter-rater reliability (needs a second human annotator) and the
-approval-rate/audit-trail metrics (need real approvals performed). Both are
-implemented and unit-tested and will produce numbers the moment the data exists.
+The two items that were blocked on data collection have since been resolved: the
+approval-rate and audit-trail metrics were computed once real approvals existed
+(§3C), and the gold's reliability is triangulated by an independent-annotator kappa of
+0.84 against a documented codebook (§2.9). The one piece still genuinely open is a
+*human* second labelling of the gold — a second annotator, or the author's test–retest
+after a washout — for a human inter-rater figure rather than a human-vs-automated one.

@@ -47,7 +47,7 @@ as accurate as manual" became a three-axis, conditional statement (see
 |---|---|---|---|
 | 1 | Modeller ablation | RQ1 / H1a, H1b | Entity id at ceiling (~0.93 F1 vs the manual gold), learning-independent; naming not transferred at k=3 |
 | 2 | Learning curve + LOO | RQ1 / H1c | Naming transfer is threshold-gated (0→1 at k≈10) and instance-level copying, not generalisation (leave-one-out → 0) |
-| 3 | CIM cross-domain control | RQ1 / H1c (safety of corpus) | Cross-domain examples are inert, not harmful; the naming effect needs a table-vs-concept gap to exist at all |
+| 3 | CIM cross-domain control | RQ1 / H1c (safety of corpus) | Cross-domain examples are inert on CIM, but the unfiltered live corpus hurts ServiceNow (findings §2.8) — corpus safety is schema-dependent; the naming effect needs a table-vs-concept gap to exist at all |
 | 4 | End-to-end + taxonomy shift | RQ1 / H1d | The reviewer resolves link-FK errors but introduces surrogate-key hubs — conformance up, entity_f1 down, naming neutral, blast-radius up: a trade-off, not a scalar win |
 
 **Honest coverage statement.** Experiments 1–4 answer **RQ1 thoroughly** (all four

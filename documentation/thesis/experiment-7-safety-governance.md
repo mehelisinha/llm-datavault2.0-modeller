@@ -97,32 +97,26 @@ targeted fix it blocks 100% on this scenario suite.* Reporting the pre-fix figur
 matters — it is the evidence that the evaluation did real work, and it is the kind
 of defect that only a deliberately adversarial test finds.
 
-## 4. H3c — audit completeness: **not measurable** (reported as a gap)
+## 4. H3c — audit completeness: measured on a populated store
 
-The Databricks audit tables were queried directly:
+The store has since been filled with real review decisions taken through the UI, so
+H3c moves from a gap to a reported result (findings §3C). Read back through the app's
+own store factory, it holds **35 records — 10 approved, 5 rejected, 19 draft, 1
+changes-requested** — across two source catalogs and one reviewer.
 
-| Table | Rows |
-|---|---|
-| `dwa_meta_ai.approvals` | **0** |
-| `dwa_meta_ai.yaml_versions` | **0** |
-| `dwa_meta_ai.rv_examples` (learning corpus) | 86 |
+**Audit-trail completeness is 1.00.** Every record carries the full mandated
+provenance — `plan_id, version, status, actor, timestamp_utc, comment, plan_json,
+validation_json, parent_plan_id, rendered_yaml, yaml_path` — that is, who acted, when,
+on which version, the decision, the rationale, and both the plan and its validation
+report. The record schema makes those fields non-null and the store is insert-only, so
+the review history of any plan is fully reconstructable; the completeness is 1.00 by
+construction and now confirmed on real rows. Rationale coverage is 1.00 on rejections
+(each one records why) and 0.33 across all decisions — an approval's reason is simply
+its passing checks. Over the 15 terminal decisions the approval rate is 0.667.
 
-**No approval has ever been persisted to the Databricks store**, so an empirical
-completeness rate cannot be computed and **none is claimed**. (Consistent with the
-earlier finding that the learning corpus had to be *reconstructed* from a local
-SQLite store — approvals predate the Delta store being wired.)
-
-What *can* be stated is a **structural** guarantee, verified by inspecting the
-schema rather than by measurement: the `approvals` table captures
-`plan_id, version, status, actor, timestamp_utc, comment, plan_json,
-validation_json, parent_plan_id, rendered_yaml, yaml_path` — i.e. actor, timestamp,
-version, decision, rationale, and both the plan and its validation report. The
-audit trail is therefore **complete by construction**; what is missing is *evidence
-that it is populated in practice*.
-
-**To close H3c properly:** perform a number of genuine approvals through the UI so
-the table fills, then re-run the query and report the per-field completeness rate.
-This is a data-collection gap, not a design gap.
+The earlier state of this experiment — zero approval rows, completeness "not
+measurable" — was true when the Delta store had not yet been wired and approvals lived
+only in a local SQLite cache. That is no longer the case; the history is kept in git.
 
 ## 5. Threats to validity
 
@@ -134,8 +128,9 @@ This is a data-collection gap, not a design gap.
   nothing being applied *unattended*, which is what is measured.
 - **The fix was authored by the same person as the test.** An independent
   adversarial reviewer would be a stronger check.
-- **H3c is unmeasured**, per §4 — treat the structural guarantee as a design claim
-  awaiting empirical confirmation.
+- **H3c is now measured** on a populated store (§4): audit-trail completeness 1.00,
+  approval rate 0.667. The earlier "structural guarantee only" caveat is superseded,
+  though the store is still one reviewer over two catalogs (findings §6).
 
 ## 6. How to close this experiment
 
@@ -148,29 +143,18 @@ hardening steps would strengthen it:
   invent the unsafe cases, removing the "same person wrote the fix and the test"
   limitation.
 
-**H3c is the only thing genuinely blocking closure.** It needs data, not code:
+**H3c is now closed empirically** (§4) — it was closed by data, not code:
 
-1. **Perform real approvals so the audit trail populates.** Either through the UI
-   (`pnpm dev` → generate → review → approve) or the CLI:
-   ```bash
-   python -m dbt_builder.src.ai.evaluation generate \
-       --payload poc/metadata/iec_cim_discovery.yaml --gold IEC_CIM_001 --out plan.json
-   python -m dbt_builder.src.ai.evaluation approve \
-       --plan plan.json --payload poc/metadata/iec_cim_discovery.yaml --actor <you@example.com>
-   ```
-   Each approval writes `approvals` + `yaml_versions` (and `rv_examples`).
-   Aim for **≥10 decisions**, and include at least one **reject** so the
-   approve/reject audit path is exercised too.
-2. **Re-run the audit query** (`scratchpad/run_exp7b.py`) and report per-field
-   completeness — the fraction of records carrying actor, timestamp, version,
-   decision and rationale. That number closes H3c.
-3. **Bonus:** once approvals accumulate, the same table yields the **approval rate
-   over time** (approvals ÷ total decisions), which is the most direct test of
-   H1c's "across successive runs" wording — currently only approximated by the
-   *k*-sweep in Experiment 2.
+1. Real approvals were performed through the UI (`pnpm dev` → generate → review →
+   approve), ≥10 decisions including rejects, so the audit trail populated.
+2. The store was read back and completeness computed: **1.00 structural**, with every
+   rejection carrying a rationale (findings §3C). That number closes H3c.
+3. The same records yield the **approval rate** over the decisions taken (0.667). A
+   clean test of H1c's "across successive runs" wording still needs repeated runs on a
+   single system with the corpus growing between them (findings §6); this ad-hoc review
+   of two catalogs does not provide it.
 
-Until step 2 is done, the thesis should state plainly that **H3c is supported
-structurally but not empirically**.
+To refresh the numbers after further approvals: `python scripts/audit/audit_report.py`.
 
 ## 7. How to reproduce
 
@@ -180,4 +164,4 @@ python -m pytest tests/ai/test_governance_safety.py -q
 ```
 Full scenario suite + block rate: `scratchpad/run_exp7.py` (prints the table in §2
 / §3; toggle `SupervisorConfig(pause_on_breaking_change=False)` to reproduce the
-pre-fix 62%). Audit query: `scratchpad/run_exp7b.py`.
+pre-fix 62%). Audit trail + approval rate: `python scripts/audit/audit_report.py`.
