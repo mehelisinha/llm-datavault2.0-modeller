@@ -35,7 +35,8 @@ support that framing, and says so. The contribution is twofold and evaluative:
    matches the AI (the AI adds nothing); on difficult schemas the AI substantially beats
    rules on entity identification, but naming collapses and it over-links, and the
    feedback-learning mechanism is largely inert at the modelling stage (instance-copying,
-   not convention generalisation; cross-domain examples add nothing). The safety layer —
+   not convention generalisation; and, on the error measure with the widest downstream
+reach, cross-domain examples are not merely inert but actively harmful, §2.8). The safety layer —
    deterministic drift detection plus AI impact classification plus a governance gate —
    is the most robust "it works" result.
 
@@ -89,12 +90,32 @@ run); the middle block needs a **gold/reference model**; the bottom block is
 | **Cost-Weighted Misclassification Error** | Penalises dangerous mislabels (breaking→safe) more than harmless ones | Answer key | Exp 6 |
 | **Drift-Review Action Count** | Human actions to triage a drift, unaided vs rules vs AI (effort, H2c) | Answer key | Exp 6c |
 | **Governance Block Rate** | Fraction of unsafe promotions the supervisor actually blocks | Scenario set | Exp 7 |
-| **Audit-Trail Completeness** | Do persisted approvals capture actor/time/version/decision/rationale? | Real approvals | Exp 7 (unmeasured) |
+| **Audit-Trail Completeness** | Do persisted approvals capture actor/time/version/decision/rationale? | Real approvals | §3C |
+| **Approval Rate** | Of the decisions taken, how many are approvals vs rejections? | Real approvals | §3C |
+| **Significance + Effect Size** | Is a difference bigger than seed noise, and how large? (paired permutation test, Cliff's δ) | Mixed | §2.8 |
+| **Inter-Rater Reliability** | Is the gold reproducible by an independent rater? (Cohen's κ against a codebook) | Gold + codebook | §2.9 |
 
-The two remaining unmeasured items — **inter-rater reliability** (needs a second human
-annotator) and **audit-trail / approval-rate** (needs real approvals performed) — are
-gaps of *data collection*, not of missing code; both metrics are implemented and
-tested. See §6.
+Both of the items that were open at the start of this work have since been measured.
+Audit-trail completeness and the approval rate were computed once the approval store
+held real decisions (§3C), and the gold's reliability is triangulated against an
+independent annotator and a written codebook (§2.9). What is still outstanding is a
+genuinely *human* second labelling of the gold — a second annotator, or the author
+re-labelling after a gap — which §6 records.
+
+### 1.2 Why the seed count is ten
+
+A word on why every learning comparison here runs over ten seeds rather than the three
+a first pass invites. The choice came out of a near-miss. An early three-seed run of the
+off-versus-on comparison looked encouraging on the hard schema: learning seemed to
+tighten link cardinality and lift conformance, and the conformance gain was a clean
+sweep, every "on" run beating its paired "off" run — the sort of result that reads as
+settled. It was not. Rerun at ten seeds, both effects shrank and lost any claim to
+significance, while the one difference that held up was a cost rather than a gain:
+learning significantly worsened the errors with the widest downstream reach (§2.8).
+Three seeds would have earned a confident paragraph the larger sample flatly
+contradicts. So the count is ten throughout, effects carry their spread instead of
+standing as single numbers, and nothing is called significant on the strength of a
+handful of runs.
 
 ---
 
@@ -396,9 +417,12 @@ does not help entity identification or naming and *measurably worsens the errors
 carry the most downstream cost* — those with high dependency fan-out. This is a clean
 corroboration of the boundary-condition thesis (§0): feedback learning is **not a free
 improvement**; cross-domain examples are inert at best and harmful on the axis that
-matters most. It also vindicates the power argument concretely — the three-seed
-estimates were unreliable in magnitude and, for one metric, in *direction*; only n = 10
-resolves them.
+matters most. It is also a concrete lesson about sample size. No single metric changed
+sign between the two runs; what changed was the conclusion. At three seeds the numbers
+read as a mild endorsement of learning — two effects that looked sizeable — and at ten
+seeds those melt into noise while the one difference that hardens into significance is a
+cost. That is the quiet way a small sample misleads: not by flipping a number, but by
+dressing noise up as signal.
 
 **Scope.** The corpus here is cross-domain to CIM/ServiceNow (the approved examples come
 from other catalogs), so this measures **cross-domain** learning specifically; a
@@ -856,8 +880,8 @@ unit-tested in `tests/ai/test_interrater.py`.
 **Compile-pass rate and execution.** With a Databricks OAuth profile per project in
 `~/.dbt/profiles.yml`, the sweep compiles both the CIM and ServiceNow projects
 (compile-pass rate 2/2) and executes CIM (`run`/`test`); the ServiceNow project is
-produced from a generated plan via `plan_to_metadata.py` (§2.4). Inter-rater
-reliability still requires a second human annotator.
+produced from a generated plan via `plan_to_metadata.py` (§2.4). A *human* inter-rater
+figure still needs a second human labelling (§2.9, §6).
 
 ---
 
