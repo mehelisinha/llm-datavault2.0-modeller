@@ -536,13 +536,17 @@ monotone learning curve would have been.
 ### Experiment 3 — Cross-domain control
 **Metrics:** as Experiment 1, on CIM with the CIM corpus excluded.
 **Result.** Every metric identical across all conditions (all 1.000; link ratio 2.0).
-**What it means.** Injecting examples from unrelated source systems is **inert, not
-harmful** — a shared multi-system corpus is safe to leave enabled. Separately, CIM's
-naming adherence was already 1.0 without any learning, because its source tables are
-*already* concept-named. That sharpened the Experiment 2 finding into a scope
-condition: the naming benefit only exists where table names diverge from the shop
-convention.
-**Supports.** RQ1 / H1c (corpus safety).
+**What it means.** On this easy schema, injecting examples from unrelated source systems
+is **inert** — every metric is unchanged. But "inert" is a claim about CIM only, and it
+does not generalise: the ten-seed run in §2.8 shows the same cross-domain corpus is
+*not* harmless on the hard ServiceNow schema, where it significantly raises the
+blast-radius-weighted error impact. So the honest scope condition is that a shared
+multi-system corpus is safe where the model is already strong and a liability where it
+is not, rather than universally safe. Separately, CIM's naming adherence was already 1.0
+without any learning, because its source tables are *already* concept-named — which
+sharpens the Experiment 2 finding: the naming benefit exists only where table names
+diverge from the shop convention.
+**Supports.** RQ1 / H1c (corpus safety is schema-dependent — see §2.8).
 
 ### Experiment 4 — End-to-end reviewer and error-taxonomy shift
 **Metrics:** Error-Taxonomy Distribution, Blast-Radius-Weighted Error Impact, DV2
