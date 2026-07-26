@@ -230,15 +230,18 @@ one authored by hand and one produced by the AI.
 **Execution (`dbt run` + `dbt test`) — the stronger check, and what it exposes.**
 Compile validates SQL; execution materialises the models and runs the data tests. On
 the CIM project, `dbt test` passed **38 of 42 (0.905)** against the materialised
-objects. `dbt run` re-materialisation, however, exposed a defect that compile did not:
-`stg_terminals` derives `END_DATE` / `IS_DELETED` from an `OPERATION_TYPE` CDC column
-that the live `terminals` bronze table does not contain (`UNRESOLVED_COLUMN`), so 3
-models error and the 9 downstream models skip. (Two of the three errors are instead
-`PERMISSION_DENIED` on pre-existing staging views — an environment grant, not a code
-defect — but the `OPERATION_TYPE` error is intrinsic.) The lesson is the finding:
-**compile-pass does not imply run-pass** — a derived-column expression can name a source
-column that does not exist, compile without complaint, and fail only at execution.
-Executing, not just compiling, is what catches it.
+objects. `dbt run`, however, exposed a defect that compile did not: `stg_terminals`
+derived `END_DATE` / `IS_DELETED` from an `OPERATION_TYPE` CDC column that the live
+`terminals` bronze table does not contain (`UNRESOLVED_COLUMN`) — a derived-column
+expression that names a non-existent source column compiles without complaint and fails
+only at execution. **This is the finding: compile-pass does not imply run-pass.** The
+defect was corrected — the delete flag is the bronze `cdc_flag` column (as the other
+staging models already use), not `OPERATION_TYPE` — and after regeneration `stg_terminals`
+resolves its columns and no longer errors. The remaining barrier to a fully clean
+materialisation is not the code: all three staging views fail identically with
+`PERMISSION_DENIED` (`MANAGE`) because they pre-exist under another principal in the
+target schema — a warehouse grant, resolved by granting `MANAGE` or materialising into a
+user-owned schema.
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -335,36 +338,39 @@ is **Cliff's delta** (scale-free, non-parametric). Both are implemented in
 `stats.py` (`paired_permutation_test`, `cliffs_delta`, `compare_paired`) and unit-
 tested against hand-computed values.
 
-**Worked result (the one contrast with recorded per-seed values).** For CIM naming
-adherence, learning OFF vs ON — the five-seed values recorded in §2.7 (four seeds at
-1.0, one at 0.333, versus all five at 1.0):
+**Result — learning OFF vs ON, paired by seed (n = 3, gpt-4.1).** The ON arm retrieves
+up to 10 approved examples from the corpus; both arms share seeds 42/43/44 per system.
 
-| Contrast | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
-|---|---|---|---|---|---|---|
-| CIM naming, OFF→ON | 0.867 | 1.000 | −0.133 [−0.400, 0.000] | **1.000** | −0.20 | small |
+| System | Metric | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
+|---|---|---|---|---|---|---|---|
+| CIM | entity F1 | 1.000 | 1.000 | 0.000 | 1.000 | 0.00 | negligible |
+| CIM | naming | 1.000 | 1.000 | 0.000 | 1.000 | 0.00 | negligible |
+| CIM | link ratio | 2.000 | 2.000 | 0.000 | 1.000 | 0.00 | negligible |
+| ServiceNow | entity F1 | 0.914 | 0.914 | 0.000 | 1.000 | 0.00 | negligible |
+| ServiceNow | naming | 0.000 | 0.000 | 0.000 | 1.000 | 0.00 | negligible |
+| ServiceNow | link ratio | 1.242 | 1.121 | +0.121 [0.000, 0.182] | 0.500 | +0.56 | large |
+| ServiceNow | conformance | 0.953 | 0.961 | −0.008 [−0.023, −0.001] | 0.250 | −1.00 | large |
 
-**What this means — and why the p-value is the point.** The means differ (0.867 vs
-1.0), but the paired permutation test returns **p = 1.0**: the entire difference rests
-on a *single* discordant seed, and one out of five pairs can never be significant
-under sign-flipping. This is not a defect of the test — it is the honest verdict that
-**the apparent naming "gain" from learning on CIM is statistically indistinguishable
-from noise**, which corroborates the instability finding of §2.2 rather than
-contradicting the learning story (CIM tables are already concept-named, §Exp 3, so
-there was little for learning to add). The methodological lesson the thesis should
-state: with n = 3–5 seeds, only effects present in *most* seeds are detectable; a
-single-seed effect is undetectable **by construction**, so such differences must be
-reported as directional, never as established.
+**What this means — and why the p-value is the point.** No learning effect reaches
+significance at three seeds, and that is itself the finding, in two parts. On the
+metrics where the base model is already strong (entity identification, naming) the
+effect is *exactly zero* — OFF and ON produce identical per-seed values, because the
+corpus here is cross-domain to CIM/ServiceNow and therefore inert on those axes
+(consistent with Experiment 3). On the hard ServiceNow schema, learning *does* move
+link parsimony (over-linking 1.24 → 1.12) and conformance (0.953 → 0.961) in the right
+direction with **large effect sizes** (Cliff's δ = 0.56 and −1.00 — the latter a
+complete separation: every ON seed beats its OFF pair), yet neither is significant.
+The reason is power, not absence of effect: with n = 3 the smallest achievable
+two-sided permutation p-value is 0.25, so even a complete-separation effect *cannot* be
+called significant. These directional gains are real but **underpowered**; the remedy
+is more seeds, not more method. This is exactly the discipline §2.2/§2.7 argue for —
+report the effect size and its dispersion, and never read significance into a
+three-seed point estimate.
 
-**Scope.** The significance and effect-size machinery
-(`scripts/stats/significance.py`, §5) applies to any metric and condition pair in an
-`experiment --out` JSON. The result reported here is the single contrast for which
-per-seed values are on record (CIM naming); a full table across every contrast (entity
-F1, link ratio, correction steps) is a matter of persisting the per-seed JSON for the
-remaining experiments, not of further method. The learning **off-vs-on** contrasts
-additionally require the approved-example corpus (the Databricks SQL warehouse), which
-is reachable only from an authenticated session; without it the *on* arm retrieves no
-examples and the contrast degenerates, so the off-vs-on significance table is produced
-by running the experiment matrix with `--out` under that session (§5).
+**Scope.** The same script (`scripts/stats/significance.py`, §5) computes any
+metric/condition pair from an `experiment --out` JSON. The binding limit here is
+**statistical power** (n = 3 seeds → minimum two-sided p = 0.25), narrowed by raising
+the seed count, not by further instrumentation.
 
 **Supports.** Statistical rigour; directly addresses the small-n threat to validity.
 
@@ -759,23 +765,20 @@ instrumentation:
    inter-rater reliability; the solo substitute is intra-rater test–retest, an
    independent LLM annotator, and a documented codebook.
 2. **A fully clean `dbt run`** — compile-pass rate is 2/2 and `dbt test` passes 38/42
-   (§2.4), but a clean *materialisation* of the CIM project is blocked by a metadata
-   defect (`stg_terminals` derives from an `OPERATION_TYPE` column absent from the live
-   `terminals` bronze table) and by warehouse `MANAGE` grants on pre-existing staging
-   views. Fixing the derived-column definition and the grants would close it; the defect
-   itself is a reported finding.
-4. **The successive-runs approval effect (H1c)** — the approval rate is reported
+   (§2.4). The one metadata defect execution exposed (`stg_terminals`' `OPERATION_TYPE`)
+   is fixed; the remaining barrier to a fully clean materialisation is a warehouse
+   `MANAGE` grant on staging views that pre-exist under another principal — resolved by
+   the grant or by materialising into a user-owned schema, neither a code matter.
+3. **The successive-runs approval effect (H1c)** — the approval rate is reported
    (0.667, §3C), but the claim that approval improves over successive runs as the corpus
    grows is not established, because the decisions span only two catalogs and one
    reviewer. Establishing it requires repeated runs on the same system with the corpus
    growing between them.
-5. **Full significance table** — the paired permutation test and effect size (§2.8) are
-   reported for the one contrast with per-seed values on record. A table across the
-   learning **off-vs-on** contrasts requires re-running the experiment matrix with
-   `--out` under an authenticated session, because the *on* arm needs the approved-example
-   corpus (Databricks SQL warehouse); without that session the *on* arm loses its
-   examples and the contrast degenerates.
-6. **Breadth** — two source systems and small seed counts. The transferable claims are
+4. **Statistical power of the learning contrast** — the off-vs-on significance table is
+   reported (§2.8), but at n = 3 seeds the minimum two-sided permutation p-value is 0.25,
+   so the large-effect directional gains on ServiceNow (link parsimony, conformance)
+   cannot reach significance. This is a power limit closed by more seeds, not more method.
+5. **Breadth** — two source systems and small seed counts. The transferable claims are
    the *patterns* (AI advantage scales with schema difficulty; naming is unstable while
    entity identification is stable), not the absolute figures. Model-ablation (§3B.3)
    covers two models on two systems.

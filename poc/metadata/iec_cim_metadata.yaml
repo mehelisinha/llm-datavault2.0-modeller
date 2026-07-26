@@ -199,8 +199,11 @@ staging:
       LOAD_DATE:     "load_dts"
       EFFECTIVE_FROM: "load_dts"
       START_DATE: "load_dts"
-      END_DATE: "CASE WHEN OPERATION_TYPE = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31' AS DATE) END"
-      IS_DELETED:   "CASE WHEN OPERATION_TYPE = 'D' THEN TRUE ELSE FALSE END"
+      # END_DATE/IS_DELETED are closed by CDC deletion records. The delete flag is the
+      # bronze `cdc_flag` column (as used by the other staging models) — not
+      # OPERATION_TYPE, which does not exist in the terminals source and failed at run.
+      END_DATE: "CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31' AS DATE) END"
+      IS_DELETED:   "CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END"
     hashed_columns:
       HK_TERMINAL:
         - mrid
