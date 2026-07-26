@@ -371,41 +371,43 @@ is **Cliff's delta** (scale-free, non-parametric). Both are implemented in
 `stats.py` (`paired_permutation_test`, `cliffs_delta`, `compare_paired`) and unit-
 tested against hand-computed values.
 
-**Result — learning OFF vs ON, paired by seed (n = 3, gpt-4.1).** The ON arm retrieves
-up to 10 approved examples from the corpus; both arms share seeds 42/43/44 per system.
+**Result — learning OFF vs ON, paired by seed (n = 10, gpt-4.1).** The ON arm retrieves
+up to 10 approved examples from the (cross-domain) corpus; both arms share seeds 42–51
+per system.
 
 | System | Metric | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
 |---|---|---|---|---|---|---|---|
-| CIM | entity F1 | 1.000 | 1.000 | 0.000 | 1.000 | 0.00 | negligible |
-| CIM | naming | 1.000 | 1.000 | 0.000 | 1.000 | 0.00 | negligible |
-| CIM | link ratio | 2.000 | 2.000 | 0.000 | 1.000 | 0.00 | negligible |
-| ServiceNow | entity F1 | 0.914 | 0.914 | 0.000 | 1.000 | 0.00 | negligible |
-| ServiceNow | naming | 0.000 | 0.000 | 0.000 | 1.000 | 0.00 | negligible |
-| ServiceNow | link ratio | 1.242 | 1.121 | +0.121 [0.000, 0.182] | 0.500 | +0.56 | large |
-| ServiceNow | conformance | 0.953 | 0.961 | −0.008 [−0.023, −0.001] | 0.250 | −1.00 | large |
+| CIM | entity F1 / naming / link | 1.00 / 1.00 / 2.00 | identical | 0.000 | 1.000 | 0.00 | none |
+| ServiceNow | entity F1 | 0.927 | 0.910 | +0.018 [−0.006, +0.041] | 0.375 | +0.30 | small |
+| ServiceNow | link ratio | 1.173 | 1.127 | +0.045 [−0.018, +0.109] | 0.375 | +0.20 | small |
+| ServiceNow | conformance | 0.957 | 0.960 | −0.002 [−0.006, +0.002] | 0.287 | −0.38 | medium |
+| ServiceNow | **weighted error impact** | 31.0 | 37.9 | **−6.9 [−11.5, −2.2]** | **0.029** | −0.67 | large |
 
-**What this means — and why the p-value is the point.** No learning effect reaches
-significance at three seeds, and that is itself the finding, in two parts. On the
-metrics where the base model is already strong (entity identification, naming) the
-effect is *exactly zero* — OFF and ON produce identical per-seed values, because the
-corpus here is cross-domain to CIM/ServiceNow and therefore inert on those axes
-(consistent with Experiment 3). On the hard ServiceNow schema, learning *does* move
-link parsimony (over-linking 1.24 → 1.12) and conformance (0.953 → 0.961) in the right
-direction with **large effect sizes** (Cliff's δ = 0.56 and −1.00 — the latter a
-complete separation: every ON seed beats its OFF pair), yet neither is significant.
-The reason is power, not absence of effect: with n = 3 the smallest achievable
-two-sided permutation p-value is 0.25, so even a complete-separation effect *cannot* be
-called significant. These directional gains are real but **underpowered**; the remedy
-is more seeds, not more method. This is exactly the discipline §2.2/§2.7 argue for —
-report the effect size and its dispersion, and never read significance into a
-three-seed point estimate.
+**What this means.** With ten seeds the picture sharpens and partly *reverses* the
+three-seed read. On CIM, learning is **completely inert** — every metric identical
+across all ten seeds. On ServiceNow the directional "gains" that looked large at n = 3
+(a preliminary run had link parsimony δ = 0.56 and a conformance *complete separation*
+δ = −1.00) **shrink to small/medium and remain non-significant** at n = 10
+(p = 0.29–0.38): those were small-sample artifacts, exactly the trap §2.7 warned
+against. The **one effect that reaches significance is negative**: learning ON
+**significantly increases the blast-radius-weighted error impact** on the hard schema
+(31.0 → 37.9; p = 0.029; δ = −0.67, large). Retrieving cross-domain approved examples
+does not help entity identification or naming and *measurably worsens the errors that
+carry the most downstream cost* — those with high dependency fan-out. This is a clean
+corroboration of the boundary-condition thesis (§0): feedback learning is **not a free
+improvement**; cross-domain examples are inert at best and harmful on the axis that
+matters most. It also vindicates the power argument concretely — the three-seed
+estimates were unreliable in magnitude and, for one metric, in *direction*; only n = 10
+resolves them.
 
-**Scope.** The same script (`scripts/stats/significance.py`, §5) computes any
-metric/condition pair from an `experiment --out` JSON. The binding limit here is
-**statistical power** (n = 3 seeds → minimum two-sided p = 0.25), narrowed by raising
-the seed count, not by further instrumentation.
+**Scope.** The corpus here is cross-domain to CIM/ServiceNow (the approved examples come
+from other catalogs), so this measures **cross-domain** learning specifically; a
+same-domain corpus is untested (§6). At n = 10 a large effect is detectable (minimum
+two-sided p = 2/2¹⁰ ≈ 0.002); the remaining small/medium effects would need still more
+seeds to resolve.
 
-**Supports.** Statistical rigour; directly addresses the small-n threat to validity.
+**Supports.** RQ1 / H1c (feedback learning is inert-to-harmful cross-domain);
+statistical rigour.
 
 ### 2.9 Inter-Rater Reliability of the Gold Sets (single-author triangulation)
 
@@ -739,7 +741,7 @@ successive-runs effect is not established).
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
 | **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
-| **H1c** feedback effect is conditional | **Supported, with limits** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §3C (approval rate 0.667; successive-runs effect not established) |
+| **H1c** feedback effect is conditional | **Supported — inert-to-harmful cross-domain** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §2.8 (n = 10: CIM inert; ServiceNow weighted error impact significantly **↑** with learning, p = 0.029); §3C (approval rate 0.667) |
 | **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |
@@ -881,10 +883,11 @@ instrumentation:
    grows is not established, because the decisions span only two catalogs and one
    reviewer. Establishing it requires repeated runs on the same system with the corpus
    growing between them.
-4. **Statistical power of the learning contrast** — the off-vs-on significance table is
-   reported (§2.8), but at n = 3 seeds the minimum two-sided permutation p-value is 0.25,
-   so the large-effect directional gains on ServiceNow (link parsimony, conformance)
-   cannot reach significance. This is a power limit closed by more seeds, not more method.
+4. **Power for the *small* learning effects** — the off-vs-on table is now at n = 10
+   (§2.8), enough to detect the one large effect (a *negative* one: learning
+   significantly raises weighted error impact, p = 0.029). The residual small/medium
+   ServiceNow effects (entity F1, link ratio, conformance) stay non-significant and would
+   need still more seeds to resolve; none is load-bearing for a claim.
 5. **Breadth** — two source systems and small seed counts. The transferable claims are
    the *patterns* (AI advantage scales with schema difficulty; naming is unstable while
    entity identification is stable), not the absolute figures. Model-ablation (§3B.3)
