@@ -36,7 +36,8 @@ support that framing, and says so. The contribution is twofold and evaluative:
    rules on entity identification, but naming collapses and it over-links, and the
    feedback-learning mechanism is largely inert at the modelling stage (instance-copying,
    not convention generalisation; and, on the error measure with the widest downstream
-reach, cross-domain examples are not merely inert but actively harmful, §2.8). The safety layer —
+reach, the live approved corpus does not merely fail to help but actively hurts on the
+harder schema, §2.8). The safety layer —
    deterministic drift detection plus AI impact classification plus a governance gate —
    is the most robust "it works" result.
 
@@ -393,8 +394,8 @@ is **Cliff's delta** (scale-free, non-parametric). Both are implemented in
 tested against hand-computed values.
 
 **Result — learning OFF vs ON, paired by seed (n = 10, gpt-4.1).** The ON arm retrieves
-up to 10 approved examples from the (cross-domain) corpus; both arms share seeds 42–51
-per system.
+up to 10 approved examples from the live corpus (the real UI approvals, no domain
+exclusion); both arms share seeds 42–51 per system.
 
 | System | Metric | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
 |---|---|---|---|---|---|---|---|
@@ -412,26 +413,28 @@ across all ten seeds. On ServiceNow the directional "gains" that looked large at
 (p = 0.29–0.38): those were small-sample artifacts, exactly the trap §2.7 warned
 against. The **one effect that reaches significance is negative**: learning ON
 **significantly increases the blast-radius-weighted error impact** on the hard schema
-(31.0 → 37.9; p = 0.029; δ = −0.67, large). Retrieving cross-domain approved examples
-does not help entity identification or naming and *measurably worsens the errors that
-carry the most downstream cost* — those with high dependency fan-out. This is a clean
-corroboration of the boundary-condition thesis (§0): feedback learning is **not a free
-improvement**; cross-domain examples are inert at best and harmful on the axis that
-matters most. It is also a concrete lesson about sample size. No single metric changed
+(31.0 → 37.9; p = 0.029; δ = −0.67, large). Retrieving approved examples does not help
+entity identification or naming and *measurably worsens the errors that carry the most
+downstream cost* — those with high dependency fan-out. This is a clean corroboration of
+the boundary-condition thesis (§0): feedback learning is **not a free improvement**; the
+current corpus is inert at best and, on the axis that matters most, a liability on the
+hard schema. It is also a concrete lesson about sample size. No single metric changed
 sign between the two runs; what changed was the conclusion. At three seeds the numbers
 read as a mild endorsement of learning — two effects that looked sizeable — and at ten
 seeds those melt into noise while the one difference that hardens into significance is a
 cost. That is the quiet way a small sample misleads: not by flipping a number, but by
 dressing noise up as signal.
 
-**Scope.** The corpus here is cross-domain to CIM/ServiceNow (the approved examples come
-from other catalogs), so this measures **cross-domain** learning specifically; a
-same-domain corpus is untested (§6). At n = 10 a large effect is detectable (minimum
-two-sided p = 2/2¹⁰ ≈ 0.002); the remaining small/medium effects would need still more
-seeds to resolve.
+**Scope.** The ON arm uses the corpus exactly as it stands, retrieving the ten most
+similar approved examples with no domain filter — so this is the effect of the live
+corpus, not a controlled cross-domain probe (that is Experiment 3, which excludes the
+target's own catalogs and finds inertness on CIM). Which part of the corpus drives the
+ServiceNow harm — near-domain examples, off-domain ones, or simply noisy retrieval — is
+not isolated here (§6). At n = 10 a large effect is detectable (minimum two-sided
+p = 2/2¹⁰ ≈ 0.002); the remaining small/medium effects would need still more seeds.
 
-**Supports.** RQ1 / H1c (feedback learning is inert-to-harmful cross-domain);
-statistical rigour.
+**Supports.** RQ1 / H1c (feedback learning is inert on the easy schema and, with the
+live corpus, a liability on the hard schema); statistical rigour.
 
 ### 2.9 Inter-Rater Reliability of the Gold Sets (single-author triangulation)
 
@@ -537,12 +540,14 @@ monotone learning curve would have been.
 **Metrics:** as Experiment 1, on CIM with the CIM corpus excluded.
 **Result.** Every metric identical across all conditions (all 1.000; link ratio 2.0).
 **What it means.** On this easy schema, injecting examples from unrelated source systems
-is **inert** — every metric is unchanged. But "inert" is a claim about CIM only, and it
-does not generalise: the ten-seed run in §2.8 shows the same cross-domain corpus is
-*not* harmless on the hard ServiceNow schema, where it significantly raises the
-blast-radius-weighted error impact. So the honest scope condition is that a shared
-multi-system corpus is safe where the model is already strong and a liability where it
-is not, rather than universally safe. Separately, CIM's naming adherence was already 1.0
+is **inert** — every metric is unchanged. But this is a controlled cross-domain result
+on CIM alone (the CIM catalogs are excluded), and it does not license the broader claim
+that a shared corpus is safe everywhere. A separate ten-seed run (§2.8) leaves the
+corpus unfiltered and finds that on the hard ServiceNow schema it significantly raises
+the blast-radius-weighted error impact. That run does not isolate cross-domain
+interference — its corpus is the full approved set — so the two results sit side by side
+rather than contradict: cross-domain examples do no harm on CIM, and the live corpus as
+a whole is a liability on ServiceNow. Separately, CIM's naming adherence was already 1.0
 without any learning, because its source tables are *already* concept-named — which
 sharpens the Experiment 2 finding: the naming benefit exists only where table names
 diverge from the shop convention.
@@ -769,7 +774,7 @@ successive-runs effect is not established).
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
 | **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
-| **H1c** feedback effect is conditional | **Supported — inert-to-harmful cross-domain** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert); §2.8 (n = 10: CIM inert; ServiceNow weighted error impact significantly **↑** with learning, p = 0.029); §3C (approval rate 0.667) |
+| **H1c** feedback effect is conditional | **Supported — inert on easy, harmful on hard** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert on CIM); §2.8 (n = 10: CIM inert; ServiceNow weighted error impact significantly **↑** with the live corpus, p = 0.029); §3C (approval rate 0.667) |
 | **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |

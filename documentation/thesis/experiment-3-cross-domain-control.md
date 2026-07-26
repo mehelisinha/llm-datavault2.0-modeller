@@ -30,13 +30,17 @@
 
 ## 3. Analysis
 
-**F-1: Cross-domain learning is inert, not harmful (safety control passed).**
-Feeding the CIM modeller purely non-CIM examples (ServiceNow + ITSM) — at k=3 and
-k=10 — left every metric at its OFF value. Retrieval on CIM source tables
+**F-1: Cross-domain learning is inert on CIM (the safety control passes here).**
+Feeding the CIM modeller purely non-CIM examples (ServiceNow + ITSM), at k=3 and
+k=10, left every metric at its OFF value. Retrieval on CIM source tables
 (`conducting_equipment`, `terminals`) finds little lexically-relevant material in
 the ServiceNow/ITSM corpus, so the injected context does not perturb the output.
-This is the key robustness result: **a shared, multi-system corpus does not
-degrade an unrelated target** — learning is safe to leave enabled.
+On this easy schema, then, a shared corpus does no harm. The claim stops there: it
+is a control on CIM, not a general guarantee. A later ten-seed run on the harder
+ServiceNow schema, with the corpus left unfiltered, found learning significantly
+*raises* the blast-radius-weighted error impact (findings §2.8). The honest reading
+is that a shared corpus is safe where the model is already strong and a liability
+where it is not — not safe everywhere.
 
 **F-2: Entity identification is at a perfect ceiling here.** CIM's three
 mRID-keyed entities are unambiguous; `entity_f1 = 1.0` in every condition, with
@@ -69,7 +73,7 @@ the feedback loop's value at the modelling stage:
 | Entity + key identification | none (at ceiling) | base model already competent |
 | Naming convention | 0 → 1.0 **transfer** | requires (a) k above a threshold, (b) *same entity* in corpus, and (c) a *table-vs-concept naming gap* (else nothing to transfer) |
 | Over-linking | none | structural, model-intrinsic |
-| Cross-domain interference | none (inert, not harmful) | safe in a shared corpus |
+| Cross-domain interference | none on CIM; the unfiltered corpus hurts ServiceNow (§2.8) | safe on easy schemas, a liability on hard ones |
 | Latency | +0–3 s | negligible |
 
 The contribution is a **map of where retrieval-based feedback helps, is inert,
@@ -138,8 +142,8 @@ published numbers.
 
 **Exact reproduction — zero deviation in any cell, zero variance across seeds**
 (`issue_count = 0` throughout). Every finding stands unchanged: F-1 (cross-domain
-learning is inert, not harmful), F-2 (entity id at a perfect ceiling), F-3 (no
-naming gap to close on CIM), F-4 (over-linking at 2.0×).
+learning is inert *on CIM* — with the scope caveat noted there), F-2 (entity id at a
+perfect ceiling), F-3 (no naming gap to close on CIM), F-4 (over-linking at 2.0×).
 
 **Why this reproduces more cleanly than Experiments 1–2.** Those wobbled ±0.02–0.06
 on `entity_f1` because a *borderline* entity (the cross-schema `hub_task`) flickers
