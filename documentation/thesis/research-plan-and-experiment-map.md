@@ -153,9 +153,11 @@ These apply across all experiments and should appear in the thesis's limitations
 section. Several are cheap upgrades that materially raise rigour:
 
 - **Single-author gold (construct validity).** The biggest threat: the "ground
-  truth" is one person's Data Vault judgement. *Upgrade:* a second annotator
-  independently models a subset and report inter-rater agreement (Cohen's κ). This
-  is the single most valuable addition for credibility.
+  truth" is one person's Data Vault judgement. *Partly addressed:* a documented
+  codebook plus an independent-annotator panel put inter-rater agreement at κ 0.84
+  (findings §2.9). The remaining upgrade is a genuinely *human* second labelling —
+  a second annotator or the author's test–retest after a washout — for a human
+  inter-rater figure. This is the single most valuable addition still open.
 - **Means without dispersion.** Results are reported as seed means. *Upgrade:*
   report confidence intervals / effect sizes; with small n use bootstrap CIs or a
   non-parametric test (e.g. Wilcoxon signed-rank) rather than asserting a
