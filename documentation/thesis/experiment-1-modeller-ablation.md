@@ -155,12 +155,12 @@ toward (i) harder schemas and (ii) the stages where its signal is actionable.
    corpus can't exclude a catalog per-run; use the harness hook: build the agent
    with `get_modelling_agent(reference_loader_override=_load_reference_corpus(cfg,
    exclude_catalogs=("edh_unreg_consumption_dev",)), reference_limit_override=3)`
-   and vary `cfg.llm_seed`. (Script: `scratchpad/exp1_v2.py`.)
+   and vary `cfg.llm_seed`.
 4. To confirm F-2, print the injected block for the ON-full agent:
    `agent._reference_block(payload)` — you will see concept-named examples
    (`hub_department`) that the output nonetheless does not adopt.
 
-Steps 2–3 above are the *original* (scratchpad) procedure. The experiment is now
+Steps 2–3 use the committed modelling modules directly. The experiment is also
 reproducible in **one command** via the unified harness:
 
 ```bash

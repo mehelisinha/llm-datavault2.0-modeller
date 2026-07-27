@@ -152,13 +152,15 @@ no network:
 ```bash
 python -m pytest tests/ai/test_drift_impact.py -q
 ```
-Real run (needs Azure + the `cim_drifted` schema): `scratchpad/run_exp6.py` reads
-`bronze` and `cim_drifted` from Databricks, diffs via `pipeline.diff_analyzer.diff`,
-expands with `atomic_changes`, classifies with `rule_based_impact` +
-`get_impact_classifier()`, and scores against `fixtures/cim_drift_labels.json` with
-`score_impacts`. Recreate the dataset from `fixtures/cim_drift.sql`.
-Effort counts (H2c): `scratchpad/run_exp6c.py` reads both schemas and computes the
-discovery/decision/correction actions in §3.
+Real run (needs Azure + the `cim_drifted` schema): the committed drift modules under
+`dbt_builder/src/ai/drift/` produce every figure. Read `bronze` and `cim_drifted` from
+Databricks, diff via `pipeline.diff_analyzer.diff`, expand with `atomic_changes`,
+classify with `rule_based_impact` + `get_impact_classifier()`, and score against
+`fixtures/cim_drift_labels.json` with `score_impacts`; recreate the dataset from
+`fixtures/cim_drift.sql`. The effort counts (H2c) come from the same two schemas via the
+discovery/decision/correction action model in §3. (These were driven by a one-off
+orchestration script that was not committed; the modules and labels it called are all in
+the repo and unit-tested in `tests/ai/test_drift_impact.py`.)
 
 ## 7. Viewing the drift in the UI
 
@@ -186,8 +188,9 @@ drift. Prerequisites are already in `.env`: `DWA_API_DISCOVERY_MODE=databricks`,
 > classified as breaking — and then **not stopped** (block rate 62%). See
 > `experiment-7-safety-governance.md` §2–§3.
 
-Verified via the identical backend code path (`scratchpad/verify_ui_drift.py`):
-UC REST → `inspect_catalog(bronze)` + `read_bronze(cim_drifted)` → `diff`.
+Verified via the identical committed backend code path:
+UC REST → `inspect_catalog(bronze)` + `read_bronze(cim_drifted)` → `diff` (the same
+`pipeline` modules the app itself runs).
 
 ## 8. Appendix — synthetic proof-of-concept (for contrast)
 
@@ -198,4 +201,6 @@ recall to 0.75 (rule 1.00) and raising cost to 5 (rule 2). That surfaced the saf
 failure mode the cost-weighted metric is built to catch, and motivated the hybrid
 guardrail (§3 F-4). On the **real** CIM data that miss did not recur (§3 F-3). Both
 outcomes are reported — the synthetic caution and the real clean run — rather than
-keeping only the flattering one. Script: `scratchpad/exp6_synthetic.py`.
+keeping only the flattering one. (The synthetic preview was a one-off run and its
+script was not committed; the real-data result in §3 is the one that stands, and it
+is reproducible from the committed drift modules and fixtures.)

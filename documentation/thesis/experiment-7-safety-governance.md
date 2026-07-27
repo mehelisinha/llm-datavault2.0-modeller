@@ -162,6 +162,8 @@ Regression tests for the safety floor (deterministic, no network):
 ```bash
 python -m pytest tests/ai/test_governance_safety.py -q
 ```
-Full scenario suite + block rate: `scratchpad/run_exp7.py` (prints the table in §2
-/ §3; toggle `SupervisorConfig(pause_on_breaking_change=False)` to reproduce the
-pre-fix 62%). Audit trail + approval rate: `python scripts/audit/audit_report.py`.
+The block-rate table (§2/§3) is produced by running the committed supervisor
+(`dbt_builder/src/ai/supervision/supervisor.py`) over the scenario suite; toggle
+`SupervisorConfig(pause_on_breaking_change=False)` to reproduce the pre-fix 62%. The
+scenarios and the escalation are covered by `tests/ai/test_governance_safety.py`. Audit
+trail + approval rate: `python scripts/audit/audit_report.py`.

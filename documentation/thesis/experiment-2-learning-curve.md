@@ -139,15 +139,13 @@ already normalised in production.
              technical_columns=cfg.technical_payload_column_set())
    print(m.gold_entity_f1, m.gold_naming_adherence)
    ```
-   (Full script: `scratchpad/exp2_curve.py`.)
 3. **Transfer probe** — repeat at k=10 with
    `_load_reference_corpus(cfg, exclude_catalogs=("edh_unreg_consumption_dev",))`
    and observe `naming_adherence` drop back to 0. Inspect the injected examples
    with `agent._reference_block(p)` to confirm they are *other-entity* examples.
-   (Script: `scratchpad/exp2_loo.py`.)
 
-The steps above are the *original* (scratchpad) procedure. The whole curve plus
-the transfer probe is now reproducible in **one command**:
+The steps above use the committed modelling modules directly. The whole curve plus
+the transfer probe is also reproducible in **one command**:
 
 ```bash
 python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \

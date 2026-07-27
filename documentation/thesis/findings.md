@@ -828,29 +828,39 @@ python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --sys
 Each command prints entity F1, naming adherence, link ratio, conformance, the error
 taxonomy and the correction-step count.
 
-**Experiment 6 (drift).** Recreate the dataset from
-`dbt_builder/src/ai/drift/fixtures/cim_drift.sql`; the answer key is
-`cim_drift_labels.json`. Then run `scratchpad/run_exp6.py` (recall + impact accuracy)
-and `scratchpad/run_exp6c.py` (review effort). To view the drift in the UI: `pnpm dev`,
+**Experiment 6 (drift).** The drift engine, impact classifier and cost scoring are the
+committed modules under `dbt_builder/src/ai/drift/`; the labelled dataset is
+`dbt_builder/src/ai/drift/fixtures/cim_drift.sql` with answer key `cim_drift_labels.json`,
+and the metrics (detection recall, impact accuracy, breaking-change recall,
+cost-weighted error) are unit-tested in `tests/ai/test_drift_impact.py`. The real-data
+figures come from pointing those committed modules at the live
+`edh_unreg_silver_dev_st.cim_drifted` schema. To view the drift in the UI: `pnpm dev`,
 then run the pipeline with catalog `edh_unreg_silver_dev_st`, vault schema `bronze`,
 bronze schema `cim_drifted`.
 
-**Experiment 7 (governance).** `scratchpad/run_exp7.py` prints the block-rate table
-(set `SupervisorConfig(pause_on_breaking_change=False)` to reproduce the pre-fix 62%);
-`scratchpad/run_exp7b.py` queries the audit tables; `scratchpad/verify_exp7_real.py`
-shows the pre-/post-fix decision on the real drift.
+**Experiment 7 (governance).** The safety floor and the `pause_on_breaking_change`
+escalation live in `dbt_builder/src/ai/supervision/supervisor.py` and are
+regression-tested in `tests/ai/test_governance_safety.py` (set
+`SupervisorConfig(pause_on_breaking_change=False)` to reproduce the pre-fix 62%). The
+audit trail and approval rate come from `python scripts/audit/audit_report.py` (§3C).
 
 **Section 2 metrics (hallucination, consistency, idempotency, tokens, validation,
-kappa, confidence intervals).** `scratchpad/run_metrics.py` performs the repeated
-generations and prints every figure in §2; `scratchpad/run_seeds_ablation.py`
-produces the five-seed confidence intervals in §2.7.
+kappa, confidence intervals).** Each is a committed, unit-tested function —
+`dbt_builder/src/ai/evaluation/grounding.py` (hallucination) and `…/stats.py`
+(self-consistency, idempotency, bootstrap CIs, Cohen's kappa), verified in
+`tests/ai/test_grounding_and_stats.py`. The repeated-generation figures (e.g.
+self-consistency over five CIM / three ServiceNow runs) are produced by generating the
+plans with the unified harness (`… evaluation experiment … --seeds …`) and applying
+those functions to the results.
 
-**Section 3B improvements.** `scratchpad/run_improvements.py` measures link parsimony
-before/after, the constrained reviewer's full-arm entity F1, and the gpt-4o ablation.
-The passes are unit-tested in `tests/ai/test_plan_hygiene.py`; they are enabled by the
-settings `link_parsimony_enabled` and `reviewer_preserve_business_keys` (both default
-on). The approval recommendation is `python -m dbt_builder.src.ai.evaluation generate
---payload <disc.yaml> --gold <system_id>` (prints the APPROVE/REVIEW/REJECT verdict).
+**Section 3B improvements.** The two deterministic plan-hygiene passes are committed and
+unit-tested (`tests/ai/test_plan_hygiene.py`), enabled by the settings
+`link_parsimony_enabled` and `reviewer_preserve_business_keys` (both default on). The
+before/after link-parsimony and constrained-reviewer figures are reproduced by running
+the unified harness with those settings toggled; the gpt-4o ablation by setting
+`DWA_AI_MODELLER_CHAT_DEPLOYMENT=gpt-4o` before the same run. The approval recommendation
+is `python -m dbt_builder.src.ai.evaluation generate --payload <disc.yaml> --gold
+<system_id>` (prints the APPROVE/REVIEW/REJECT verdict).
 
 **Significance + effect size (§2.8).** `python scripts/stats/significance.py --results
 <experiment.json> --metric gold_entity_f1 --compare off,on` reads an `experiment --out`

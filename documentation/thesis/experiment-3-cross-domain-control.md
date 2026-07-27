@@ -113,10 +113,9 @@ learning curve, because it is falsifiable and it explains its own boundary cases
    print(m.gold_entity_f1, m.gold_naming_adherence)   # -> 1.0, 1.0 (inert + no gap)
    ```
    Compare to the OFF baseline (`reference_limit_override=0`) — identical.
-   (Full script: `scratchpad/exp3_cim.py`.)
 
-The steps above are the *original* (scratchpad) procedure. All four conditions are
-now reproducible in **one command** via the unified harness:
+The steps above use the committed modelling modules directly. All four conditions are
+also reproducible in **one command** via the unified harness:
 
 ```bash
 python -m dbt_builder.src.ai.evaluation experiment --system IEC_CIM_001 \
