@@ -227,6 +227,10 @@ versions — find the conference version on DBLP.)*
   but **new (2024) and not yet CORE-ranked** — say so; use it as a multi-agent anchor,
   not as a "high-ranked" citation.
 
+- **Guo et al., "Large Language Model based Multi-Agents: A Survey of Progress and
+  Challenges", *IJCAI*, 2024** — a recent multi-agent *survey* at a top venue (A\*);
+  a survey is ideal for a related-work section and gets cited quickly.
+
 *Lead with MetaGPT/ChatDev/Reflexion/Self-Refine (all 2023–2024). Cite ReAct/CoT once
 for lineage.*
 
@@ -392,7 +396,14 @@ artifact types; **evaluation** of design artifacts; positioning/presenting DSR.
 
 **Target venues.** *MIS Quarterly*, *JMIS*, *EJIS*, *JAIS* (Q1); DESRIST conference.
 
-**Suggested papers (confirm on DBLP / journal site).**
+> **Why the foundations here are (correctly) old.** DSR is a *mature methodology*, and
+> you cite the paper that **defines the method you followed** — that is Hevner 2004 and
+> Peffers 2007. Reviewers expect them; substituting a 2025 paper for Hevner would look
+> like you don't know the field. Old ≠ outdated for a methodology foundation. Pair the
+> canonical papers with **one recent** DSR reference to show currency — that is the right
+> shape, not "all recent".
+
+**Foundational (cite these — they define the method).**
 - **Hevner, March, Park & Ram, "Design Science in Information Systems Research", *MIS
   Quarterly*, 2004** — the foundational DSR guidelines (Q1).
 - **Peffers, Tuunanen, Rothenberger & Chatterjee, "A Design Science Research Methodology
@@ -400,10 +411,18 @@ artifact types; **evaluation** of design artifacts; positioning/presenting DSR.
   the DSRM process model your methodology chapter follows (Q1).
 - **Gregor & Hevner, "Positioning and Presenting Design Science Research for Maximum
   Impact", *MIS Quarterly*, 2013** — how to frame the contribution (Q1).
-- **March & Smith, "Design and Natural Science Research on Information Technology",
-  *Decision Support Systems*, 1995** — build/evaluate artifact types (Q1).
-- **Pick 2–3, not all four** — Hevner 2004 + Peffers 2007 are the core; add Gregor &
-  Hevner 2013 if you discuss contribution framing.
+
+**Recent (add ONE of these for currency — both verified, top venue).**
+- **Tuunanen, Winter & vom Brocke, "Dealing with Complexity in Design Science Research:
+  A Methodology Using Design Echelons", *MIS Quarterly* 48(2), 2024** — a genuinely
+  recent DSR methodology paper at the field's top venue (Q1); use it to show the method
+  is live, not frozen in 2007.
+- **vom Brocke, Winter, Hevner & Maedche, "Accumulation and Evolution of Design Knowledge
+  in Design Science Research: A Journey Through Time and Space", *JAIS* 21(3), 2020** —
+  heavily cited; on how DSR contributions build into a body of knowledge (Q1).
+
+**Pick 2–3 total:** Hevner 2004 + Peffers 2007 (core) **+ Tuunanen et al. 2024** (recency).
+That pairing — two canonical, one 2024 — is exactly what an examiner wants to see.
 
 ---
 
@@ -485,3 +504,19 @@ generator–critic reviewer, retrieval-based learning, schema drift, honest eval
 the DSR frame). The two deliberately weaker-venue areas — §2 Data Vault (ER/DaWaK) and
 §4's AutoGen (COLM, unranked) — are the niches where strong venues genuinely do not
 exist, which you state as motivation rather than apologise for.
+
+## On 2025 / 2026 papers — read before you go hunting for them
+
+There is a real tension in "recent **and** well-cited": a 2025/2026 paper has had almost
+no time to accumulate citations, and a large share of 2025/2026 work is still **arXiv-only**
+(which your rule excludes). So "newest possible" and "good citation count / ranked venue"
+pull against each other. The right target is **2023–2024 papers at A\*/Q1 venues** — recent
+enough to be current, old enough to be peer-reviewed *and* cited. That is what the core set
+above is.
+
+Where 2025/2026 genuinely helps is **surveys** (they get cited fast and suit a related-work
+section) and the **methodology currency pick** (§9's Tuunanen et al. 2024). If you want a
+2025 paper for a specific concept, tell me the concept and I will hunt for one that is
+**already at a 2025 venue (ICLR/ACL/NeurIPS/VLDB 2025), not CoRR** — but expect it to carry
+few citations, and don't build a core argument on it. Never trade a well-cited 2024 A\* paper
+for a shinier-but-uncited 2026 preprint.
