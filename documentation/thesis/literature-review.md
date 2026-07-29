@@ -178,33 +178,63 @@ and human-effort trade-offs against manual and rule-based baselines.*
 feedback (H1a–H1d), RQ2 = drift detection + impact (H2a–H2c), RQ3 = safety + governance +
 effort (H3a–H3c). Confirm each venue/rank on DBLP + CORE/Scimago before submitting.*
 
-| Theme | Paper | First author | Venue | Year | Rank | Supports | Reason for inclusion |
+| Theme | Paper | Authors | Venue | Year | Rank | Supports | Reason for inclusion |
 |---|---|---|---|---|---|---|---|
-| Data-warehouse automation | An MDA Approach for the Development of Data Warehouses | Mazón | Decision Support Systems | 2008 | SJR Q1 | RQ1 (context) | Shows warehouse/ETL design can be model-driven and automated, but through fixed rules — the baseline the thesis extends to Data Vault with LLMs. |
-| Data Vault modelling | Modeling Data Lakes with Data Vault | Giebler | ER (Conceptual Modeling) | 2019 | CORE A | RQ1 | A rare peer-reviewed Data Vault paper; grounds the target methodology and evidences that DV *automation* is essentially unstudied. |
-| LLM structured generation | DIN-SQL: Decomposed In-Context Learning of Text-to-SQL with Self-Correction | Pourreza | NeurIPS | 2023 | CORE A\* | RQ1 / H1a | An LLM producing valid structured database artifacts with a self-correction step — the technical basis for generating and checking DV YAML. |
-| LLM structured generation | Can LLM Already Serve as a Database Interface? (BIRD) | Li | NeurIPS (D&B) | 2023 | CORE A\* | RQ1 | Benchmarks LLMs on large, real database-grounded generation, motivating schema-grounded rather than free-text generation. |
-| In-context example selection | Text-to-SQL Empowered by LLMs (DAIL-SQL) | Gao | PVLDB | 2024 | CORE A\* | RQ1 / H1c | Shows which retrieved examples most help LLM generation — directly relevant to the approved-decisions feedback index. |
-| Multi-agent systems | MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework | Hong | ICLR | 2024 | CORE A\* | RQ1 | Role-specialised multi-agent "software company" — the closest published analogue of the thesis's multi-agent pipeline. |
-| Multi-agent systems | ChatDev: Communicative Agents for Software Development | Qian | ACL | 2024 | CORE A\* | RQ1 | Communicating agents build software artifacts through structured roles, supporting the agent-collaboration design. |
-| Generator–critic | Self-Refine: Iterative Refinement with Self-Feedback | Madaan | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | The generate-then-critique pattern the plan-reviewer implements; frames H1d (reviewer as refinement, not a scalar gain). |
-| Self-critique agents | Reflexion: Language Agents with Verbal Reinforcement Learning | Shinn | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | Agents that verbally critique and correct their own output — support for the reviewer / self-correction step. |
-| Multi-agent survey | LLM based Multi-Agents: A Survey of Progress and Challenges | Guo | IJCAI | 2024 | CORE A\* | RQ1 | Recent survey mapping multi-agent LLM progress and open challenges — anchors the related-work framing. |
-| RAG + self-critique | Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection | Asai | ICLR (Oral) | 2024 | CORE A\* | RQ1 / H1c, H1d | Retrieval combined with a self-critique step — the single closest match to the thesis's retrieve–generate–review design. |
-| Sampling and voting | Self-Consistency Improves Chain-of-Thought Reasoning | Wang | ICLR | 2023 | CORE A\* | RQ1 / H1a | Sample-many-then-vote — the mechanism behind the modeller's majority vote and the self-consistency reliability metric. |
-| Learning from feedback | Direct Preference Optimization (DPO) | Rafailov | NeurIPS | 2023 | CORE A\* | RQ1 / H1c | Learning from human-preferred outputs — the conceptual parent of treating approved decisions as a learning signal. |
-| Evaluating LLM output | Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena | Zheng | NeurIPS (D&B) | 2023 | CORE A\* | Evaluation (all RQs) | Establishes using an independent LLM to assess generated output — basis for the thesis's independent-annotator evaluation. |
-| Evaluating LLM output | G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment | Liu | EMNLP | 2023 | CORE A\* | Evaluation | LLM-based scoring of generated text — supports the reference-free (no full gold) evaluation methodology. |
-| Hallucination / grounding | Survey of Hallucination in Natural Language Generation | Ji | ACM Computing Surveys | 2023 | SJR Q1 | Evaluation / RQ3 | The reference survey on the failure mode the grounding metric measures and the guardrails prevent. |
-| Schema matching / drift | A Survey of Approaches to Automatic Schema Matching | Rahm | VLDB Journal | 2001 | SJR Q1 | RQ2 / H2a | The classic foundation for deterministic schema comparison — grounds the drift-detection engine. |
+| Data-warehouse automation | An MDA Approach for the Development of Data Warehouses | Mazón & Trujillo | Decision Support Systems | 2008 | SJR Q1 | RQ1 (context) | Shows warehouse/ETL design can be model-driven and automated, but through fixed rules — the baseline the thesis extends to Data Vault with LLMs. |
+| Data Vault modelling | Modeling Data Lakes with Data Vault | Giebler et al. | ER (Conceptual Modeling) | 2019 | CORE A | RQ1 | A rare peer-reviewed Data Vault paper; grounds the target methodology and evidences that DV *automation* is essentially unstudied. |
+| LLM structured generation | DIN-SQL: Decomposed In-Context Learning of Text-to-SQL with Self-Correction | Pourreza & Rafiei | NeurIPS | 2023 | CORE A\* | RQ1 / H1a | An LLM producing valid structured database artifacts with a self-correction step — the technical basis for generating and checking DV YAML. |
+| LLM structured generation | Can LLM Already Serve as a Database Interface? (BIRD) | Li et al. | NeurIPS (D&B) | 2023 | CORE A\* | RQ1 | Benchmarks LLMs on large, real database-grounded generation, motivating schema-grounded rather than free-text generation. |
+| In-context example selection | Text-to-SQL Empowered by LLMs (DAIL-SQL) | Gao et al. | PVLDB | 2024 | CORE A\* | RQ1 / H1c | Shows which retrieved examples most help LLM generation — directly relevant to the approved-decisions feedback index. |
+| Multi-agent systems | MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework | Hong et al. | ICLR | 2024 | CORE A\* | RQ1 | Role-specialised multi-agent "software company" — the closest published analogue of the thesis's multi-agent pipeline. |
+| Multi-agent systems | ChatDev: Communicative Agents for Software Development | Qian et al. | ACL | 2024 | CORE A\* | RQ1 | Communicating agents build software artifacts through structured roles, supporting the agent-collaboration design. |
+| Generator–critic | Self-Refine: Iterative Refinement with Self-Feedback | Madaan et al. | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | The generate-then-critique pattern the plan-reviewer implements; frames H1d (reviewer as refinement, not a scalar gain). |
+| Self-critique agents | Reflexion: Language Agents with Verbal Reinforcement Learning | Shinn et al. | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | Agents that verbally critique and correct their own output — support for the reviewer / self-correction step. |
+| Multi-agent survey | LLM based Multi-Agents: A Survey of Progress and Challenges | Guo et al. | IJCAI | 2024 | CORE A\* | RQ1 | Recent survey mapping multi-agent LLM progress and open challenges — anchors the related-work framing. |
+| RAG + self-critique | Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection | Asai et al. | ICLR (Oral) | 2024 | CORE A\* | RQ1 / H1c, H1d | Retrieval combined with a self-critique step — the single closest match to the thesis's retrieve–generate–review design. |
+| Sampling and voting | Self-Consistency Improves Chain-of-Thought Reasoning | Wang et al. | ICLR | 2023 | CORE A\* | RQ1 / H1a | Sample-many-then-vote — the mechanism behind the modeller's majority vote and the self-consistency reliability metric. |
+| Learning from feedback | Direct Preference Optimization (DPO) | Rafailov et al. | NeurIPS | 2023 | CORE A\* | RQ1 / H1c | Learning from human-preferred outputs — the conceptual parent of treating approved decisions as a learning signal. |
+| Evaluating LLM output | Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena | Zheng et al. | NeurIPS (D&B) | 2023 | CORE A\* | Evaluation (all RQs) | Establishes using an independent LLM to assess generated output — basis for the thesis's independent-annotator evaluation. |
+| Evaluating LLM output | G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment | Liu et al. | EMNLP | 2023 | CORE A\* | Evaluation | LLM-based scoring of generated text — supports the reference-free (no full gold) evaluation methodology. |
+| Hallucination / grounding | Survey of Hallucination in Natural Language Generation | Ji et al. | ACM Computing Surveys | 2023 | SJR Q1 | Evaluation / RQ3 | The reference survey on the failure mode the grounding metric measures and the guardrails prevent. |
+| Schema matching / drift | A Survey of Approaches to Automatic Schema Matching | Rahm & Bernstein | VLDB Journal | 2001 | SJR Q1 | RQ2 / H2a | The classic foundation for deterministic schema comparison — grounds the drift-detection engine. |
 | Inter-rater reliability | A Coefficient of Agreement for Nominal Scales | Cohen | Educational and Psychological Measurement | 1960 | SJR Q1 | Evaluation | Defines Cohen's κ, the agreement statistic used for gold-set reliability and impact-label agreement. |
-| Research methodology | Design Science in Information Systems Research | Hevner | MIS Quarterly | 2004 | SJR Q1 | Methodology (all RQs) | The foundational Design Science Research guidelines the thesis's method follows. |
-| Research methodology | A Design Science Research Methodology for Information Systems Research | Peffers | Journal of Management Information Systems | 2007 | SJR Q1 | Methodology | The DSRM process model that structures the build-and-evaluate cycle. |
+| Research methodology | Design Science in Information Systems Research | Hevner et al. | MIS Quarterly | 2004 | SJR Q1 | Methodology (all RQs) | The foundational Design Science Research guidelines the thesis's method follows. |
+| Research methodology | A Design Science Research Methodology for Information Systems Research | Peffers et al. | Journal of Management Information Systems | 2007 | SJR Q1 | Methodology | The DSRM process model that structures the build-and-evaluate cycle. |
 
 **Count: 20 papers** — all peer-reviewed, non-arXiv, and (for the AI/ML/LLM/RAG rows)
-2023–2024. Optional depth swap-ins (also verified): Ditto (Li, PVLDB 2020 — H2b),
-Design Echelons (Tuunanen, MIS Quarterly 2024 — recent methodology), Landis & Koch
-(Biometrics 1977 — the κ interpretation bands).
+2023–2024.
+
+**Recent swap-ins to modernise the older themes (all verified, all newer):**
+- **RQ2 / schema drift → Liu et al., *Magneto: Combining Small and Large Language Models
+  for Schema Matching*, *PVLDB* 18(8):2681–2694, 2025 (CORE A\*).** A 2025, top-venue
+  paper that applies LLMs to schema matching with a retrieve-then-LLM-rerank pipeline —
+  a much newer and more on-point RQ2 anchor than Rahm & Bernstein (2001). Recommended
+  *addition* (keep Rahm & Bernstein as the deterministic foundation, or replace it).
+- **Methodology → Tuunanen, Winter & vom Brocke, *Dealing with Complexity in Design
+  Science Research: A Methodology Using Design Echelons*, *MIS Quarterly* 48(2), 2024
+  (Q1).** Add alongside Hevner/Peffers for currency.
+- **H2b (LM-based matching) → Li et al., *Ditto: Deep Entity Matching with Pre-Trained
+  Language Models*, *PVLDB*, 2020 (A\*).**
+- **§F κ bands → Landis & Koch, *…Observer Agreement for Categorical Data*, *Biometrics*,
+  1977 (Q1).**
+
+### Is it okay to cite the older papers in a 2026 thesis?
+
+Yes — but the reason differs by paper, and this matters:
+
+- **Cohen (1960) and Hevner (2004) / Peffers (2007) are *method-origin* citations, not
+  "old papers".** You cite Cohen because it *defines* Cohen's κ; a 2026 paper that uses
+  κ still cites Cohen 1960. You cite Hevner/Peffers because they *define the Design
+  Science method you followed*. There is no newer paper that "replaces" them, and
+  substituting a 2025 reference would be wrong, not fresher. **Keep them.** For DSR, pair
+  them with the recent Tuunanen et al. 2024 to show currency — that pairing (canon +
+  one recent) is exactly what an examiner expects.
+- **Rahm & Bernstein (2001) and Mazón & Trujillo (2008) are *domain-survey* citations**,
+  where a newer paper genuinely helps. For **schema drift (RQ2)** use **Magneto (2025)**
+  above — it is recent *and* directly about LLMs classifying schema matches. For **DWA**,
+  the field is quieter; Mazón & Trujillo is an acceptable "classical automation" baseline,
+  and if you want recency there, a recent *LLMs-for-data-management* survey can be added
+  (verify one on DBLP — e.g. an ACM-TIST 2025 survey), noting the looser fit.
 
 ---
 
