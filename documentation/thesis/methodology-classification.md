@@ -211,3 +211,12 @@ approval-rate and audit-trail metrics were computed once real approvals existed
 0.84 against a documented codebook (§2.9). The one piece still genuinely open is a
 *human* second labelling of the gold — a second annotator, or the author's test–retest
 after a washout — for a human inter-rater figure rather than a human-vs-automated one.
+
+> **Metric set is deliberately final.** The evaluation suite above is treated as complete
+> for the thesis's claims; no further metrics are added, to keep scope disciplined and
+> avoid late re-runs — additions such as weighted/ordinal κ or confidence calibration
+> would only refine at the margins, not change any finding. Two choices to defend if
+> asked: (1) **unweighted** Cohen's κ is used because the impact decision is a
+> categorical modelling judgement (which action to take), not a magnitude; (2) the
+> **κ = 1.0 on n = 8** result is reported as *directional, not statistically established*
+> (cosmetic class n = 1), which the text states plainly rather than overclaiming.

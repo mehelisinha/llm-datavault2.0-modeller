@@ -118,6 +118,62 @@ contradicts. So the count is ten throughout, effects carry their spread instead 
 standing as single numbers, and nothing is called significant on the strength of a
 handful of runs.
 
+### 1.3 Why each metric was chosen (in plain words)
+
+One simple reason per metric — *why it is here at all*:
+
+- **Hallucination rate** — an LLM can make up tables or columns that do not exist in the
+  source; if it does, the output is unusable, and no other check catches it.
+- **Self-consistency** — the model can give different answers to the *same* input, so we
+  measure whether one run can be trusted or is just a lucky draw.
+- **Idempotency rate** — the same input should give the exact same plan every time; we
+  check whether it actually does.
+- **Structural validation pass rate** — the YAML must parse and its internal references
+  must line up, or it cannot be used at all.
+- **dbt compile (live)** — "valid YAML" is not enough; it must compile into a real dbt
+  project against the actual warehouse.
+- **Token consumption** — every run costs money and time; we track how much, and how fast
+  it grows with schema size.
+- **Entity identification F1** — the core job is finding the right business entities and
+  keys; F1 rewards finding the right ones *and* not missing any, in one number.
+- **Naming-convention adherence** — using the shop's names (`hub_company`, not
+  `hub_core_company`) matters, so we score it separately from correctness.
+- **Link cardinality ratio** — the model tends to make too many links; this checks it
+  produces the *right number*.
+- **DV2 conformance score** — the output must obey Data Vault rules (no dangling links,
+  no orphan satellites); this is checked by rules, not opinion.
+- **Error-taxonomy distribution** — not all errors are alike, so we look at *what kinds*
+  of error occur and how the reviewer shifts them.
+- **Blast-radius-weighted error impact** — an error on a hub (everything depends on it)
+  is worse than one on a leaf; we weight each error by how much depends on it.
+- **Manual correction-step count** — we could not fairly time a human expert, so we count
+  the concrete edits needed to fix the output — an objective, honest stand-in for effort.
+- **Generation latency** — a slow pipeline is a real-world problem, so we time it.
+- **Drift detection recall** — a safety layer must miss nothing; we check it catches
+  *every* real schema change.
+- **Change-impact classification accuracy** — after a change is detected, the AI must
+  correctly say whether it is safe or breaking.
+- **Breaking-change recall** — missing a *breaking* change is the dangerous failure, so we
+  track that one class on its own.
+- **Cost-weighted misclassification error** — calling a breaking change "safe" is far
+  worse than the reverse, so dangerous mistakes are penalised more heavily.
+- **Drift-review action count** — the goal is to save human effort, so we count the manual
+  actions needed to triage a drift, with and without the tool.
+- **Governance block rate** — the whole safety promise is that unsafe changes get stopped;
+  we measure the fraction actually blocked.
+- **Audit-trail completeness** — every decision must be traceable (who, when, what, why);
+  we check the stored records carry all of it.
+- **Approval rate** — a simple measure of how often generated plans are good enough for a
+  human to approve.
+- **Cohen's κ** — when comparing two sets of labels, plain "% agree" is misleading if one
+  answer is common; κ strips out the agreement you would get by luck.
+- **Bootstrap confidence intervals** — a single average can be a fluke; the interval shows
+  how much that number wobbles.
+- **Significance + effect size** — with only a handful of runs, a difference could be
+  noise; these say whether it is real and how big it is.
+- **Inter-rater reliability** — the gold answers are one person's judgement, so we check an
+  independent rater reaches the same labels — evidence the gold is not just opinion.
+
 ---
 
 ## 2. Reliability and grounding of generated models
