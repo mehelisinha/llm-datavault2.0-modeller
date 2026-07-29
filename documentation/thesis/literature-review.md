@@ -169,3 +169,118 @@ and human-effort trade-offs against manual and rule-based baselines.*
 > transcription slip. When your final set is chosen, hand it back and I will synthesise
 > the papers into the written review, grouped by theme and positioned against your
 > contribution.
+
+---
+
+## Part 7 — Dissertation-ready reference table (paste this)
+
+*RQ/hypothesis labels are the **reframed** ones (`RQ-Hypothesis.md`): RQ1 = accuracy +
+feedback (H1a–H1d), RQ2 = drift detection + impact (H2a–H2c), RQ3 = safety + governance +
+effort (H3a–H3c). Confirm each venue/rank on DBLP + CORE/Scimago before submitting.*
+
+| Theme | Paper | First author | Venue | Year | Rank | Supports | Reason for inclusion |
+|---|---|---|---|---|---|---|---|
+| Data-warehouse automation | An MDA Approach for the Development of Data Warehouses | Mazón | Decision Support Systems | 2008 | SJR Q1 | RQ1 (context) | Shows warehouse/ETL design can be model-driven and automated, but through fixed rules — the baseline the thesis extends to Data Vault with LLMs. |
+| Data Vault modelling | Modeling Data Lakes with Data Vault | Giebler | ER (Conceptual Modeling) | 2019 | CORE A | RQ1 | A rare peer-reviewed Data Vault paper; grounds the target methodology and evidences that DV *automation* is essentially unstudied. |
+| LLM structured generation | DIN-SQL: Decomposed In-Context Learning of Text-to-SQL with Self-Correction | Pourreza | NeurIPS | 2023 | CORE A\* | RQ1 / H1a | An LLM producing valid structured database artifacts with a self-correction step — the technical basis for generating and checking DV YAML. |
+| LLM structured generation | Can LLM Already Serve as a Database Interface? (BIRD) | Li | NeurIPS (D&B) | 2023 | CORE A\* | RQ1 | Benchmarks LLMs on large, real database-grounded generation, motivating schema-grounded rather than free-text generation. |
+| In-context example selection | Text-to-SQL Empowered by LLMs (DAIL-SQL) | Gao | PVLDB | 2024 | CORE A\* | RQ1 / H1c | Shows which retrieved examples most help LLM generation — directly relevant to the approved-decisions feedback index. |
+| Multi-agent systems | MetaGPT: Meta Programming for a Multi-Agent Collaborative Framework | Hong | ICLR | 2024 | CORE A\* | RQ1 | Role-specialised multi-agent "software company" — the closest published analogue of the thesis's multi-agent pipeline. |
+| Multi-agent systems | ChatDev: Communicative Agents for Software Development | Qian | ACL | 2024 | CORE A\* | RQ1 | Communicating agents build software artifacts through structured roles, supporting the agent-collaboration design. |
+| Generator–critic | Self-Refine: Iterative Refinement with Self-Feedback | Madaan | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | The generate-then-critique pattern the plan-reviewer implements; frames H1d (reviewer as refinement, not a scalar gain). |
+| Self-critique agents | Reflexion: Language Agents with Verbal Reinforcement Learning | Shinn | NeurIPS | 2023 | CORE A\* | RQ1 / H1d | Agents that verbally critique and correct their own output — support for the reviewer / self-correction step. |
+| Multi-agent survey | LLM based Multi-Agents: A Survey of Progress and Challenges | Guo | IJCAI | 2024 | CORE A\* | RQ1 | Recent survey mapping multi-agent LLM progress and open challenges — anchors the related-work framing. |
+| RAG + self-critique | Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection | Asai | ICLR (Oral) | 2024 | CORE A\* | RQ1 / H1c, H1d | Retrieval combined with a self-critique step — the single closest match to the thesis's retrieve–generate–review design. |
+| Sampling and voting | Self-Consistency Improves Chain-of-Thought Reasoning | Wang | ICLR | 2023 | CORE A\* | RQ1 / H1a | Sample-many-then-vote — the mechanism behind the modeller's majority vote and the self-consistency reliability metric. |
+| Learning from feedback | Direct Preference Optimization (DPO) | Rafailov | NeurIPS | 2023 | CORE A\* | RQ1 / H1c | Learning from human-preferred outputs — the conceptual parent of treating approved decisions as a learning signal. |
+| Evaluating LLM output | Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena | Zheng | NeurIPS (D&B) | 2023 | CORE A\* | Evaluation (all RQs) | Establishes using an independent LLM to assess generated output — basis for the thesis's independent-annotator evaluation. |
+| Evaluating LLM output | G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment | Liu | EMNLP | 2023 | CORE A\* | Evaluation | LLM-based scoring of generated text — supports the reference-free (no full gold) evaluation methodology. |
+| Hallucination / grounding | Survey of Hallucination in Natural Language Generation | Ji | ACM Computing Surveys | 2023 | SJR Q1 | Evaluation / RQ3 | The reference survey on the failure mode the grounding metric measures and the guardrails prevent. |
+| Schema matching / drift | A Survey of Approaches to Automatic Schema Matching | Rahm | VLDB Journal | 2001 | SJR Q1 | RQ2 / H2a | The classic foundation for deterministic schema comparison — grounds the drift-detection engine. |
+| Inter-rater reliability | A Coefficient of Agreement for Nominal Scales | Cohen | Educational and Psychological Measurement | 1960 | SJR Q1 | Evaluation | Defines Cohen's κ, the agreement statistic used for gold-set reliability and impact-label agreement. |
+| Research methodology | Design Science in Information Systems Research | Hevner | MIS Quarterly | 2004 | SJR Q1 | Methodology (all RQs) | The foundational Design Science Research guidelines the thesis's method follows. |
+| Research methodology | A Design Science Research Methodology for Information Systems Research | Peffers | Journal of Management Information Systems | 2007 | SJR Q1 | Methodology | The DSRM process model that structures the build-and-evaluate cycle. |
+
+**Count: 20 papers** — all peer-reviewed, non-arXiv, and (for the AI/ML/LLM/RAG rows)
+2023–2024. Optional depth swap-ins (also verified): Ditto (Li, PVLDB 2020 — H2b),
+Design Echelons (Tuunanen, MIS Quarterly 2024 — recent methodology), Landis & Koch
+(Biometrics 1977 — the κ interpretation bands).
+
+---
+
+## Part 8 — The research gap this thesis fills (paste-ready)
+
+*Written as continuous prose for direct use in the dissertation.*
+
+Research on automating the data warehouse is not new. Model-driven and metadata-driven
+approaches have long been able to generate parts of a warehouse — ETL routines,
+multidimensional designs, and staging logic — from higher-level models rather than by
+hand (Mazón and Trujillo, 2008). These approaches, however, are rule- and template-based:
+they follow fixed transformations and do not reason about ambiguous or messy source
+schemas the way a human modeller does. When we narrow the focus to Data Vault 2.0, the
+methodology this thesis targets, the picture is thinner still. The peer-reviewed
+literature treats Data Vault mainly as a modelling and architecture question (Giebler et
+al., 2019); there is almost no academic work on *automatically generating* Data Vault
+metadata, and none that does so from a live, operational warehouse schema. This is the
+first part of the gap: automation stops short of Data Vault, and what little exists is
+not driven by the kind of flexible reasoning that real source systems demand.
+
+At the same time, large language models have shown that they can produce valid,
+structured artifacts directly from a schema or a natural-language request. Recent work on
+text-to-SQL demonstrates LLMs generating correct, executable database queries, including
+approaches that decompose the task and correct their own mistakes (Pourreza and Rafiei,
+2023) and that are benchmarked on large, realistic databases (Li et al., 2023). A
+parallel line of work shows that several LLM agents can collaborate — taking on
+specialised roles such as analyst, engineer, and reviewer — to build software artifacts
+together (Hong et al., 2024; Qian et al., 2024; Guo et al., 2024), and that a model can
+improve its own output by critiquing and refining it, sometimes while also retrieving
+supporting examples (Madaan et al., 2023; Shinn et al., 2023; Asai et al., 2024). These
+results are the technical foundation the thesis builds on. But they were developed for a
+different job: generating ad-hoc queries or greenfield code, not producing and
+maintaining a *governed, versioned metadata contract* that a production pipeline depends
+on. Their notion of "learning" is also internal to the model — self-critique, or tuning
+on preference data (Rafailov et al., 2023) — rather than learning from the concrete
+approvals of a human expert. The mechanism of feeding *approved* decisions back into a
+retrieval index so that later runs imitate them, and the question of *when* that actually
+helps, is left open. In-context learning research tells us which examples are useful in
+general (Gao et al., 2024), but not how an approval-driven corpus behaves for
+data-model generation specifically.
+
+The second use case — keeping the generated metadata correct as source schemas change —
+sits on a similarly split literature. Detecting structural differences between two
+schemas is a mature, well-understood, and deterministic problem (Rahm and Bernstein,
+2001). Judging the *meaning* of a change — whether adding, renaming, or retyping a column
+is harmless or will break a downstream Data Vault model — is exactly the kind of semantic
+judgement LLMs are now good at. Yet the two have not been brought together in a way that
+keeps the safety guarantees a production system needs: a design in which detection stays
+fully deterministic (so nothing is missed), an LLM only *explains and classifies* the
+impact, and a breaking change is never applied automatically regardless of how confident
+the model or the reviewer is. Existing multi-agent and refactoring systems change
+artifacts autonomously; they do not enforce this "detect deterministically, reason with
+AI, but never auto-apply a breaking change" boundary.
+
+Finally, there is the problem of *evaluating* a system like this honestly. Methods now
+exist to use an LLM as a judge of generated output (Zheng et al., 2023; Liu et al.,
+2023), to reason about the fabrication or "hallucination" failure mode (Ji et al., 2023),
+and to measure agreement between annotators (Cohen, 1960). But there is no established,
+reference-free way to grade LLM-generated *data-model metadata* when no full gold standard
+exists — one that separates entity identification from naming and from over-linking,
+checks that every generated reference is grounded in the real source, and reports its
+numbers with proper measures of stability and agreement rather than a single flattering
+score. Without such an evaluation, claims about accuracy and about the value of a feedback
+loop cannot be trusted.
+
+Taken together, these strands leave a specific gap that this thesis fills. No prior work
+combines, in one governed system: (1) a multi-agent LLM pipeline that generates Data
+Vault 2.0 metadata grounded in a live warehouse schema, so the model cannot invent tables
+or columns that do not exist; (2) an approval-driven feedback loop in which human expert
+approvals become the retrieval corpus that shapes future generations, together with an
+honest account of the narrow conditions under which that loop actually improves quality;
+(3) a schema-evolution workflow that pairs fully deterministic drift detection with an LLM
+impact classifier under a hard rule that breaking changes are surfaced for human decision
+and never auto-applied; and (4) a reproducible, gold-free evaluation of the whole system's
+accuracy, learning behaviour, drift handling, safety, and human-effort trade-offs against
+manual and rule-based baselines. Each individual ingredient exists in the literature; what
+is missing — and what this thesis contributes — is their combination into a single,
+grounded, auditable metadata-lifecycle system, and a careful, honest measurement of where
+that combination genuinely helps and where it does not.
