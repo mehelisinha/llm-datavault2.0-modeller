@@ -338,20 +338,28 @@ therefore produce warehouse-valid projects across two schemas of very different 
 one authored by hand and one produced by the AI.
 
 **Execution (`dbt run` + `dbt test`) — the stronger check, and what it exposes.**
-Compile validates SQL; execution materialises the models and runs the data tests. On
-the CIM project, `dbt test` passed **38 of 42 (0.905)** against the materialised
-objects. `dbt run`, however, exposed a defect that compile did not: `stg_terminals`
-derived `END_DATE` / `IS_DELETED` from an `OPERATION_TYPE` CDC column that the live
-`terminals` bronze table does not contain (`UNRESOLVED_COLUMN`) — a derived-column
-expression that names a non-existent source column compiles without complaint and fails
-only at execution. **This is the finding: compile-pass does not imply run-pass.** The
-defect was corrected — the delete flag is the bronze `cdc_flag` column (as the other
-staging models already use), not `OPERATION_TYPE` — and after regeneration `stg_terminals`
-resolves its columns and no longer errors. The remaining barrier to a fully clean
-materialisation is not the code: all three staging views fail identically with
-`PERMISSION_DENIED` (`MANAGE`) because they pre-exist under another principal in the
-target schema — a warehouse grant, resolved by granting `MANAGE` or materialising into a
-user-owned schema.
+Compile validates SQL; execution materialises the models and runs the data tests. Two
+things surfaced here that compile did not, and both are findings.
+
+First, **compile-pass does not imply run-pass.** An early `dbt run` failed because
+`stg_terminals` derived `END_DATE` / `IS_DELETED` from an `OPERATION_TYPE` CDC column
+that the live `terminals` bronze table does not contain (`UNRESOLVED_COLUMN`) — a
+derived-column expression can name a non-existent source column, compile without
+complaint, and fail only at execution. The defect was corrected (the delete flag is the
+bronze `cdc_flag` column, as the other staging models already use). After the fix, and
+materialising into user-owned schemas to avoid a warehouse `MANAGE` grant on
+pre-existing objects, **`dbt run` builds all 12 models cleanly — PASS = 12, ERROR = 0** —
+the full Data Vault (staging views, incremental-merge hubs/links/sats, and the
+effectivity satellite) materialises against the live warehouse.
+
+Second, `dbt test` passes **38 of 42**. The four non-passes are *not* run failures and
+*not* data-quality surprises: every one is the auto-generated **`unique` test on a
+satellite / eff-sat hash key** (`HK_*`). This is over-strict by Data Vault design — a
+satellite's grain is *(hash key + load date)*, so the hash key legitimately repeats
+across loaded versions of a business key. The emitter attaches a plain `unique` test to
+the satellite hash key where the correct constraint is uniqueness on *(hash key, load
+date)*; the failures reflect that emitter default, not a broken model. (A small,
+reportable improvement to the generated tests, not a pipeline defect.)
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -972,11 +980,13 @@ instrumentation:
    *human* second labelling — either a second annotator or the author's intra-rater
    test–retest after a washout (the 12-item template is prepared) — to report a
    human inter-rater kappa rather than a human-vs-automated one.
-2. **A fully clean `dbt run`** — compile-pass rate is 2/2 and `dbt test` passes 38/42
-   (§2.4). The one metadata defect execution exposed (`stg_terminals`' `OPERATION_TYPE`)
-   is fixed; the remaining barrier to a fully clean materialisation is a warehouse
-   `MANAGE` grant on staging views that pre-exist under another principal — resolved by
-   the grant or by materialising into a user-owned schema, neither a code matter.
+2. **`dbt run` is now clean; four generated tests are over-strict.** Materialising into
+   user-owned schemas, `dbt run` builds **all 12 models with zero errors** and `dbt test`
+   passes **38/42** (§2.4). The remaining item is not a run or code failure: the four
+   non-passing tests are the emitter's `unique` test on **satellite/eff-sat hash keys**,
+   which is over-strict for the Data Vault satellite grain *(hash key + load date)*.
+   Correcting the generated test (uniqueness on the composite key, or dropping `unique`
+   on the satellite hash key) is a small emitter improvement, left as future work.
 3. **The successive-runs approval effect (H1c)** — the approval rate is reported
    (0.667, §3C), but the claim that approval improves over successive runs as the corpus
    grows is not established, because the decisions span only two catalogs and one
