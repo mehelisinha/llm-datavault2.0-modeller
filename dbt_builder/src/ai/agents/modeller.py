@@ -1609,6 +1609,11 @@ def _merge_plans(plans: Sequence[ModelingPlan], *, system_id: str) -> ModelingPl
 # ====================================================================== factory
 
 
+# Bounded retry for the intermittently-flaky warehouse corpus load (see body).
+_CORPUS_LOAD_ATTEMPTS = 3
+_CORPUS_LOAD_RETRY_SLEEP_S = 3.0
+
+
 def _load_reference_corpus(
     settings: AISettings, *, exclude_catalogs: tuple[str, ...] = ()
 ) -> ReferenceLoader | None:
@@ -1623,32 +1628,51 @@ def _load_reference_corpus(
     uses to prevent train/test leakage — testing system X with X's own approved
     model excluded, so retrieval measures genuine transfer, not memorisation.
     """
-    try:
-        from dbt_builder.src.ai.reference import ReferenceLoader
-        from dbt_builder.src.ai.store.corpus import make_example_store
+    import time as _time
 
-        store = make_example_store(settings)
-        if store is None:
-            return None
-        rows = store.load_latest()
-        if exclude_catalogs:
-            excl = {c.lower() for c in exclude_catalogs}
-            rows = tuple(r for r in rows if r.catalog.lower() not in excl)
-        loader = ReferenceLoader.from_corpus_rows(rows)
-        _LOG.info(
-            "ModellingAgent: loaded %d approved example(s) from the learning corpus"
-            "%s",
-            len(loader.all()),
-            f" (excluding catalogs {list(exclude_catalogs)})" if exclude_catalogs else "",
-        )
-        return loader
-    except Exception as exc:  # noqa: BLE001 — never let corpus load fail a run
-        _LOG.warning(
-            "ModellingAgent: could not load approved-YAML corpus (%s); "
-            "proceeding without few-shot examples.",
-            exc,
-        )
-        return None
+    from dbt_builder.src.ai.reference import ReferenceLoader
+    from dbt_builder.src.ai.store.corpus import make_example_store
+
+    # The warehouse token exchange is intermittently flaky (transient
+    # "Failed to invoke the Azure CLI" / token-exchange errors). Without a retry
+    # a single hiccup makes this return None, silently degrading a learning-ON
+    # run to a no-corpus run — which corrupts any OFF-vs-ON comparison. Retry a
+    # few times before giving up; a *permanent* failure still degrades gracefully.
+    last_exc: Exception | None = None
+    for attempt in range(1, _CORPUS_LOAD_ATTEMPTS + 1):
+        try:
+            store = make_example_store(settings)
+            if store is None:
+                return None
+            rows = store.load_latest()
+            if exclude_catalogs:
+                excl = {c.lower() for c in exclude_catalogs}
+                rows = tuple(r for r in rows if r.catalog.lower() not in excl)
+            loader = ReferenceLoader.from_corpus_rows(rows)
+            _LOG.info(
+                "ModellingAgent: loaded %d approved example(s) from the learning corpus"
+                "%s",
+                len(loader.all()),
+                f" (excluding catalogs {list(exclude_catalogs)})" if exclude_catalogs else "",
+            )
+            return loader
+        except Exception as exc:  # noqa: BLE001 — never let corpus load fail a run
+            last_exc = exc
+            if attempt < _CORPUS_LOAD_ATTEMPTS:
+                _LOG.warning(
+                    "ModellingAgent: corpus load attempt %d/%d failed (%s); retrying...",
+                    attempt,
+                    _CORPUS_LOAD_ATTEMPTS,
+                    exc,
+                )
+                _time.sleep(_CORPUS_LOAD_RETRY_SLEEP_S)
+    _LOG.warning(
+        "ModellingAgent: could not load approved-YAML corpus after %d attempt(s) (%s); "
+        "proceeding without few-shot examples.",
+        _CORPUS_LOAD_ATTEMPTS,
+        last_exc,
+    )
+    return None
 
 
 def get_modelling_agent(

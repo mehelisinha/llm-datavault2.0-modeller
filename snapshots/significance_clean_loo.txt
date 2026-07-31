@@ -1,0 +1,27 @@
+﻿Clean leave-one-out significance — ServiceNow, OFF vs ON(k=10, CIM-only corpus), n=20 seeds 62-81
+(naming omitted: 0.00 in BOTH arms -> zero cross-domain transfer, no test needed)
+
+==================== gold_entity_f1 ====================
+SNOW_IT4IT_001         gold_entity_f1                  off->on    0.930    0.947   -0.016    [-0.033,-0.003]   0.126  -0.240       small
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== gold_link_ratio ====================
+SNOW_IT4IT_001         gold_link_ratio                 off->on    1.155    1.064   +0.091    [+0.045,+0.132]   0.002  +0.585       large
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== conformance_score ====================
+SNOW_IT4IT_001         conformance_score               off->on    0.960    0.956   +0.004    [+0.001,+0.009]   0.049  +0.278       small
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== weighted_error_impact ====================
+SNOW_IT4IT_001         weighted_error_impact           off->on   33.950   31.600   +2.350    [-0.650,+5.300]   0.157  +0.323       small
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== correction_steps ====================
+SNOW_IT4IT_001         correction_steps                off->on   12.200   11.950   +0.250    [-0.700,+1.300]   0.705  +0.065  negligible
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).

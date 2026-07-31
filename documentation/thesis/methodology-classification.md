@@ -138,7 +138,7 @@ hand-assigned.
 |---|---|---|
 | **1 — modeller ablation** | H1a, H1b | Entity id at ceiling & learning-independent; naming/link parsimony are the weak axes |
 | **2 — learning curve + LOO** | H1c | Supported *conditionally*: threshold-gated, instance-level copying, not generalisation |
-| **3 — CIM cross-domain control** | H1c (corpus safety) | Cross-domain examples inert on CIM; the live corpus hurts ServiceNow (findings §2.8) |
+| **3 — CIM cross-domain control** | H1c (corpus safety) | Cross-domain examples inert on CIM; on ServiceNow (verified-load, leave-one-out, §2.8) they give a significant *structural* gain (link parsimony) with no naming transfer and no harm |
 | **4 — end-to-end + taxonomy shift** | H1d | Reviewer is a **trade-off**, not a scalar gain |
 | **5 — three-arm baseline** | H1a, H3b | AI ≫ rules on hard schemas, ties on easy; fewest correction steps |
 | **6 — drift** | H2a, H2b, H2c | Recall 1.00; AI 1.00 vs rule 0.88; effort 36 → 0 actions |

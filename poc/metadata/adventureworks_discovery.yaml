@@ -1,0 +1,341 @@
+system:
+  system_id: ADVWORKS_001
+  system_name: AdventureWorks
+  source_type: delta
+  catalog: edh_unreg_consumption_dev
+  schema: 2240_adventureworks
+  record_source: ADVENTUREWORKS_v1
+tables:
+- name: address
+  columns:
+  - name: AddressID
+    raw_dtype: int
+    nullable: true
+  - name: AddressLine1
+    raw_dtype: string
+    nullable: true
+  - name: AddressLine2
+    raw_dtype: string
+    nullable: true
+  - name: City
+    raw_dtype: string
+    nullable: true
+  - name: StateProvince
+    raw_dtype: string
+    nullable: true
+  - name: CountryRegion
+    raw_dtype: string
+    nullable: true
+  - name: PostalCode
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: address_nonpii
+  columns:
+  - name: AddressID
+    raw_dtype: int
+    nullable: true
+  - name: AddressLine1
+    raw_dtype: string
+    nullable: true
+  - name: AddressLine2
+    raw_dtype: string
+    nullable: true
+  - name: City
+    raw_dtype: string
+    nullable: true
+  - name: StateProvince
+    raw_dtype: string
+    nullable: true
+  - name: CountryRegion
+    raw_dtype: string
+    nullable: true
+  - name: PostalCode
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: customer
+  columns:
+  - name: CustomerID
+    raw_dtype: int
+    nullable: true
+  - name: NameStyle
+    raw_dtype: boolean
+    nullable: true
+  - name: Title
+    raw_dtype: string
+    nullable: true
+  - name: FirstName
+    raw_dtype: string
+    nullable: true
+  - name: MiddleName
+    raw_dtype: string
+    nullable: true
+  - name: LastName
+    raw_dtype: string
+    nullable: true
+  - name: Suffix
+    raw_dtype: string
+    nullable: true
+  - name: CompanyName
+    raw_dtype: string
+    nullable: true
+  - name: SalesPerson
+    raw_dtype: string
+    nullable: true
+  - name: EmailAddress
+    raw_dtype: string
+    nullable: true
+  - name: Phone
+    raw_dtype: string
+    nullable: true
+  - name: PasswordHash
+    raw_dtype: string
+    nullable: true
+  - name: PasswordSalt
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: customer_nonpii
+  columns:
+  - name: CustomerID
+    raw_dtype: int
+    nullable: true
+  - name: NameStyle
+    raw_dtype: boolean
+    nullable: true
+  - name: Title
+    raw_dtype: string
+    nullable: true
+  - name: FirstName
+    raw_dtype: string
+    nullable: true
+  - name: MiddleName
+    raw_dtype: string
+    nullable: true
+  - name: LastName
+    raw_dtype: string
+    nullable: true
+  - name: Suffix
+    raw_dtype: string
+    nullable: true
+  - name: CompanyName
+    raw_dtype: string
+    nullable: true
+  - name: SalesPerson
+    raw_dtype: string
+    nullable: true
+  - name: EmailAddress
+    raw_dtype: string
+    nullable: true
+  - name: Phone
+    raw_dtype: string
+    nullable: true
+  - name: PasswordHash
+    raw_dtype: string
+    nullable: true
+  - name: PasswordSalt
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: customeraddress
+  columns:
+  - name: CustomerID
+    raw_dtype: int
+    nullable: true
+  - name: AddressID
+    raw_dtype: int
+    nullable: true
+  - name: AddressType
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: customeraddress_nonpii
+  columns:
+  - name: CustomerID
+    raw_dtype: int
+    nullable: true
+  - name: AddressID
+    raw_dtype: int
+    nullable: true
+  - name: AddressType
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: product
+  columns:
+  - name: ProductID
+    raw_dtype: int
+    nullable: true
+  - name: Name
+    raw_dtype: string
+    nullable: true
+  - name: ProductNumber
+    raw_dtype: string
+    nullable: true
+  - name: Color
+    raw_dtype: string
+    nullable: true
+  - name: StandardCost
+    raw_dtype: decimal(19,4)
+    nullable: true
+  - name: ListPrice
+    raw_dtype: decimal(19,4)
+    nullable: true
+  - name: Size
+    raw_dtype: string
+    nullable: true
+  - name: Weight
+    raw_dtype: decimal(8,2)
+    nullable: true
+  - name: ProductCategoryID
+    raw_dtype: int
+    nullable: true
+  - name: ProductModelID
+    raw_dtype: int
+    nullable: true
+  - name: SellStartDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: SellEndDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: DiscontinuedDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: ThumbNailPhoto
+    raw_dtype: binary
+    nullable: true
+  - name: ThumbnailPhotoFileName
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: product_nonpii
+  columns:
+  - name: ProductID
+    raw_dtype: int
+    nullable: true
+  - name: Name
+    raw_dtype: string
+    nullable: true
+  - name: ProductNumber
+    raw_dtype: string
+    nullable: true
+  - name: Color
+    raw_dtype: string
+    nullable: true
+  - name: StandardCost
+    raw_dtype: decimal(19,4)
+    nullable: true
+  - name: ListPrice
+    raw_dtype: decimal(19,4)
+    nullable: true
+  - name: Size
+    raw_dtype: string
+    nullable: true
+  - name: Weight
+    raw_dtype: decimal(8,2)
+    nullable: true
+  - name: ProductCategoryID
+    raw_dtype: int
+    nullable: true
+  - name: ProductModelID
+    raw_dtype: int
+    nullable: true
+  - name: SellStartDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: SellEndDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: DiscontinuedDate
+    raw_dtype: timestamp
+    nullable: true
+  - name: ThumbNailPhoto
+    raw_dtype: binary
+    nullable: true
+  - name: ThumbnailPhotoFileName
+    raw_dtype: string
+    nullable: true
+  - name: rowguid
+    raw_dtype: string
+    nullable: true
+  - name: ModifiedDate
+    raw_dtype: timestamp
+    nullable: true
+- name: volumemetrics
+  columns:
+  - name: source_system
+    raw_dtype: string
+    nullable: true
+  - name: business_unit
+    raw_dtype: string
+    nullable: true
+  - name: table_name
+    raw_dtype: string
+    nullable: true
+  - name: loading_timestamp
+    raw_dtype: string
+    nullable: true
+  - name: erwin_load_type
+    raw_dtype: string
+    nullable: true
+  - name: databricks_load_type
+    raw_dtype: string
+    nullable: true
+  - name: time_taken_lan_std
+    raw_dtype: string
+    nullable: true
+  - name: records_landing
+    raw_dtype: string
+    nullable: true
+  - name: records_inserted
+    raw_dtype: string
+    nullable: true
+  - name: records_updated
+    raw_dtype: string
+    nullable: true
+  - name: records_deleted
+    raw_dtype: string
+    nullable: true
+  - name: total_records
+    raw_dtype: string
+    nullable: true
+  - name: time_taken_std_cons
+    raw_dtype: string
+    nullable: true

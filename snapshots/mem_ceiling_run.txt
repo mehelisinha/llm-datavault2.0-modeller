@@ -1,0 +1,22 @@
+Memorisation ceiling — ServiceNow, OFF vs ON(k=10, FULL corpus, no filter)
+corpus: 146 examples (includes ServiceNow's own approved model)
+seeds: 62-81 (n=20). Contrast with clean_loo_run.txt.
+
+SNOW_IT4IT_001/off:
+  gold_entity_f1         0.953
+  gold_naming_adherence  0.0
+  conformance_score      0.954
+  issue_count            5.75
+  weighted_error_impact  33.15
+  gold_link_ratio        1.105
+  correction_steps       11.55
+
+SNOW_IT4IT_001/on:
+  gold_entity_f1         0.967
+  gold_naming_adherence  0.729
+  conformance_score      0.967
+  issue_count            5.5
+  weighted_error_impact  39.0
+  gold_link_ratio        1.223
+  correction_steps       10.45
+

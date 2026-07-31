@@ -28,6 +28,24 @@ class SatelliteBaseComponent(DVBaseRawVaultComponent):
     @abstractmethod
     def _sql_template_body(self) -> str: ...
 
+    @property
+    def _pk_tests(self) -> list[str]:
+        # A satellite historises each hash key over time, so its grain is the composite
+        # (hash key + load date). The hash key alone repeats across versions — testing it
+        # for `unique` is therefore wrong by Data Vault design. Keep only `not_null` here;
+        # the composite uniqueness is asserted at model level (`_model_level_tests`).
+        return ["not_null"]
+
+    @property
+    def _model_level_tests(self) -> list[dict]:
+        return [
+            {
+                "dbt_utils.unique_combination_of_columns": {
+                    "combination_of_columns": [self.model.src_pk, self.model.src_ldts],
+                }
+            }
+        ]
+
 
 class SatComponent(SatelliteBaseComponent):
     """Regular Data Vault Satellite (descriptive attributes with hashdiff)."""

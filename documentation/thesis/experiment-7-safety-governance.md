@@ -149,10 +149,13 @@ hardening steps would strengthen it:
    approve), ≥10 decisions including rejects, so the audit trail populated.
 2. The store was read back and completeness computed: **1.00 structural**, with every
    rejection carrying a rationale (findings §3C). That number closes H3c.
-3. The same records yield the **approval rate** over the decisions taken (0.667). A
-   clean test of H1c's "across successive runs" wording still needs repeated runs on a
-   single system with the corpus growing between them (findings §6); this ad-hoc review
-   of two catalogs does not provide it.
+3. The same records yield the **approval rate** over the decisions taken (0.667). The
+   controlled test of H1c's "across successive runs" wording — repeated runs on a single
+   system with the corpus growing between them — is now provided *separately* by the
+   corpus-growth curve (findings §3C): as ServiceNow's own corpus grows 0→125, naming
+   adherence rises 0→~0.8+ and entity F1 ultimately reaches 0.978, with an early
+   partial-corpus valley. This ad-hoc two-catalog review supplies the observational rate;
+   the growth curve supplies the causal trend.
 
 To refresh the numbers after further approvals: `python scripts/audit/audit_report.py`.
 

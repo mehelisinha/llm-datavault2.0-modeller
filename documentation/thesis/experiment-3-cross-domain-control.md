@@ -36,11 +36,17 @@ k=10, left every metric at its OFF value. Retrieval on CIM source tables
 (`conducting_equipment`, `terminals`) finds little lexically-relevant material in
 the ServiceNow/ITSM corpus, so the injected context does not perturb the output.
 On this easy schema, then, a shared corpus does no harm. The claim stops there: it
-is a control on CIM, not a general guarantee. A later ten-seed run on the harder
-ServiceNow schema, with the corpus left unfiltered, found learning significantly
-*raises* the blast-radius-weighted error impact (findings §2.8). The honest reading
-is that a shared corpus is safe where the model is already strong and a liability
-where it is not — not safe everywhere.
+is a control on CIM, not a general guarantee. The matching *treatment* on the harder
+ServiceNow schema is the controlled, verified-load, leave-one-out run at n = 20
+(findings §2.8): there, learning from CIM-only examples is **not** inert — it produces
+a significant, large improvement in link parsimony (1.155 → 1.064, p = 0.002) with
+**zero** naming transfer (0.000 both arms) and **no harm** to error impact. (An earlier
+*uncontrolled* ten-seed run had appeared to show learning raising the weighted error
+impact; that was traced to the corpus silently failing to load on some seeds — a
+plumbing artifact, corrected by the verified-load control.) The honest reading is that a
+shared corpus is **safe across domains** and transfers *structural* discipline (link
+parsimony) where there is room to improve, while *lexical* naming does not cross domains —
+not "a liability on hard schemas".
 
 **F-2: Entity identification is at a perfect ceiling here.** CIM's three
 mRID-keyed entities are unambiguous; `entity_f1 = 1.0` in every condition, with
@@ -73,7 +79,7 @@ the feedback loop's value at the modelling stage:
 | Entity + key identification | none (at ceiling) | base model already competent |
 | Naming convention | 0 → 1.0 **transfer** | requires (a) k above a threshold, (b) *same entity* in corpus, and (c) a *table-vs-concept naming gap* (else nothing to transfer) |
 | Over-linking | none | structural, model-intrinsic |
-| Cross-domain interference | none on CIM; the unfiltered corpus hurts ServiceNow (§2.8) | safe on easy schemas, a liability on hard ones |
+| Cross-domain transfer | none on CIM (at ceiling); on ServiceNow, significant *structural* gain — link parsimony 1.155→1.064, p=0.002 (§2.8), no naming transfer, no harm | safe across domains; transfers structure, not naming |
 | Latency | +0–3 s | negligible |
 
 The contribution is a **map of where retrieval-based feedback helps, is inert,

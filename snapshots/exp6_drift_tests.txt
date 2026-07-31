@@ -1,0 +1,28 @@
+﻿# Experiment 6 - schema-drift detection + AI impact classification (Use Case B, RQ2)
+# deterministic verification of H2a (recall), H2b (AI beats rule), cost function
+# command: pytest tests/ai/test_drift_impact.py -v
+# generated: 2026-07-30 22:41
+============================= test session starts =============================
+collecting ... collected 19 items
+
+tests/ai/test_drift_impact.py::test_new_table_is_additive PASSED         [  5%]
+tests/ai/test_drift_impact.py::test_added_column_is_additive PASSED      [ 10%]
+tests/ai/test_drift_impact.py::test_removed_column_is_breaking PASSED    [ 15%]
+tests/ai/test_drift_impact.py::test_type_change_is_conservatively_breaking PASSED [ 21%]
+tests/ai/test_drift_impact.py::test_high_risk_is_breaking PASSED         [ 26%]
+tests/ai/test_drift_impact.py::test_orphaned_table_is_breaking PASSED    [ 31%]
+tests/ai/test_drift_impact.py::test_unchanged_is_cosmetic PASSED         [ 36%]
+tests/ai/test_drift_impact.py::test_ai_classifier_parses_verdict PASSED  [ 42%]
+tests/ai/test_drift_impact.py::test_ai_beats_rule_on_compatible_widening PASSED [ 47%]
+tests/ai/test_drift_impact.py::test_ai_classifier_falls_back_on_bad_json PASSED [ 52%]
+tests/ai/test_drift_impact.py::test_ai_classifier_falls_back_on_unknown_label PASSED [ 57%]
+tests/ai/test_drift_impact.py::test_no_client_uses_rule_baseline PASSED  [ 63%]
+tests/ai/test_drift_impact.py::test_missing_a_breaking_change_is_the_costliest_error PASSED [ 68%]
+tests/ai/test_drift_impact.py::test_score_impacts_perfect PASSED         [ 73%]
+tests/ai/test_drift_impact.py::test_score_impacts_confusion_and_cost PASSED [ 78%]
+tests/ai/test_drift_impact.py::test_score_impacts_length_mismatch_raises PASSED [ 84%]
+tests/ai/test_drift_impact.py::test_atomic_changes_splits_drift_per_column PASSED [ 89%]
+tests/ai/test_drift_impact.py::test_atomic_changes_keeps_table_level_units PASSED [ 94%]
+tests/ai/test_drift_impact.py::test_diff_engine_detects_all_injected_changes PASSED [100%]
+
+============================= 19 passed in 1.43s ==============================

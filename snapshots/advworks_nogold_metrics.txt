@@ -1,0 +1,10 @@
+AdventureWorks (ADVWORKS_001) — ground-truth-free metrics, learning OFF, gpt-4.1
+source: 9 tables / 105 columns
+
+ seed  hubs  links  sats  grounding   halluc  conform  issues
+   42     3      1     5     1.0000   0.0000    1.000       0
+   43     3      1     4     1.0000   0.0000    1.000       0
+   44     3      1     7     1.0000   0.0000    1.000       0
+
+self-consistency (same entity set across 3 runs): 0.333
+idempotency (identical plan across runs)                 : 0.333

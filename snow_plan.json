@@ -1,0 +1,535 @@
+{
+  "system_id": "SNOW_IT4IT_001",
+  "hubs": [
+    {
+      "name": "hub_cmn_department",
+      "source_table": "cmn_department",
+      "confidence": "high",
+      "rationale": "ServiceNow reference table; sys_id is the only stable, unique business key.",
+      "kind": "hub",
+      "business_keys": [
+        "sys_id"
+      ],
+      "hash_key": "HK_CMN_DEPARTMENT"
+    },
+    {
+      "name": "hub_cmn_location",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "ServiceNow reference table; sys_id is the only stable, unique business key.",
+      "kind": "hub",
+      "business_keys": [
+        "sys_id"
+      ],
+      "hash_key": "HK_CMN_LOCATION"
+    },
+    {
+      "name": "hub_contract_sla",
+      "source_table": "contract_sla",
+      "confidence": "high",
+      "rationale": "ServiceNow reference table; sys_id is the only stable, unique business key.",
+      "kind": "hub",
+      "business_keys": [
+        "sys_id"
+      ],
+      "hash_key": "HK_CONTRACT_SLA"
+    },
+    {
+      "name": "hub_core_company",
+      "source_table": "core_company",
+      "confidence": "high",
+      "rationale": "ServiceNow reference table; sys_id is the only stable, unique business key.",
+      "kind": "hub",
+      "business_keys": [
+        "sys_id"
+      ],
+      "hash_key": "HK_CORE_COMPANY"
+    },
+    {
+      "name": "hub_core_country",
+      "source_table": "core_country",
+      "confidence": "high",
+      "rationale": "ISO 3166-1 alpha-3 code is the canonical business key for countries.",
+      "kind": "hub",
+      "business_keys": [
+        "iso3166_3"
+      ],
+      "hash_key": "HK_CORE_COUNTRY"
+    },
+    {
+      "name": "hub_sys_user_group",
+      "source_table": "sys_user_grmember",
+      "confidence": "high",
+      "rationale": "group is a FK to sys_user_group.sys_id, which is the business key for user groups.",
+      "kind": "hub",
+      "business_keys": [
+        "group"
+      ],
+      "hash_key": "HK_SYS_USER_GROUP"
+    },
+    {
+      "name": "hub_sys_user",
+      "source_table": "sys_user_grmember",
+      "confidence": "high",
+      "rationale": "user is a FK to sys_user.sys_id, which is the business key for users.",
+      "kind": "hub",
+      "business_keys": [
+        "user"
+      ],
+      "hash_key": "HK_SYS_USER"
+    },
+    {
+      "name": "hub_task",
+      "source_table": "task_sla",
+      "confidence": "high",
+      "rationale": "task is a FK to task.sys_id, which is the business key for tasks/incidents.",
+      "kind": "hub",
+      "business_keys": [
+        "task"
+      ],
+      "hash_key": "HK_TASK"
+    }
+  ],
+  "links": [
+    {
+      "name": "link_cmn_department_company",
+      "source_table": "cmn_department",
+      "confidence": "high",
+      "rationale": "company is a FK to core_company.sys_id; links department to company.",
+      "kind": "link",
+      "hash_key": "HK_CMN_DEPARTMENT_COMPANY",
+      "fk_columns": [
+        "HK_CMN_DEPARTMENT",
+        "HK_CORE_COMPANY"
+      ]
+    },
+    {
+      "name": "link_cmn_department_dept_head",
+      "source_table": "cmn_department",
+      "confidence": "high",
+      "rationale": "dept_head is a FK to sys_user.sys_id; links department to department head.",
+      "kind": "link",
+      "hash_key": "HK_CMN_DEPARTMENT_DEPT_HEAD",
+      "fk_columns": [
+        "HK_CMN_DEPARTMENT",
+        "HK_SYS_USER"
+      ]
+    },
+    {
+      "name": "link_cmn_location_company",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "company is a FK to core_company.sys_id; links location to company.",
+      "kind": "link",
+      "hash_key": "HK_CMN_LOCATION_COMPANY",
+      "fk_columns": [
+        "HK_CMN_LOCATION",
+        "HK_CORE_COMPANY"
+      ]
+    },
+    {
+      "name": "link_cmn_location_country",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "country is a FK to core_country.sys_id; links location to country.",
+      "kind": "link",
+      "hash_key": "HK_CMN_LOCATION_COUNTRY",
+      "fk_columns": [
+        "HK_CMN_LOCATION",
+        "HK_CORE_COUNTRY"
+      ]
+    },
+    {
+      "name": "link_cmn_location_contact",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "contact is a FK to sys_user.sys_id; links location to contact.",
+      "kind": "link",
+      "hash_key": "HK_CMN_LOCATION_CONTACT",
+      "fk_columns": [
+        "HK_CMN_LOCATION",
+        "HK_SYS_USER"
+      ]
+    },
+    {
+      "name": "link_cmn_location_managed_by_group",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "managed_by_group is a FK to sys_user_group.sys_id; links location to managing group.",
+      "kind": "link",
+      "hash_key": "HK_CMN_LOCATION_MANAGED_BY_GROUP",
+      "fk_columns": [
+        "HK_CMN_LOCATION",
+        "HK_SYS_USER_GROUP"
+      ]
+    },
+    {
+      "name": "link_contract_sla_vendor",
+      "source_table": "contract_sla",
+      "confidence": "high",
+      "rationale": "vendor is a FK to core_company.sys_id; links SLA to vendor company.",
+      "kind": "link",
+      "hash_key": "HK_CONTRACT_SLA_VENDOR",
+      "fk_columns": [
+        "HK_CONTRACT_SLA",
+        "HK_CORE_COMPANY"
+      ]
+    },
+    {
+      "name": "link_contract_sla_u_sla_owner",
+      "source_table": "contract_sla",
+      "confidence": "high",
+      "rationale": "u_sla_owner is a FK to sys_user.sys_id; links SLA to owner user.",
+      "kind": "link",
+      "hash_key": "HK_CONTRACT_SLA_U_SLA_OWNER",
+      "fk_columns": [
+        "HK_CONTRACT_SLA",
+        "HK_SYS_USER"
+      ]
+    },
+    {
+      "name": "link_core_company_country",
+      "source_table": "core_company",
+      "confidence": "high",
+      "rationale": "country is a FK to core_country.sys_id; links company to country.",
+      "kind": "link",
+      "hash_key": "HK_CORE_COMPANY_COUNTRY",
+      "fk_columns": [
+        "HK_CORE_COMPANY",
+        "HK_CORE_COUNTRY"
+      ]
+    },
+    {
+      "name": "link_core_company_contact",
+      "source_table": "core_company",
+      "confidence": "high",
+      "rationale": "contact is a FK to sys_user.sys_id; links company to contact user.",
+      "kind": "link",
+      "hash_key": "HK_CORE_COMPANY_CONTACT",
+      "fk_columns": [
+        "HK_CORE_COMPANY",
+        "HK_SYS_USER"
+      ]
+    },
+    {
+      "name": "link_sys_user_group_user",
+      "source_table": "sys_user_grmember",
+      "confidence": "high",
+      "rationale": "sys_user_grmember is a canonical association table between users and groups.",
+      "kind": "link",
+      "hash_key": "HK_SYS_USER_GROUP_USER",
+      "fk_columns": [
+        "HK_SYS_USER",
+        "HK_SYS_USER_GROUP"
+      ]
+    },
+    {
+      "name": "link_task_sla_contract_sla",
+      "source_table": "task_sla",
+      "confidence": "high",
+      "rationale": "sla is a FK to contract_sla.sys_id; links task to SLA.",
+      "kind": "link",
+      "hash_key": "HK_TASK_SLA_CONTRACT_SLA",
+      "fk_columns": [
+        "HK_TASK",
+        "HK_CONTRACT_SLA"
+      ]
+    }
+  ],
+  "satellites": [
+    {
+      "name": "sat_cmn_department_details",
+      "source_table": "cmn_department",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly static attributes for department.",
+      "kind": "satellite",
+      "parent_hub": "hub_cmn_department",
+      "hash_key": "HK_CMN_DEPARTMENT",
+      "hashdiff": "HD_CMN_DEPARTMENT_DETAILS",
+      "payload": [
+        "name",
+        "id",
+        "business_unit",
+        "cost_center",
+        "description",
+        "head_count",
+        "sys_domain",
+        "u_short_name"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_cmn_location_details",
+      "source_table": "cmn_location",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly static attributes for location.",
+      "kind": "satellite",
+      "parent_hub": "hub_cmn_location",
+      "hash_key": "HK_CMN_LOCATION",
+      "hashdiff": "HD_CMN_LOCATION_DETAILS",
+      "payload": [
+        "name",
+        "full_name",
+        "city",
+        "state",
+        "street",
+        "zip",
+        "phone",
+        "phone_territory",
+        "fax_phone",
+        "time_zone",
+        "latitude",
+        "longitude",
+        "lat_long_error",
+        "coordinates_retrieved_on",
+        "cmn_location_source",
+        "cmn_location_type",
+        "primary_location",
+        "stock_room",
+        "u_accountable_bu",
+        "u_additional_bus",
+        "u_alternative_site_access_3_email",
+        "u_alternative_site_access_3_landline",
+        "u_alternative_site_access_3_mobile",
+        "u_alternative_site_access_3_name",
+        "u_bit_cluster",
+        "u_bit_coordinator_name",
+        "u_closure_date",
+        "u_comment",
+        "u_contract_mcs",
+        "u_contract_mwp",
+        "u_country",
+        "u_eon_internal_name",
+        "u_expected_closure_date",
+        "u_itc_room",
+        "u_lan_site_type",
+        "u_location_id",
+        "u_location_type",
+        "u_number",
+        "u_post_office_box",
+        "u_security_requirements",
+        "u_site_access_1_availability",
+        "u_site_access_1_name",
+        "u_site_access_2_availability",
+        "u_site_access_2_name",
+        "u_site_access_3_availability",
+        "u_site_access_3_name",
+        "u_site_access_instructions",
+        "u_site_classification",
+        "u_site_id",
+        "u_status",
+        "u_users_on_site",
+        "u_vip_on_site",
+        "u_wan_provider",
+        "u_wan_site_type",
+        "u_work_info",
+        "life_cycle_stage",
+        "life_cycle_stage_status"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_contract_sla_details",
+      "source_table": "contract_sla",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly static attributes for SLA definition.",
+      "kind": "satellite",
+      "parent_hub": "hub_contract_sla",
+      "hash_key": "HK_CONTRACT_SLA",
+      "hashdiff": "HD_CONTRACT_SLA_DETAILS",
+      "payload": [
+        "name",
+        "type",
+        "target",
+        "collection",
+        "active",
+        "duration",
+        "duration_type",
+        "schedule",
+        "schedule_source",
+        "schedule_source_field",
+        "timezone",
+        "timezone_source",
+        "workflow",
+        "flow",
+        "adv_condition_type",
+        "condition_class",
+        "start_condition",
+        "stop_condition",
+        "pause_condition",
+        "resume_condition",
+        "cancel_condition",
+        "reset_condition",
+        "reset_action",
+        "when_to_cancel",
+        "when_to_resume",
+        "set_start_to",
+        "relative_duration_works_on",
+        "retroactive",
+        "retroactive_pause",
+        "enable_logging",
+        "sys_overrides",
+        "sys_domain",
+        "sys_domain_path",
+        "u_actual_duration",
+        "u_module",
+        "u_service_contract"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_core_company_details",
+      "source_table": "core_company",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly static attributes for company.",
+      "kind": "satellite",
+      "parent_hub": "hub_core_company",
+      "hash_key": "HK_CORE_COMPANY",
+      "hashdiff": "HD_CORE_COMPANY_DETAILS",
+      "payload": [
+        "name",
+        "sys_class_name",
+        "customer",
+        "vendor",
+        "vendor_type",
+        "manufacturer",
+        "primary",
+        "state",
+        "city",
+        "street",
+        "zip",
+        "phone",
+        "fax_phone",
+        "latitude",
+        "longitude",
+        "lat_long_error",
+        "coordinates_retrieved_on",
+        "website",
+        "notes",
+        "stock_symbol",
+        "stock_price",
+        "market_cap",
+        "revenue_per_year",
+        "profits",
+        "discount",
+        "num_employees",
+        "publicly_traded",
+        "fiscal_year",
+        "rank_tier",
+        "theme",
+        "apple_icon",
+        "banner_image",
+        "banner_image_light",
+        "banner_text",
+        "sso_source",
+        "u_active",
+        "u_checked_in",
+        "u_export_restricted",
+        "u_id",
+        "u_market_unit",
+        "u_preferred_language",
+        "u_short_name",
+        "u_l1_approval",
+        "u_invoice_recipient"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_core_country_details",
+      "source_table": "core_country",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly static attributes for country.",
+      "kind": "satellite",
+      "parent_hub": "hub_core_country",
+      "hash_key": "HK_CORE_COUNTRY",
+      "hashdiff": "HD_CORE_COUNTRY_DETAILS",
+      "payload": [
+        "name",
+        "iso3166_2",
+        "iana",
+        "un_numeric",
+        "order",
+        "population",
+        "active"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_sys_user_grmember_details",
+      "source_table": "sys_user_grmember",
+      "confidence": "high",
+      "rationale": "Descriptive attributes for user-group membership.",
+      "kind": "satellite",
+      "parent_hub": "hub_sys_user_group",
+      "hash_key": "HK_SYS_USER_GROUP",
+      "hashdiff": "HD_SYS_USER_GRMEMBER_DETAILS",
+      "payload": [
+        "scrum_role",
+        "points",
+        "u_expiry_date"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_task_sla_details",
+      "source_table": "task_sla",
+      "confidence": "high",
+      "rationale": "Descriptive, mostly dynamic attributes for SLA instance.",
+      "kind": "satellite",
+      "parent_hub": "hub_task",
+      "hash_key": "HK_TASK",
+      "hashdiff": "HD_TASK_SLA_DETAILS",
+      "payload": [
+        "stage",
+        "active",
+        "has_breached",
+        "start_time",
+        "end_time",
+        "pause_time",
+        "planned_end_time",
+        "original_breach_time",
+        "duration",
+        "business_duration",
+        "business_pause_duration",
+        "business_time_left",
+        "business_percentage",
+        "pause_duration",
+        "percentage",
+        "time_left",
+        "schedule",
+        "timezone"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    },
+    {
+      "name": "sat_u_mcs_company_and_approval_group_mapping_details",
+      "source_table": "u_mcs_company_and_approval_group_mapping",
+      "confidence": "high",
+      "rationale": "Descriptive attribute for company/department/group mapping.",
+      "kind": "satellite",
+      "parent_hub": "hub_core_company",
+      "hash_key": "HK_CORE_COMPANY",
+      "hashdiff": "HD_U_MCS_COMPANY_AND_APPROVAL_GROUP_MAPPING_DETAILS",
+      "payload": [
+        "u_approval_level"
+      ],
+      "effective_from": null,
+      "subgroup": "details",
+      "change_velocity": "static"
+    }
+  ]
+}

@@ -58,9 +58,13 @@ help.
 decisions into the retrieval index improves *naming-convention adherence*, but
 only when (i) the amount of retrieved context exceeds a size threshold and (ii)
 the corpus already contains an approved model of the *same entity*. That is, the
-mechanism is **instance-level transfer (copying), not convention generalisation**,
+naming mechanism is **instance-level transfer (copying), not convention generalisation**,
 and it does **not** change entity-identification accuracy, which is already at
-ceiling.
+ceiling. A distinct, *structural* effect does generalise across domains: even with the
+target system held out (leave-one-out), retrieving another domain's approved models
+significantly improves **link parsimony** on the hard schema (findings §2.8) — so the
+feedback loop transfers modelling *structure* across domains while *naming* stays
+instance-specific.
 
 **H1d — Reviewer stage is a trade-off, not a scalar gain (sub-question).** The
 second-model (plan-reviewer) stage — the part that makes the pipeline genuinely

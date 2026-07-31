@@ -1,0 +1,28 @@
+dbt execution on live Databricks warehouse — CIM Data Vault project (post emitter fix)
+=======================================================================================
+project : C:\Users\user\dwa_build\clean2\iec_cim_metadata
+schemas : cim_dv2_staging / cim_dv2_raw_vault  (catalog edh_unreg_silver_dev_st)
+stages  : deps -> run -> test   (all exit 0)
+
+  dbt run : all models build with zero errors
+  dbt test: 42 / 42 PASS   (test_pass_rate = 1.00)
+
+Change vs. the earlier 38/42:
+  The emitter previously emitted a column-level `unique` test on each satellite /
+  eff-sat hash key. A satellite historises each hash key over time, so its grain is the
+  composite (hash key + load date) — the hash key alone repeats across versions, so
+  `unique` on it is wrong by Data Vault design and failed (4 failing tests).
+
+  Fix (dv_components emitter): satellites/eff-sats now emit `not_null` on the hash key
+  and a model-level `dbt_utils.unique_combination_of_columns` on (hash key + load date).
+  Hubs and links are unchanged (their hash key IS unique, so they keep `unique`).
+
+  Result: the 4 spurious failures are gone and uniqueness is asserted on the correct
+  grain -> 42/42.
+
+Reproduce:
+  python scripts/dbt/build_projects.py --metadata poc/metadata/iec_cim_metadata.yaml \
+      --out-root <build_dir>
+  # (point +schema at user-owned schemas, e.g. cim_dv2_staging / cim_dv2_raw_vault)
+  python scripts/dbt/dbt_sweep.py --project <build_dir>/iec_cim_metadata \
+      --stages deps,run,test --profiles-dir ~/.dbt --results-out exec.json

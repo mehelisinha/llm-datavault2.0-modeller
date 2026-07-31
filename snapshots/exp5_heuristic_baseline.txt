@@ -1,0 +1,31 @@
+﻿# Experiment 5a - deterministic heuristic baseline (both systems, seed 42)
+# command: python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --system IEC_CIM_001 --condition deterministic:producer=heuristic --seeds 42
+# generated: 2026-07-30 22:59
+systems=['SNOW_IT4IT_001', 'IEC_CIM_001']  conditions=['deterministic']  seeds=[42]  samples=1
+
+[SNOW_IT4IT_001 deterministic s=42] ef1=0.50 nam=0.00 conf=0.90 iss=8 wimpact=16 lr=0.00 | model 0s
+[IEC_CIM_001    deterministic s=42] ef1=1.00 nam=0.33 conf=1.00 iss=0 wimpact=0 lr=0.00 | model 0s
+
+=== STUDY SUMMARY (means over seeds) ===
+
+SNOW_IT4IT_001/deterministic:
+  gold_entity_f1         0.5
+  gold_naming_adherence  0.0
+  conformance_score      0.902
+  issue_count            8.0
+  weighted_error_impact  16.0
+  gold_link_ratio        0.0
+  correction_steps       25.0
+  taxonomy raw     : {'surrogate_business_key': 8}
+
+IEC_CIM_001/deterministic:
+  gold_entity_f1         1.0
+  gold_naming_adherence  0.333
+  conformance_score      1.0
+  issue_count            0.0
+  weighted_error_impact  0.0
+  gold_link_ratio        0.0
+  correction_steps       4.0
+  taxonomy raw     : {}
+
+results written to C:\Users\user\OneDrive - ExampleCorp\Desktop\DWA\dwa\output\exp5_heuristic.json

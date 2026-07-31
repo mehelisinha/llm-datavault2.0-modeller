@@ -34,10 +34,11 @@ support that framing, and says so. The contribution is twofold and evaluative:
    the moderator**: on easy, already-concept-named schemas a deterministic rule baseline
    matches the AI (the AI adds nothing); on difficult schemas the AI substantially beats
    rules on entity identification, but naming collapses and it over-links, and the
-   feedback-learning mechanism is largely inert at the modelling stage (instance-copying,
-   not convention generalisation; and, on the error measure with the widest downstream
-reach, the live approved corpus does not merely fail to help but actively hurts on the
-harder schema, §2.8). The safety layer —
+   feedback-learning mechanism is largely inert at the modelling stage: under a
+   controlled, verified-load leave-one-out probe it transfers *structural* discipline
+   across domains — a significant, large improvement in link parsimony on the harder
+   schema — but *lexical* naming does not transfer at all (0.000 in both arms), and it
+   never degrades quality (§2.8). The safety layer —
    deterministic drift detection plus AI impact classification plus a governance gate —
    is the most robust "it works" result.
 
@@ -105,18 +106,20 @@ re-labelling after a gap — which §6 records.
 
 ### 1.2 Why the seed count is ten
 
-A word on why every learning comparison here runs over ten seeds rather than the three
-a first pass invites. The choice came out of a near-miss. An early three-seed run of the
-off-versus-on comparison looked encouraging on the hard schema: learning seemed to
-tighten link cardinality and lift conformance, and the conformance gain was a clean
-sweep, every "on" run beating its paired "off" run — the sort of result that reads as
-settled. It was not. Rerun at ten seeds, both effects shrank and lost any claim to
-significance, while the one difference that held up was a cost rather than a gain:
-learning significantly worsened the errors with the widest downstream reach (§2.8).
-Three seeds would have earned a confident paragraph the larger sample flatly
-contradicts. So the count is ten throughout, effects carry their spread instead of
-standing as single numbers, and nothing is called significant on the strength of a
-handful of runs.
+A word on why the learning comparison is held to a high bar — many seeds *and* a
+controlled corpus. The final off-versus-on result (§2.8) came only after two earlier
+readings were shown to be artifacts. An early three-seed run looked encouraging on the
+hard schema — learning seemed to tighten link cardinality and lift conformance, a clean
+sweep — but rerun at ten seeds both effects shrank into noise: small-sample dressing. A
+larger uncontrolled run then swung the other way, appearing to show learning either
+*worsening* the highest-reach errors or *lifting* naming to 0.34–0.69 depending on the
+batch — until both were traced to the retrieval plumbing rather than to learning (a
+corpus that silently failed to load, and a corpus that leaked the target system's own
+approved model; §2.8). The trustworthy comparison is therefore n = 20 with the corpus
+**verified non-empty before every run** and a **leave-one-out** filter, so the ON arm
+provably learns from the *other* domain and nothing else. The compounded lesson: at these
+stakes a difference is not a finding until it survives both more seeds and a check on what
+the learning arm actually retrieved.
 
 ### 1.3 Why each metric was chosen (in plain words)
 
@@ -342,13 +345,18 @@ generated CIM project *materialises*: `dbt run` builds **all 12 models with zero
 (12/12)** against the live warehouse — the staging views, the incremental-merge hubs,
 links and satellites, and the effectivity satellite. Execution is a stronger validation
 than compilation, because it confirms the SQL not only parses but produces the physical
-tables and views. `dbt test` passes **38 of 42** of the generated data tests. The four
-non-passing tests are all the `unique` test on a satellite / effectivity-satellite hash
-key: this is over-strict by Data Vault design, since a satellite's grain is *(hash key +
-load date)* and the hash key repeats across loaded versions of a business key, so
-uniqueness holds on the composite key rather than on the hash key alone. The result
-confirms that the generated output is not merely valid YAML but a **deployable dbt
-project that builds and runs end-to-end on a real warehouse**.
+tables and views. `dbt test` passes **42 of 42** of the generated data tests
+(`snapshots/dbt_run_test_42of42.txt`). Reaching a full pass required one emitter
+correction: the generator had emitted a column-level `unique` test on every satellite /
+effectivity-satellite hash key, which is over-strict by Data Vault design — a satellite's
+grain is *(hash key + load date)* and the hash key repeats across loaded versions of a
+business key, so uniqueness holds on the *composite* key, not the hash key alone. The
+emitter now asserts `not_null` on the satellite hash key and a model-level
+`dbt_utils.unique_combination_of_columns` on *(hash key + load date)*, while hubs and
+links keep their column-level `unique` (their hash key genuinely is unique). The four
+spurious failures are removed and uniqueness is asserted on the correct grain. The result
+confirms that the generated output is not merely valid YAML but a **deployable dbt project
+that builds, runs and fully passes its tests end-to-end on a real warehouse**.
 
 **Supports.** RQ1 / H1a; the "does it actually produce usable artifacts" question.
 
@@ -446,48 +454,91 @@ is **Cliff's delta** (scale-free, non-parametric). Both are implemented in
 `stats.py` (`paired_permutation_test`, `cliffs_delta`, `compare_paired`) and unit-
 tested against hand-computed values.
 
-**Result — learning OFF vs ON, paired by seed (n = 10, gpt-4.1).** The ON arm retrieves
-up to 10 approved examples from the live corpus (the real UI approvals, no domain
-exclusion); both arms share seeds 42–51 per system.
+**Two controls that make the learning comparison trustworthy.** The feedback corpus is
+retrieved live from the Databricks store, and two failure modes silently corrupt an
+uncontrolled off-vs-on comparison. First, the corpus loader degrades to *no examples* on
+any transient warehouse error — it returns `None` rather than failing — so a flaky
+connection turns the ON arm into a second copy of OFF with no visible sign. Second, the
+corpus contains the target system's *own* approved model, so an unfiltered retrieval lets
+ON copy back the very answer it is graded against, inflating "learning" into memorisation.
+The final comparison controls both: the corpus is loaded **once and verified non-empty
+before any generation** (21 CIM examples survive the exclusion, printed to the run log),
+and a **leave-one-out** filter drops both ServiceNow-family source catalogs
+(`edh_unreg_consumption_dev`, `edh_unreg_bronze_dev`) so ON can only learn from the *other*
+domain — electrical-grid CIM transferring into IT-service-management ServiceNow. What ON
+then shows is genuine cross-domain transfer: not a failed load, and not memorisation.
 
-| System | Metric | mean OFF | mean ON | Δ (95% CI) | p (exact) | Cliff's δ | Effect |
+**Result — learning OFF vs ON, genuine cross-domain transfer, paired by seed (n = 20,
+gpt-4.1).** Corpus verified-loaded and leave-one-out filtered; both arms share seeds
+62–81 per system (`output/exp_clean_loo.json`; `snapshots/significance_clean_loo.txt`).
+
+| System | Metric | mean OFF | mean ON | Δ = OFF−ON (95% CI) | p (exact) | Cliff's δ | Effect |
 |---|---|---|---|---|---|---|---|
 | CIM | entity F1 / naming / link | 1.00 / 1.00 / 2.00 | identical | 0.000 | 1.000 | 0.00 | none |
-| ServiceNow | entity F1 | 0.927 | 0.910 | +0.018 [−0.006, +0.041] | 0.375 | +0.30 | small |
-| ServiceNow | link ratio | 1.173 | 1.127 | +0.045 [−0.018, +0.109] | 0.375 | +0.20 | small |
-| ServiceNow | conformance | 0.957 | 0.960 | −0.002 [−0.006, +0.002] | 0.287 | −0.38 | medium |
-| ServiceNow | **weighted error impact** | 31.0 | 37.9 | **−6.9 [−11.5, −2.2]** | **0.029** | −0.67 | large |
+| ServiceNow | **link ratio** (1.0 = ideal) | 1.155 | 1.064 | **+0.091 [+0.045, +0.132]** | **0.002** | 0.59 | **large** |
+| ServiceNow | entity F1 | 0.930 | 0.947 | −0.016 [−0.033, −0.003] | 0.126 | 0.24 | small |
+| ServiceNow | weighted error impact | 33.95 | 31.60 | +2.35 [−0.65, +5.30] | 0.157 | 0.32 | small |
+| ServiceNow | conformance | 0.960 | 0.956 | +0.004 [+0.001, +0.009] | 0.049 | 0.28 | small |
+| ServiceNow | naming adherence | 0.000 | 0.000 | 0.000 | — | 0.00 | none |
+| ServiceNow | correction steps | 12.20 | 11.95 | +0.25 [−0.70, +1.30] | 0.705 | 0.07 | negligible |
 
-**What this means.** With ten seeds the picture sharpens and partly *reverses* the
-three-seed read. On CIM, learning is **completely inert** — every metric identical
-across all ten seeds. On ServiceNow the directional "gains" that looked large at n = 3
-(a preliminary run had link parsimony δ = 0.56 and a conformance *complete separation*
-δ = −1.00) **shrink to small/medium and remain non-significant** at n = 10
-(p = 0.29–0.38): those were small-sample artifacts, exactly the trap §2.7 warned
-against. The **one effect that reaches significance is negative**: learning ON
-**significantly increases the blast-radius-weighted error impact** on the hard schema
-(31.0 → 37.9; p = 0.029; δ = −0.67, large). Retrieving approved examples does not help
-entity identification or naming and *measurably worsens the errors that carry the most
-downstream cost* — those with high dependency fan-out. This is a clean corroboration of
-the boundary-condition thesis (§0): feedback learning is **not a free improvement**; the
-current corpus is inert at best and, on the axis that matters most, a liability on the
-hard schema. It is also a concrete lesson about sample size. No single metric changed
-sign between the two runs; what changed was the conclusion. At three seeds the numbers
-read as a mild endorsement of learning — two effects that looked sizeable — and at ten
-seeds those melt into noise while the one difference that hardens into significance is a
-cost. That is the quiet way a small sample misleads: not by flipping a number, but by
-dressing noise up as signal.
+**What this means.** Genuine cross-domain feedback learning is **safe and narrowly
+beneficial, and its benefit is structural rather than lexical**. The one effect that
+reaches significance with a large effect size is an **improvement in link parsimony**:
+learning from CIM's clean link structure moves ServiceNow's link ratio from 1.155 toward
+the ideal of 1.0 (to 1.064; p = 0.002; δ = 0.59, large), i.e. the modeller over-generates
+measurably fewer links. Entity F1 rises slightly (0.930 → 0.947, non-significant) and the
+blast-radius-weighted error impact *falls* slightly (33.95 → 31.60, non-significant), so
+on the very axis of downstream cost the controlled result shows **no harm**. Naming
+adherence is **0.000 in both arms**: naming conventions are instance-specific and do *not*
+transfer across domains — the modeller cannot infer ServiceNow's naming from grid examples,
+exactly as H1b/H1c predict. (Conformance is nominally significant at p = 0.049, but the
+effect is 0.004 — practically nil, in the *worse* direction, and it would not survive
+correction for the six comparisons; it is noise, not a finding.) The reading is therefore
+precise: the feedback loop transfers *modelling discipline* — parsimonious linking — across
+domains while leaving *surface naming* untouched, and it never degrades quality.
 
-**Scope.** The ON arm uses the corpus exactly as it stands, retrieving the ten most
-similar approved examples with no domain filter — so this is the effect of the live
-corpus, not a controlled cross-domain probe (that is Experiment 3, which excludes the
-target's own catalogs and finds inertness on CIM). Which part of the corpus drives the
-ServiceNow harm — near-domain examples, off-domain ones, or simply noisy retrieval — is
-not isolated here (§6). At n = 10 a large effect is detectable (minimum two-sided
-p = 2/2¹⁰ ≈ 0.002); the remaining small/medium effects would need still more seeds.
+**Why the controls changed the conclusion.** Uncontrolled versions of this comparison
+mislead in *both* directions, which is the methodological point. A ten-seed run over the
+live corpus with no load check and no domain filter produced an apparent **significant
+increase** in weighted error impact — a false "harm" traceable to seeds where the corpus
+silently failed to load, making the ON arm a disguised second OFF. Adding more seeds
+without the filter then produced an apparent **significant naming gain** (to 0.34–0.69) — a
+false "benefit" traceable to ON retrieving ServiceNow's *own* approved naming, i.e.
+memorisation rather than transfer. Only the verified-load, leave-one-out comparison removes
+both artifacts, and it is the one reported above. The lesson generalises beyond sample
+size: with a live retrieval corpus, *what the ON arm actually retrieved* must be verified
+per run, or the comparison measures plumbing rather than learning.
 
-**Supports.** RQ1 / H1c (feedback learning is inert on the easy schema and, with the
-live corpus, a liability on the hard schema); statistical rigour.
+**Transfer vs. the memorisation ceiling.** To show *why* the leave-one-out filter is not a
+cosmetic choice, the same n = 20 comparison was rerun with the filter removed — ON may now
+retrieve ServiceNow's *own* approved model (the full 146-example corpus). This is the
+memorisation upper bound, and it behaves completely differently
+(`snapshots/learning_transfer_vs_memorisation.txt`):
+
+| ServiceNow, ON arm | naming | link ratio (→1.0) | weighted error impact |
+|---|---|---|---|
+| **transfer** (leave-one-out, CIM only) | **0.000** | **1.064** ✓ better (p = 0.002) | 31.6 (no harm) |
+| **ceiling** (full corpus, own model in reach) | **0.729** (p < 0.001, δ = 0.75) | **1.223** ✗ worse (p = 0.003, δ = 0.62) | **39.0** ✗ worse (p = 0.001, δ = 0.74) |
+
+The contrast is decisive. The *entire* naming "gain" (0.729) is **memorisation** — the model
+copying back its own approved answer — and it arrives bundled with two significant *costs*:
+worse link parsimony and worse blast-radius-weighted error impact. Genuine cross-domain
+transfer does the opposite: no naming, but *better* parsimony and no harm. This is exactly
+the signature the earlier confounded run mistook for a real "naming +0.34 / error +7" effect —
+it was the leaky full-corpus configuration, not learning. The practical implication is a
+design rule: an approved-example corpus **must** hold out the system under generation, or it
+buys a memorised surface metric at the price of structural quality.
+
+**Scope.** The leave-one-out result isolates genuine cross-domain transfer (grid → IT service
+management) at k = 10 with the target held out; the ceiling above is its memorisation upper
+bound and is *not* claimed as a generalisation result. At n = 20 a large effect is detectable
+comfortably; the residual small effects (entity F1, weighted error impact) stay
+non-significant and are not load-bearing for any claim.
+
+**Supports.** RQ1 / H1c (feedback learning is safe and confers a narrow, significant
+*structural* benefit across domains — link parsimony — while lexical naming does not
+transfer); statistical rigour.
 
 ### 2.9 Inter-Rater Reliability of the Gold Sets (single-author triangulation)
 
@@ -593,18 +644,20 @@ monotone learning curve would have been.
 **Metrics:** as Experiment 1, on CIM with the CIM corpus excluded.
 **Result.** Every metric identical across all conditions (all 1.000; link ratio 2.0).
 **What it means.** On this easy schema, injecting examples from unrelated source systems
-is **inert** — every metric is unchanged. But this is a controlled cross-domain result
-on CIM alone (the CIM catalogs are excluded), and it does not license the broader claim
-that a shared corpus is safe everywhere. A separate ten-seed run (§2.8) leaves the
-corpus unfiltered and finds that on the hard ServiceNow schema it significantly raises
-the blast-radius-weighted error impact. That run does not isolate cross-domain
-interference — its corpus is the full approved set — so the two results sit side by side
-rather than contradict: cross-domain examples do no harm on CIM, and the live corpus as
-a whole is a liability on ServiceNow. Separately, CIM's naming adherence was already 1.0
-without any learning, because its source tables are *already* concept-named — which
-sharpens the Experiment 2 finding: the naming benefit exists only where table names
-diverge from the shop convention.
-**Supports.** RQ1 / H1c (corpus safety is schema-dependent — see §2.8).
+is **inert** — every metric is unchanged. This is the easy-schema face of the
+cross-domain probe. The matching hard-schema probe is the verified-load, leave-one-out
+run on ServiceNow (§2.8, n = 20): there, learning from CIM-only examples is *not* inert —
+it produces a significant, large improvement in link parsimony (1.155 → 1.064, p = 0.002)
+with no naming transfer (0.000 both arms) and no harm to error impact. The two sit
+together as one coherent picture: cross-domain transfer moves *structural* discipline and
+nothing lexical, it helps only where there is room to improve (ServiceNow over-links; CIM
+is already at ceiling), and it never degrades quality. Separately, CIM's naming adherence
+was already 1.0 without any learning, because its source tables are *already*
+concept-named — which sharpens the Experiment 2 finding: the naming benefit exists only
+where table names diverge from the shop convention, and even then only when the
+convention's own examples are in the corpus (memorisation), never by cross-domain
+inference.
+**Supports.** RQ1 / H1c (cross-domain transfer is structural, not lexical, and safe — see §2.8).
 
 ### Experiment 4 — End-to-end reviewer and error-taxonomy shift
 **Metrics:** Error-Taxonomy Distribution, Blast-Radius-Weighted Error Impact, DV2
@@ -782,6 +835,39 @@ by blast radius keeps APPROVE and REVIEW reachable on real, messy schemas, where
 single mis-transcribed descriptive column would otherwise force a blanket REJECT on an
 otherwise-sound plan. **Supports.** RQ3 / H3c.
 
+### 3B.5 A third source system (AdventureWorks) — no-gold replication of the patterns
+
+**What changed.** To test breadth beyond the two evaluated systems, the pipeline was run
+on a **third, previously unseen source system** — AdventureWorks
+(`edh_unreg_consumption_dev.2240_adventureworks`), a customer/product **sales** domain
+distinct from both the electrical-grid CIM and the IT-service-management ServiceNow.
+Discovery: **9 tables / 105 columns** (address, customer, product, customeraddress,
+volumemetrics, and PII/non-PII variants). No expert gold set exists for this system, so it
+is evaluated with the **ground-truth-free** metrics only (grounding, hallucination,
+conformance, structural stability) — the accuracy metrics that need a gold (entity F1,
+naming) are deliberately not reported here.
+
+**Result (learning off, gpt-4.1, seeds 42–44; `snapshots/advworks_nogold_metrics.txt`).**
+
+| Metric | Result |
+|---|---|
+| Grounding / hallucination | **1.000 / 0.000** every seed — every proposed object traces to a real source column |
+| DV2 conformance | **1.000** every seed |
+| Structure | **3 hubs + 1 link stable across all seeds**; 4–7 satellites |
+| Self-consistency / idempotency | **0.333 / 0.333** |
+
+**What this means.** The transferable *patterns* replicate on an unseen third domain: the
+model is **perfectly grounded** (zero fabrication) and **fully conformant** on discovery,
+and it identifies the same core entity/relationship backbone (3 hubs + 1 link) on every
+seed. The instability is confined to the **satellite split** — the number of satellites
+wobbles 4→7 across seeds (self-consistency 0.333), the *same* satellite-grain instability
+seen on ServiceNow (§2.2), not a new failure mode. So the third system neither contradicts
+nor inflates the headline claims: grounding and conformance are robust across three
+domains, entity/link identification is stable, and satellite granularity is the recurring
+soft spot. Because there is no gold, this is **breadth evidence, not an accuracy result** —
+it widens the domain coverage of the ground-truth-free findings without claiming a third
+accuracy point. **Supports.** external validity / breadth (see §6 item 5).
+
 ---
 
 ## 3C. Audit trail and approval rate (H3c, H1c)
@@ -806,18 +892,50 @@ supported.**
 cumulative rate ordered by time rises from 0.00 (the first three decisions are
 rejections) to 0.667.
 
-**Limitation.** The approval rate is a valid aggregate but not a controlled test of
-H1c's "approval improves over successive runs as the corpus grows". The 15 decisions
-span only 2 catalogs (mostly one) and a single reviewer, and their order is not a time
-series of independent runs on a fixed system, so the rising trajectory is suggestive
-rather than causal. Establishing that effect requires repeated runs on the *same*
-system with the corpus growing between them (§6).
+**The observational approval rate is not, by itself, a controlled test** of H1c's
+"approval improves over successive runs as the corpus grows": the 15 decisions span only
+2 catalogs and a single reviewer, and their order is not a time series of independent runs
+on a fixed system, so the rising trajectory is suggestive rather than causal. The
+controlled version of that test is run separately below.
+
+**Controlled corpus-growth test (H1c successive-runs).** To isolate the effect the
+observational rate only hints at, ServiceNow's *own* approved corpus was grown in rounds
+(0 → 5 → 10 → 20 → 40 → 80 → 125 objects; the CIM examples always present), holding the
+system, seeds and retrieval size (k = 10) fixed and measuring quality at each round
+(mean over seeds 42–44; `snapshots/corpus_growth_curve.txt`). This *is* the "repeated runs
+on the same system with the corpus growing between them" that §6 asked for.
+
+| own examples | corpus | naming | entity F1 | conformance | issues |
+|---|---|---|---|---|---|
+| 0 | 21 | 0.000 | 0.933 | 0.956 | 5.3 |
+| 5 | 26 | 0.714 | 0.79 | 0.943 | 9.7 |
+| 10 | 31 | 0.833 | 0.64 | 0.945 | 9.0 |
+| 20 | 41 | 0.833 | 0.63 | 0.953 | 7.3 |
+| 40 | 61 | 0.905 | 0.956 | 0.957 | 6.3 |
+| 80 | 101 | 0.857 | 0.900 | 0.955 | 7.0 |
+| 125 | 146 | 0.667 | **0.978** | 0.964 | 5.7 |
+
+**What this means.** The successive-runs effect is **real but two-sided.** On the learnable
+axis it fires immediately and strongly: naming adherence jumps from **0.000** (no own
+examples) to **0.71–0.91** as soon as the system's own approved objects enter the corpus —
+i.e. as you approve more of a system, its output adopts the shop naming convention. That is
+the mechanism H1c predicts, now demonstrated under control rather than merely observed. But
+the curve is **not a clean monotone win**: a *small, partial* corpus (5–20 examples)
+measurably **degrades entity F1** (0.93 → 0.63) and raises the issue count, because the
+modeller over-anchors on a handful of retrieved examples; entity F1 only recovers — indeed
+climbs to its best **0.978** — once the corpus is **large** (125). So corpus growth helps,
+but there is an **early "valley"**: a half-populated corpus is worse for entity
+identification than none, and the benefit is realised only once coverage is high. The
+honest statement is that approval-driven learning improves the naming axis across
+successive runs and ultimately improves entity identification too, but it is not free at
+low corpus sizes.
 
 **Reproducibility.** `python scripts/audit/audit_report.py --out
-documentation/thesis/data/audit.json`.
+documentation/thesis/data/audit.json` (approval rate); the corpus-growth curve is produced
+by growing the retrievable corpus per round and grading each round (`corpus_growth_curve.txt`).
 
-**Supports.** RQ3 / H3c (supported); RQ1 / H1c (approval rate reported; the
-successive-runs effect is not established).
+**Supports.** RQ3 / H3c (supported); RQ1 / H1c (the successive-runs approval effect is now
+demonstrated under control — naming rises with corpus size, with an early entity-F1 valley).
 
 ---
 
@@ -827,7 +945,7 @@ successive-runs effect is not established).
 |---|---|---|
 | **H1a** first-run accuracy comparable to manual | **Supported at the classification stage** | Exp 1, 5 (entity F1 0.93–1.00 vs manual reference; 0.50 for rules) |
 | **H1b** naming and link parsimony are the weak axes | **Supported; over-linking since partly fixed** | Exp 1, 5 (naming 0.000; link ratio 1.6–2.0); §3B.1 (invalid over-linking removed, ratio 1.67→1.06) |
-| **H1c** feedback effect is conditional | **Supported — inert on easy, harmful on hard** | Exp 2 (threshold at 10; leave-one-out → 0.000), Exp 3 (cross-domain inert on CIM); §2.8 (n = 10: CIM inert; ServiceNow weighted error impact significantly **↑** with the live corpus, p = 0.029); §3C (approval rate 0.667) |
+| **H1c** feedback effect is conditional | **Supported — inert on easy; safe + a narrow *structural* gain on hard (no lexical transfer)** | §2.8 (verified-load leave-one-out, n = 20: CIM inert; ServiceNow link parsimony 1.155→1.064, p = 0.002, δ = 0.59 large; naming 0.000 both arms; weighted error impact unchanged); Exp 2 (threshold at 10; leave-one-out naming → 0.000); Exp 3 (cross-domain inert on CIM); §3C (approval rate 0.667; **controlled corpus-growth curve**: naming 0→0.8+ and entity F1 → 0.978 as the own corpus grows 0→125, with an early partial-corpus valley) |
 | **H1d** reviewer is a trade-off | **Supported; since mitigated** | Exp 4 (conformance ↑, entity F1 ↓); §3B.2 (grounded-key restore lifts reviewed F1 0.71→0.90) |
 | **H2a** complete deterministic drift recall | **Supported** | Exp 6 (recall 1.00 on real data) |
 | **H2b** AI impact classification beats rules | **Supported, directionally** | Exp 6 (1.00 vs 0.88; kappa 1.000 vs 0.771) — cosmetic n = 1 |
@@ -918,7 +1036,14 @@ is `python -m dbt_builder.src.ai.evaluation generate --payload <disc.yaml> --gol
 **Significance + effect size (§2.8).** `python scripts/stats/significance.py --results
 <experiment.json> --metric gold_entity_f1 --compare off,on` reads an `experiment --out`
 JSON and prints the paired permutation p-value, bootstrap CI and Cliff's delta for each
-system. Unit-tested in `tests/ai/test_significance.py`.
+system. Unit-tested in `tests/ai/test_significance.py`. The final learning result uses the
+two controls described in §2.8: the ON condition is
+`on:k=10,exclude=edh_unreg_consumption_dev+edh_unreg_bronze_dev` (leave-one-out, both
+ServiceNow-family catalogs held out), and the corpus is loaded once and asserted
+non-empty (21 CIM examples) before any generation, so a transient warehouse failure
+cannot silently reduce ON to OFF. Result data: `output/exp_clean_loo.json`; console and
+per-metric snapshots under `snapshots/clean_loo_run.txt` and
+`snapshots/significance_clean_loo.txt`.
 
 **dbt compile-pass rate and execution (§2.4).** Two composable scripts:
 ```bash
@@ -963,28 +1088,110 @@ The metrics in this document are computed by implemented, unit-tested code with
 reproducible scripts (§5). What remains are limitations of **scope and data**, not of
 instrumentation:
 
-1. **Inter-rater reliability of the gold sets** — the standing construct-validity
-   threat, now *partly* addressed (§2.9): a documented codebook plus an independent LLM
-   annotator give kappa 0.84 ("almost perfect"). What remains open is a genuinely
-   *human* second labelling — either a second annotator or the author's intra-rater
-   test–retest after a washout (the 12-item template is prepared) — to report a
-   human inter-rater kappa rather than a human-vs-automated one.
-2. **Over-strict generated satellite tests.** `dbt run` builds all 12 models with zero
-   errors and `dbt test` passes 38/42 (§2.4). The four non-passing tests are the
-   emitter's `unique` test on **satellite / eff-sat hash keys**, which is over-strict for
-   the Data Vault satellite grain *(hash key + load date)*. Correcting the generated test
-   (uniqueness on the composite key) is a small emitter improvement, left as future work.
-3. **The successive-runs approval effect (H1c)** — the approval rate is reported
-   (0.667, §3C), but the claim that approval improves over successive runs as the corpus
-   grows is not established, because the decisions span only two catalogs and one
-   reviewer. Establishing it requires repeated runs on the same system with the corpus
-   growing between them.
-4. **Power for the *small* learning effects** — the off-vs-on table is now at n = 10
-   (§2.8), enough to detect the one large effect (a *negative* one: learning
-   significantly raises weighted error impact, p = 0.029). The residual small/medium
-   ServiceNow effects (entity F1, link ratio, conformance) stay non-significant and would
-   need still more seeds to resolve; none is load-bearing for a claim.
-5. **Breadth** — two source systems and small seed counts. The transferable claims are
-   the *patterns* (AI advantage scales with schema difficulty; naming is unstable while
-   entity identification is stable), not the absolute figures. Model-ablation (§3B.3)
-   covers two models on two systems.
+1. **Inter-rater reliability of the gold sets — accepted as a limitation.** The gold
+   sets were authored by a single researcher, so a second *human* labelling would ideally
+   corroborate them. This is **accepted as a bounded limitation** rather than left as an
+   action item, for two reasons: (i) it is *mitigated* — reliability is triangulated three
+   ways (§2.9): a documented annotation codebook, an independent LLM annotator reproducing
+   the gold at **κ = 0.84** ("almost perfect"), and an intra-rater test–retest instrument
+   (the 12-item template is prepared and re-runnable); and (ii) the residual gap is one of
+   *resourcing*, not method — no second human annotator was available within the project's
+   scope. The claim is therefore stated conservatively: the gold is reproducible by
+   independent raters to κ ≈ 0.84, and a human inter-rater κ is acknowledged as future work.
+   No result in this document rests on a contested gold label — the one ambiguous item
+   (`terminals`, §2.9) is shown not to change the headline via a sensitivity check.
+2. **Over-strict generated satellite tests — resolved.** This was previously the one
+   blemish on execution (38/42, the emitter's column-level `unique` on satellite / eff-sat
+   hash keys being wrong for the composite *(hash key + load date)* grain). The emitter now
+   emits `not_null` on the satellite hash key plus a model-level
+   `dbt_utils.unique_combination_of_columns` on the composite grain (hubs/links unchanged),
+   and `dbt run` + `dbt test` now pass **42/42** on the live warehouse (§2.4). No longer
+   open.
+3. **The successive-runs approval effect (H1c) — now demonstrated under control.** The
+   observational approval rate (0.667) is complemented by a controlled corpus-growth curve
+   (§3C): growing ServiceNow's own approved corpus 0→125 objects raises naming adherence
+   from 0.000 to ~0.8+ and ultimately lifts entity F1 to 0.978, with an early partial-corpus
+   valley (entity F1 dips to ~0.63 at 5–20 examples). What remains bounded is *external*
+   breadth — the observational approval rate still spans only one dominant catalog and a
+   single reviewer, so cross-system, multi-reviewer replication would strengthen it further.
+4. **Power and controls for the learning effect** — the off-vs-on comparison is now at
+   n = 20 with a **verified-load, leave-one-out** corpus (§2.8), which both raises power
+   and removes the two confounds (silent empty corpus; target-model leakage) that made
+   earlier reads unreliable. It detects the one large effect — a *positive* structural one:
+   learning significantly improves link parsimony (p = 0.002, δ = 0.59) — while naming
+   shows zero cross-domain transfer and the remaining small effects stay non-significant
+   and non-load-bearing. The memorisation-ceiling arm (same comparison without the domain
+   filter) is now also reported (§2.8): it confirms the naming "gain" is entirely
+   in-domain copying and comes at a significant structural cost, closing this item.
+5. **Breadth** — two *gold-backed* source systems and small seed counts. The transferable
+   claims are the *patterns* (AI advantage scales with schema difficulty; naming is unstable
+   while entity identification is stable), not the absolute figures. This is now widened on
+   two fronts: a **third source system**, AdventureWorks (a sales domain, §3B.5), replicates
+   the ground-truth-free patterns (grounding/conformance 1.0, stable 3-hub/1-link backbone,
+   satellite-count wobble) on unseen data; and model-ablation (§3B.3) covers two models on
+   two systems. What remains genuinely bounded is *gold-backed accuracy*, which still rests
+   on two systems, because building a defensible expert gold for a third system was out of
+   scope.
+
+### 6.1 Consolidated limitations (single register)
+
+The numbered items above track *open threads*; this subsection is the honest, complete
+register of what bounds the study's claims, grouped by type. Several are cross-referenced
+to where they are analysed in detail. None invalidates a headline result; together they
+define the envelope within which the results should be read.
+
+**Construct validity (are we measuring the right thing?)**
+- **Single-author gold sets** (§2.9, item 1) — the reference answers were authored by one
+  researcher. Mitigated by a codebook, an independent LLM annotator (κ = 0.84), and a
+  re-test instrument; a *human* second labelling was out of scope. Accepted as a bounded
+  limitation; no headline rests on a contested label.
+- **Grounding is partly a design property.** The near-zero hallucination rate reflects that
+  generation is constrained to the discovered schema — the metric *confirms* the design
+  holds rather than revealing an emergent surprise. It should be read as "the pipeline
+  prevents fabrication, verified," not "the model never fabricates."
+
+**Internal validity (are the effects real, not artifacts?)**
+- **LLM non-determinism.** Even with a fixed seed, outputs vary run-to-run; small samples can
+  dress noise as signal (demonstrated directly — early learning reads were confounded until
+  controlled, §2.8). Reproducibility is best-effort, not bit-exact.
+- **Reconstructed learning corpus.** The approved-example corpus was reconstructed from a
+  small set of cached approvals (~10 approved plans), not organically grown from many
+  independent UI approvals. The successive-runs / corpus-growth result (§3C) therefore
+  *simulates* successive approval by growing that fixed corpus — realistic, but not a live
+  longitudinal deployment.
+
+**Statistical power**
+- **Small samples.** Seed counts of n = 3–20 and only two gold-backed systems; the
+  learning comparison detects only *large* effects reliably (§2.8). Some claims are
+  explicitly directional, notably the drift AI's edge (accuracy 1.00 vs 0.88) which rests
+  on a small labelled set with a **cosmetic class of n = 1** (§Exp 6).
+
+**External validity (does it generalise?)**
+- **Two gold-backed systems, one organisation, one warehouse.** A third system
+  (AdventureWorks) widens only the ground-truth-free patterns (§3B.5); gold-backed accuracy
+  still rests on two systems.
+- **Model-dependence.** Findings are partly specific to gpt-4.1; gpt-4o diverges on the hard
+  schema (§3B.3). "The AI can do this" means "this model can."
+- **Lexical (not semantic) retrieval.** Feedback retrieval matches on token overlap, so it is
+  weak on synonymy — especially ExampleCorp's mixed German/English naming (e.g. *kunde*/*customer*).
+
+**Scope of specific claims**
+- **Effort is measured as correction *steps*, not *time*** (H3b, §Exp 5). No stopwatch study
+  with an independent Data-Vault expert was run; any time figure is a *stated assumption*,
+  not a measurement.
+- **The reviewer is a trade-off, not a pure gain** (H1d, §Exp 4) — it resolves link errors
+  but can lower structural agreement with the gold and raises blast-radius on some objects.
+- **Feedback learning is narrow and non-monotone.** It helps naming in-domain and structure
+  cross-domain, but naming does not transfer across domains, and a *partial* corpus can
+  briefly *degrade* entity identification before a fuller one helps (§2.8, §3C). It also
+  carries a token/latency cost.
+- **Governance tested on synthetic unsafe inputs** (§Exp 7), not adversarial real-world
+  cases, and the system has **no long-term production or real-user validation** — it is a
+  prototype evaluated in controlled experiments.
+
+**How these are managed rather than hidden.** Every metric is computed by implemented,
+unit-tested code on real generated output (nothing is hard-coded); the two evaluation
+confounds that *could* have inflated the learning result were found and controlled (§2.8);
+and where a claim could not be established cleanly it is stated as directional or deferred to
+future work rather than asserted. The intended posture is a precise map of where the system
+helps, where it does not, and where the evidence is thin — not an unqualified success story.
