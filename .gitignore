@@ -11,6 +11,7 @@ TBD_*
 output/
 **/profiles.yml
 **/*.log
+compile_log.txt
 .structurizr/
 .structurizr
 .DS_Store
