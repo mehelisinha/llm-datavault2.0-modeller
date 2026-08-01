@@ -12,6 +12,8 @@ output/
 **/profiles.yml
 **/*.log
 compile_log.txt
+snow_plan.json
+docs_html/
 .structurizr/
 .structurizr
 .DS_Store

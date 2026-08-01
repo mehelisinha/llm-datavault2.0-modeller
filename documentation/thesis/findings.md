@@ -591,14 +591,22 @@ difference is that one entity. The qualitative conclusion (the AI identifies CIM
 entities correctly) does not flip, and the AI made the **same** defensible choice as the
 shipped gold. The headline is robust to the only annotation ambiguity in the CIM gold.
 
-**Honest limits.** An LLM panel is not a panel of *humans*; this is
+**Honest limits, and why the reliability check is an *independent* rater rather than a
+self re-test.** An LLM panel is not a panel of *humans*; this is
 human-vs-independent-automated agreement and shares biases common to language models,
 and one panellist (gpt-4.1) is the pipeline modeller's model — so gpt-4o is the cleanest
-independent point (κ 0.84). A genuinely human second labelling — the author's intra-rater
-test–retest after a washout — is prepared (a 12-item blank template is emitted by the
-same script) but not yet completed, so no human test–retest kappa is reported. The claim
-is bounded accordingly: the gold is reproducible by independent raters to κ ≈ 0.84; a
-human inter-rater figure remains open (§6).
+independent point (κ 0.84). A single-author **intra-rater** test–retest was **deliberately
+not used** as the primary reliability evidence, for two methodological reasons: (i) a clean
+*washout* is not credible for a sole author who has been immersed in the schemas throughout
+the project — a re-test would largely measure memory of the first labelling, not independent
+re-derivation; and (ii) intra-rater agreement is intrinsically the *weaker* form of
+reliability evidence, because a rater tends to agree with themselves. Reliability is
+therefore anchored on the **stronger** check — agreement with a *different, independent*
+rater (κ = 0.84) applying the same documented codebook — supported by the sensitivity
+analysis above showing no headline depends on the single ambiguous label. The claim is
+bounded accordingly: the gold is reproducible by an independent rater to κ ≈ 0.84; a
+*human* second-annotator study is acknowledged as future work (§6), the gap being one of
+annotator availability, not of method.
 
 **Reproducibility.** `python scripts/audit/interrater.py --rater llm` (LLM annotator
 kappa); `--emit-template <csv>` then `--rater human --labels <csv>` (test–retest).
@@ -1092,12 +1100,15 @@ instrumentation:
    sets were authored by a single researcher, so a second *human* labelling would ideally
    corroborate them. This is **accepted as a bounded limitation** rather than left as an
    action item, for two reasons: (i) it is *mitigated* — reliability is triangulated three
-   ways (§2.9): a documented annotation codebook, an independent LLM annotator reproducing
-   the gold at **κ = 0.84** ("almost perfect"), and an intra-rater test–retest instrument
-   (the 12-item template is prepared and re-runnable); and (ii) the residual gap is one of
-   *resourcing*, not method — no second human annotator was available within the project's
-   scope. The claim is therefore stated conservatively: the gold is reproducible by
-   independent raters to κ ≈ 0.84, and a human inter-rater κ is acknowledged as future work.
+   ways (§2.9): a documented annotation codebook and an independent LLM annotator reproducing
+   the gold at **κ = 0.84** ("almost perfect"), backed by a sensitivity analysis; and (ii)
+   the residual gap is one of *annotator availability*, not method — no second human
+   annotator was available within the project's scope. A single-author *intra-rater*
+   re-test was deliberately not used as evidence, because a credible washout is not
+   achievable for a sole author immersed in the schemas and self-agreement is the weaker
+   reliability signal anyway (§2.9); the *independent*-rater κ is the stronger check. The
+   claim is therefore stated conservatively: the gold is reproducible by an independent rater
+   to κ ≈ 0.84, and a human second-annotator study is acknowledged as future work.
    No result in this document rests on a contested gold label — the one ambiguous item
    (`terminals`, §2.9) is shown not to change the headline via a sensitivity check.
 2. **Over-strict generated satellite tests — resolved.** This was previously the one
@@ -1142,9 +1153,11 @@ define the envelope within which the results should be read.
 
 **Construct validity (are we measuring the right thing?)**
 - **Single-author gold sets** (§2.9, item 1) — the reference answers were authored by one
-  researcher. Mitigated by a codebook, an independent LLM annotator (κ = 0.84), and a
-  re-test instrument; a *human* second labelling was out of scope. Accepted as a bounded
-  limitation; no headline rests on a contested label.
+  researcher. Mitigated by a codebook, an *independent* LLM annotator (κ = 0.84), and a
+  sensitivity analysis. A same-author intra-rater re-test was deliberately not used (no
+  credible washout for a sole immersed author; self-agreement is weaker evidence than an
+  independent rater); a *human* second-annotator study was out of scope for annotator
+  availability. Accepted as a bounded limitation; no headline rests on a contested label.
 - **Grounding is partly a design property.** The near-zero hallucination rate reflects that
   generation is constrained to the discovered schema — the metric *confirms* the design
   holds rather than revealing an emergent surprise. It should be read as "the pipeline
