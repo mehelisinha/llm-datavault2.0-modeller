@@ -7,8 +7,6 @@ rather than taking the gold on trust.
 
 Read alongside:
 - `RUBRIC.md` — how a gold set is turned into a scoring instrument (Tier 1/2/3).
-- `../../../../documentation/thesis/annotation-codebook.md` — the labelling protocol the
-  independent annotator also used (reliability check, κ = 0.84).
 
 > **Scope note.** The gold sets were hand-authored **from the source schema**, *not* from
 > the pipeline's output — otherwise the ablation would be circular. Every label below is a

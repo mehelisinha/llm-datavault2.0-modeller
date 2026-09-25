@@ -179,8 +179,7 @@ first store construction; schema auto-created):
 ## 9. Evaluation & experiments (thesis)
 
 `evaluation/` — ground-truth-free + gold-based quality metrics over a
-`ModelingPlan` (details in
-[`../../thesis/experiments-and-evaluation.md`](../../thesis/experiments-and-evaluation.md)):
+`ModelingPlan`:
 
 | Module | Metric |
 |---|---|
