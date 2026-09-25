@@ -7,10 +7,10 @@ from functools import cached_property
 from logging import Logger
 from typing import Any, Dict
 
-from shared.src.infra.file_manager.concrete.yml_handler import YamlHandler
-from shared.src.logger.default_logger import default_logger
 from dbt_builder.src.dv_components.helpers.template_renderer import TemplateRenderer
 from dbt_builder.src.dv_components.pydantic_model.discriminator import SqlModels
+from shared.src.infra.file_manager.concrete.yml_handler import YamlHandler
+from shared.src.logger.default_logger import default_logger
 
 # ---------------------------------------------------------------------------
 # Configuration utilities
@@ -130,20 +130,24 @@ class DVBaseYmlGenerator(ABC):
     # ------------------------------------------------------------------
 
     @property
+    def _model_level_tests(self) -> list[dict]:
+        """Model-level (multi-column) dbt tests. Empty unless a subclass adds them
+        (e.g. satellites assert uniqueness on the composite grain, not a single column)."""
+        return []
+
+    @property
     def _yaml_template(self) -> dict | None:
         """Build a dbt-compatible schema dict (version: 2, models: [...])."""
         cols = self._cols_for_yml
         if cols:
-            return {
-                "version": 2,
-                "models": [
-                    {
-                        "name": self.model.name,
-                        "description": self.model.description or "",
-                        "columns": self._cols_for_yml,
-                    }
-                ],
+            model: dict = {
+                "name": self.model.name,
+                "description": self.model.description or "",
+                "columns": self._cols_for_yml,
             }
+            if self._model_level_tests:
+                model["tests"] = self._model_level_tests
+            return {"version": 2, "models": [model]}
         return None
 
     # ------------------------------------------------------------------
@@ -275,9 +279,16 @@ class DVBaseRawVaultComponent(DVBaseComponentGenerator, ABC):
         }
 
     @property
+    def _pk_tests(self) -> list[str]:
+        """Column-level tests for the hash key. A hub/link hash key is unique per row,
+        so ``unique`` is correct; satellites override this because their grain is the
+        composite (hash key + load date), not the hash key alone."""
+        return ["not_null", "unique"]
+
+    @property
     def _default_cols_for_yml(self) -> list[dict]:
         return [
-            {"name": self.model.src_pk, "tests": ["not_null", "unique"]},
+            {"name": self.model.src_pk, "tests": self._pk_tests},
             {"name": self.model.src_ldts, "tests": ["not_null"]},
         ]
 

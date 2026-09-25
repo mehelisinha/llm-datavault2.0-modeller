@@ -1,0 +1,49 @@
+# Gold DV2 model for the it4it_servicenow ServiceNow instance.
+#
+# Hand-authored from the SOURCE SCHEMA (not the model's output — that would make
+# the ablation circular). Structural format: each hub is keyed by
+# (source_table, business_keys) so grading is naming-independent (matches
+# hub_core_company to the company entity regardless of name) and reports naming
+# adherence separately. system_id matches poc/metadata/servicenow_it4it_discovery.yaml.
+#
+# Business keys: ServiceNow reference tables (company/department/location/sla)
+# have no reliable semantic key, so they are keyed on the stable sys_id GUID;
+# country uses iso3166_3; user/group use their membership columns. CONFIRMED
+# convention (2026-07). `volumemetrics` is intentionally excluded (telemetry).
+# sys_user_grmember yields TWO entities (user, group) — hence two hubs on one
+# source table, disambiguated by business key. See RUBRIC.md for full caveats.
+system_id: SNOW_IT4IT_001
+discovery_payload: poc/metadata/servicenow_it4it_discovery.yaml
+hubs:
+  - {source_table: core_company,      business_keys: [sys_id],    name: hub_company}
+  - {source_table: core_country,      business_keys: [iso3166_3], name: hub_country}
+  - {source_table: cmn_department,    business_keys: [sys_id],    name: hub_department}
+  - {source_table: cmn_location,      business_keys: [sys_id],    name: hub_location}
+  - {source_table: contract_sla,      business_keys: [sys_id],    name: hub_sla}
+  - {source_table: sys_user_grmember, business_keys: [user],      name: hub_user}
+  - {source_table: sys_user_grmember, business_keys: [group],     name: hub_group}
+# Reference counts only (names are naming-confounded, so not name-matched).
+links:
+  - link_company_country
+  - link_company_parent
+  - link_company_vendor_manager
+  - link_department_company
+  - link_department_parent
+  - link_location_company
+  - link_location_country
+  - link_location_parent
+  - link_user_group
+  - link_u_mcs_company_approval_group
+  - link_u_mcs_company_department
+satellites:
+  - sat_company_details
+  - sat_company_operational
+  - sat_country_details
+  - sat_country_operational
+  - sat_department_details
+  - sat_department_operational
+  - sat_location_details
+  - sat_location_operational
+  - sat_sla_details
+  - sat_task_sla_measurements
+  - sat_user_group_details

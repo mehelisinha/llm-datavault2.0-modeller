@@ -1,0 +1,44 @@
+﻿# Experiment 5b - full pipeline modeller+reviewer (both systems, seeds 42-43)
+# command: python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --system IEC_CIM_001 --condition full:k=10,review=1 --seeds 42,43
+# generated: 2026-07-30 22:59
+At C:\Users\user\AppData\Local\Temp\claude\C--Users-user-OneDrive---E-ON-Desktop-DWA\cf4f9cbd-901d-42
+84-b9bb-092f0532a08b\scratchpad\regen_snapshots.ps1:13 char:12
+ 
+systems=['SNOW_IT4IT_001', 'IEC_CIM_001']  conditions=['full']  seeds=[42, 43]  samples=1
+
+[SNOW_IT4IT_001 full       s=42] ef1=0.93 nam=1.00 conf=0.97 iss=5 wimpact=37 lr=1.36 | model 22s  ->REV ef1=0.93 nam=1.00 conf=0.97 iss=6 wimpact=38 lr=1.36 (review 25s)
+[SNOW_IT4IT_001 full       s=43] ef1=0.93 nam=1.00 conf=0.97 iss=5 wimpact=40 lr=1.36 | model 20s  ->REV ef1=0.93 nam=1.00 conf=0.97 iss=6 wimpact=41 lr=1.36 (review 27s)
+[IEC_CIM_001    full       s=42] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 5s  ->REV ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 (review 6s)
+[IEC_CIM_001    full       s=43] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 4s  ->REV ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 (review 8s)
+
+=== STUDY SUMMARY (means over seeds) ===
+
+SNOW_IT4IT_001/full:
+  gold_entity_f1         0.933 -> 0.933
+  gold_naming_adherence  1.0 -> 1.0
+  conformance_score      0.973 -> 0.968
+  issue_count            5.0 -> 6.0
+  weighted_error_impact  38.5 -> 39.5
+  gold_link_ratio        1.364 -> 1.364
+  correction_steps       13.0 -> 13.0
+  taxonomy raw     : {'surrogate_business_key': 8, 'hub_without_satellite': 2}
+  taxonomy reviewed: {'surrogate_business_key': 8, 'payload_key_leak': 2, 'hub_without_satellite': 2}
+  resolved         : {}
+  introduced       : {'payload_key_leak': 2}
+  net_resolved     : -2
+
+IEC_CIM_001/full:
+  gold_entity_f1         1.0 -> 1.0
+  gold_naming_adherence  1.0 -> 1.0
+  conformance_score      1.0 -> 1.0
+  issue_count            0.0 -> 0.0
+  weighted_error_impact  0.0 -> 0.0
+  gold_link_ratio        2.0 -> 2.0
+  correction_steps       2.0 -> 2.0
+  taxonomy raw     : {}
+  taxonomy reviewed: {}
+  resolved         : {}
+  introduced       : {}
+  net_resolved     : 0
+
+results written to C:\Users\user\OneDrive - ExampleCorp\Desktop\DWA\dwa\output\exp5_full.json

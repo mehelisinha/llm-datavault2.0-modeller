@@ -1,0 +1,542 @@
+system:
+  system_id: ADVWORKS_001
+  system_name: AdventureWorks
+  source_type: delta
+  catalog: edh_unreg_consumption_dev
+  schema: 2240_adventureworks
+  load_frequency: daily
+  record_source: ADVENTUREWORKS_v1
+  record_source_column: RECORD_SOURCE
+  default_ldts: LOAD_DATE
+packages:
+- package: dbt-labs/dbt_utils
+  version: 1.3.3
+- package: metaplane/dbt_expectations
+  version: 0.10.10
+- package: Datavault-UK/automate_dv
+  version: 0.10.2
+macros:
+- name: generate_schema_name
+  description: Generates the schema name by overwriting the AutomateDV default behavior.
+hubs:
+- name: hub_address
+  source_table: address
+  staging_model: stg_address
+  business_key: AddressID
+  hash_key: HK_ADDRESS
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_ADDRESS
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_ADDRESS,LOAD_DATE
+- name: hub_customer
+  source_table: customer
+  staging_model: stg_customer
+  business_key: CustomerID
+  hash_key: HK_CUSTOMER
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CUSTOMER
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CUSTOMER,LOAD_DATE
+- name: hub_product
+  source_table: product
+  staging_model: stg_product
+  business_key: ProductID
+  hash_key: HK_PRODUCT
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_PRODUCT
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 4
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_PRODUCT,LOAD_DATE
+satellites:
+- name: sat_address_details
+  description: Details attributes for hub_address (static change velocity).
+  parent_hub: hub_address
+  source_model: stg_address
+  hash_key: HK_ADDRESS
+  hashdiff: HD_ADDRESS_DETAILS
+  effective_from: ModifiedDate
+  payload:
+  - AddressLine1
+  - AddressLine2
+  - City
+  - StateProvince
+  - CountryRegion
+  - PostalCode
+  - rowguid
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_ADDRESS
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_ADDRESS,LOAD_DATE,HD_ADDRESS_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_customer_details
+  description: Details attributes for hub_customer (static change velocity).
+  parent_hub: hub_customer
+  source_model: stg_customer
+  hash_key: HK_CUSTOMER
+  hashdiff: HD_CUSTOMER_DETAILS
+  effective_from: ModifiedDate
+  payload:
+  - NameStyle
+  - Title
+  - FirstName
+  - MiddleName
+  - LastName
+  - Suffix
+  - CompanyName
+  - SalesPerson
+  - EmailAddress
+  - Phone
+  - PasswordHash
+  - PasswordSalt
+  - rowguid
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CUSTOMER
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CUSTOMER,LOAD_DATE,HD_CUSTOMER_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_product_details
+  description: Details attributes for hub_product (static change velocity).
+  parent_hub: hub_product
+  source_model: stg_product
+  hash_key: HK_PRODUCT
+  hashdiff: HD_PRODUCT_DETAILS
+  effective_from: ModifiedDate
+  payload:
+  - Name
+  - ProductNumber
+  - Color
+  - Size
+  - ThumbNailPhoto
+  - ThumbnailPhotoFileName
+  - rowguid
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_PRODUCT
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_PRODUCT,LOAD_DATE,HD_PRODUCT_DETAILS
+  subgroup: details
+  change_velocity: static
+- name: sat_product_measurements
+  description: Measurements attributes for hub_product (dynamic change velocity).
+  parent_hub: hub_product
+  source_model: stg_product
+  hash_key: HK_PRODUCT
+  hashdiff: HD_PRODUCT_MEASUREMENTS
+  effective_from: ModifiedDate
+  payload:
+  - StandardCost
+  - ListPrice
+  - Weight
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_PRODUCT
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_PRODUCT,LOAD_DATE,HD_PRODUCT_MEASUREMENTS
+  subgroup: measurements
+  change_velocity: dynamic
+- name: sat_product_operational
+  description: Operational attributes for hub_product (dynamic change velocity).
+  parent_hub: hub_product
+  source_model: stg_product
+  hash_key: HK_PRODUCT
+  hashdiff: HD_PRODUCT_OPERATIONAL
+  effective_from: ModifiedDate
+  payload:
+  - ProductCategoryID
+  - ProductModelID
+  - SellStartDate
+  - SellEndDate
+  - DiscontinuedDate
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_PRODUCT
+    - LOAD_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_PRODUCT,LOAD_DATE,HD_PRODUCT_OPERATIONAL
+  subgroup: operational
+  change_velocity: dynamic
+links:
+- name: link_customer_address
+  source_model: stg_customeraddress
+  hash_key: HK_CUSTOMER_ADDRESS
+  fk_columns:
+  - HK_CUSTOMER
+  - HK_ADDRESS
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: append
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CUSTOMER_ADDRESS
+    - HK_CUSTOMER
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.appendOnly: true
+      delta.dataSkippingStatsColumns: HK_CUSTOMER_ADDRESS,HK_CUSTOMER,LOAD_DATE
+eff_sats:
+- name: eff_sat_link_customer_address
+  parent_link: link_customer_address
+  source_model: stg_customeraddress
+  hash_key: HK_CUSTOMER_ADDRESS
+  driving_fk: HK_CUSTOMER
+  secondary_fk:
+  - HK_ADDRESS
+  effective_from: EFFECTIVE_FROM
+  start_date: START_DATE
+  end_date: END_DATE
+  databricks_config:
+    materialized: incremental
+    incremental_strategy: merge
+    unique_key: HK_CUSTOMER_ADDRESS
+    on_schema_change: append_new_columns
+    cluster_by:
+    - HK_CUSTOMER_ADDRESS
+    - END_DATE
+    table_properties:
+      delta.autoOptimize.optimizeWrite: true
+      delta.autoOptimize.autoCompact: true
+      delta.targetFileSize: 134217728
+      delta.tuneFileSizesForRewrites: true
+      delta.logRetentionDuration: interval 30 days
+      delta.deletedFileRetentionDuration: interval 7 days
+      delta.dataSkippingNumIndexedCols: 8
+      delta.enableDeletionVectors: false
+      delta.dataSkippingStatsColumns: HK_CUSTOMER_ADDRESS,END_DATE,LOAD_DATE
+staging:
+- name: stg_address
+  source_table: address
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_ADDRESS:
+    - AddressID
+    HD_ADDRESS_DETAILS:
+      is_hashdiff: true
+      columns:
+      - AddressLine1
+      - AddressLine2
+      - City
+      - StateProvince
+      - CountryRegion
+      - PostalCode
+      - rowguid
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: AddressID
+      order_by: load_dts
+- name: stg_customer
+  source_table: customer
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CUSTOMER:
+    - CustomerID
+    HD_CUSTOMER_DETAILS:
+      is_hashdiff: true
+      columns:
+      - NameStyle
+      - Title
+      - FirstName
+      - MiddleName
+      - LastName
+      - Suffix
+      - CompanyName
+      - SalesPerson
+      - EmailAddress
+      - Phone
+      - PasswordHash
+      - PasswordSalt
+      - rowguid
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: CustomerID
+      order_by: load_dts
+- name: stg_customeraddress
+  source_table: customeraddress
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_CUSTOMER:
+    - CustomerID
+    HK_ADDRESS:
+    - AddressID
+    HK_CUSTOMER_ADDRESS:
+    - HK_CUSTOMER
+    - HK_ADDRESS
+- name: stg_product
+  source_table: product
+  databricks_config:
+    materialized: view
+  derived_columns:
+    RECORD_SOURCE: record_source
+    LOAD_DATE: load_dts
+    EFFECTIVE_FROM: load_dts
+    CDC_FLAG: cdc_flag
+    START_DATE: load_dts
+    END_DATE: CASE WHEN cdc_flag = 'D' THEN CURRENT_TIMESTAMP ELSE CAST('9999-12-31'
+      AS DATE) END
+    IS_DELETED: CASE WHEN cdc_flag = 'D' THEN TRUE ELSE FALSE END
+  hashed_columns:
+    HK_PRODUCT:
+    - ProductID
+    HD_PRODUCT_DETAILS:
+      is_hashdiff: true
+      columns:
+      - Name
+      - ProductNumber
+      - Color
+      - Size
+      - ThumbNailPhoto
+      - ThumbnailPhotoFileName
+      - rowguid
+    HD_PRODUCT_MEASUREMENTS:
+      is_hashdiff: true
+      columns:
+      - StandardCost
+      - ListPrice
+      - Weight
+    HD_PRODUCT_OPERATIONAL:
+      is_hashdiff: true
+      columns:
+      - ProductCategoryID
+      - ProductModelID
+      - SellStartDate
+      - SellEndDate
+      - DiscontinuedDate
+  ranked_columns:
+    DBTVAULT_RANK:
+      partition_by: ProductID
+      order_by: load_dts
+dim_tables:
+- name: dim_address
+  description: Current state of address (hub + PIT + satellites).
+  hub: hub_address
+  src_pk: HK_ADDRESS
+  business_key: AddressID
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_address_details
+    columns:
+    - AddressLine1
+    - AddressLine2
+    - City
+    - StateProvince
+    - CountryRegion
+    - PostalCode
+    - rowguid
+- name: dim_customer
+  description: Current state of customer (hub + PIT + satellites).
+  hub: hub_customer
+  src_pk: HK_CUSTOMER
+  business_key: CustomerID
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_customer_details
+    columns:
+    - NameStyle
+    - Title
+    - FirstName
+    - MiddleName
+    - LastName
+    - Suffix
+    - CompanyName
+    - SalesPerson
+    - EmailAddress
+    - Phone
+    - PasswordHash
+    - PasswordSalt
+    - rowguid
+- name: dim_product
+  description: Current state of product (hub + PIT + satellites).
+  hub: hub_product
+  src_pk: HK_PRODUCT
+  business_key: ProductID
+  databricks_config:
+    materialized: view
+  satellites:
+  - name: sat_product_details
+    columns:
+    - Name
+    - ProductNumber
+    - Color
+    - Size
+    - ThumbNailPhoto
+    - ThumbnailPhotoFileName
+    - rowguid
+  - name: sat_product_measurements
+    columns:
+    - StandardCost
+    - ListPrice
+    - Weight
+  - name: sat_product_operational
+    columns:
+    - ProductCategoryID
+    - ProductModelID
+    - SellStartDate
+    - SellEndDate
+    - DiscontinuedDate
+databricks_optimization:
+  default_file_size: 134217728
+  log_retention: interval 30 days
+  deleted_file_retention: interval 7 days
+  auto_optimize:
+    optimize_write: true
+    auto_compact: true
+  liquid_clustering:
+    enabled: true
+    preferred_over_zorder: true
+  skipping_indexed_cols: 8
+  incremental_strategy_defaults:
+    hub: append
+    satellite_raw: append
+    satellite_bv: append
+    link: append
+    eff_sat: merge
+    pit: insert_overwrite
+    bridge: table
+    staging: view
+    as_of_dates: view
+    dim: view
+    fact: view

@@ -1,0 +1,268 @@
+"""Pipeline-run endpoints.
+
+The agentic surface for the UI: one POST to run the whole pipeline, one GET
+to poll its progress.  Internally the orchestrator handles step sequencing,
+risk supervision, and YAML generation; the UI only sees the high-level run
+artifact.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from dbt_builder.api.discovery_callables import (
+    resolve_snapshot_callables,
+    tables_to_include_patterns,
+)
+from dbt_builder.api.settings import ApiSettings, get_settings
+from dbt_builder.src.ai.contracts.payloads import SourceSystem
+from dbt_builder.src.ai.contracts.pipeline_run import PipelineRun
+from dbt_builder.src.ai.service import (
+    DwaService,
+    PipelineInput,
+    get_service,
+)
+
+_LOG = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
+
+
+# ── Request body ────────────────────────────────────────────────────────────
+
+
+class PipelineRunRequest(BaseModel):
+    """User-facing request to run the full pipeline.
+
+    Deliberately omits ``stop_after``: the public flow is always "all the way
+    to YAML, paused only when the supervisor flags risk".  Acknowledging the
+    risk is the only knob exposed to the operator.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    catalog: str = Field(..., min_length=1)
+    bronze_schema: str = Field(..., min_length=1)
+    # Optional: omit for greenfield builds (diff treats every bronze table as NEW).
+    vault_schema: str | None = Field(default=None, min_length=1)
+    system_id: str = Field(..., min_length=1)
+    system_name: str = Field(..., min_length=1)
+    source_type: str = Field(..., min_length=1)
+    record_source: str | None = None
+
+    # Explicit table allowlist (same semantics as /api/discovery/snapshot).
+    tables: tuple[str, ...] = ()
+    include_patterns: tuple[str, ...] = ()
+    exclude_patterns: tuple[str, ...] = ()
+
+    acknowledge_risks: bool = False
+
+
+# ── Catalog adapter ─────────────────────────────────────────────────────────
+
+
+def _source_system_for(req: PipelineRunRequest) -> SourceSystem:
+    """Build a :class:`SourceSystem` with sane metadata from the request.
+
+    The UI sometimes echoes the catalog name into ``source_type`` (and leaves
+    ``record_source`` unset), which stamps a meaningless value onto every
+    downstream record and the generated YAML's ``system`` block. Normalise an
+    obvious non-type to the default Delta source type, and derive a real
+    record source as ``catalog.schema`` (the same convention the Spark
+    discovery adapter uses) when the caller doesn't supply one.
+    """
+    # Single source of truth for the fallback source type is the contract's own
+    # default, not a literal repeated here.
+    default_source_type = SourceSystem.model_fields["source_type"].default
+    source_type = (req.source_type or "").strip()
+    if source_type.lower() in {"", req.catalog.lower(), req.system_id.lower()}:
+        source_type = default_source_type
+    record_source = req.record_source or f"{req.catalog}.{req.bronze_schema}"
+    return SourceSystem(
+        system_id=req.system_id,
+        system_name=req.system_name,
+        source_type=source_type,
+        record_source=record_source,
+    )
+
+
+def _build_pipeline_input(req: PipelineRunRequest, settings: ApiSettings) -> PipelineInput:
+    """Translate the request into a :class:`PipelineInput`.
+
+    Catalog callables are resolved from ``settings.discovery_mode`` so the
+    pipeline reads the same source as the discovery dropdowns (stub YAML,
+    Unity Catalog REST, or Spark).
+    """
+    (
+        list_vault_entities,
+        describe_vault,
+        list_bronze_tables,
+        describe_bronze,
+    ) = resolve_snapshot_callables(
+        settings,
+        catalog=req.catalog,
+        bronze_schema=req.bronze_schema,
+        vault_schema=req.vault_schema,
+    )
+
+    system = _source_system_for(req)
+    return PipelineInput(
+        catalog=req.catalog,
+        bronze_schema=req.bronze_schema,
+        vault_schema=req.vault_schema,
+        system=system,
+        list_vault_entities=list_vault_entities,
+        describe_vault=describe_vault,
+        list_bronze_tables=list_bronze_tables,
+        describe_bronze=describe_bronze,
+        include_patterns=tables_to_include_patterns(req.tables, req.include_patterns),
+        exclude_patterns=req.exclude_patterns,
+    )
+
+
+# ── Routes ──────────────────────────────────────────────────────────────────
+
+
+@router.post("/run", response_model=PipelineRun, status_code=status.HTTP_201_CREATED)
+def run_pipeline(
+    req: PipelineRunRequest,
+    settings: Annotated[ApiSettings, Depends(get_settings)],
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> PipelineRun:
+    """Execute the pipeline end-to-end and return the run artifact.
+
+    The run is persisted in the in-memory pipeline-run store; the UI re-fetches
+    it via :func:`get_pipeline_run` to drive the live timeline.
+    """
+    pipeline_input = _build_pipeline_input(req, settings)
+    _LOG.info(
+        "POST /api/pipeline/run start: catalog=%s bronze_schema=%s tables=%d ack_risks=%s",
+        req.catalog,
+        req.bronze_schema,
+        len(req.tables),
+        req.acknowledge_risks,
+    )
+    t0 = time.perf_counter()
+    try:
+        run = service.run_pipeline(
+            pipeline_input,
+            acknowledge_risks=req.acknowledge_risks,
+        )
+    except Exception as exc:  # noqa: BLE001 — surface internals as 500 with detail
+        _LOG.exception(
+            "Pipeline run failed before reaching the orchestrator after %.1fs",
+            time.perf_counter() - t0,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+    _LOG.info(
+        "POST /api/pipeline/run done in %.1fs: run_id=%s status=%s",
+        time.perf_counter() - t0,
+        run.run_id,
+        getattr(run, "status", "?"),
+    )
+    return run
+
+
+class GovernanceRecommendation(BaseModel):
+    """Plain-language approve/review/reject guidance for a pipeline run's plan.
+
+    Computed from the objective checks already available on the run — DV2
+    conformance, source grounding (from the bronze snapshot), and gold grading
+    when a reference model exists for the system — so a non-expert reviewer knows
+    whether to approve, and a rejection carries a meaningful auto-generated reason.
+    """
+
+    verdict: str  # approve | review | reject
+    blocking_reasons: list[str] = []
+    review_reasons: list[str] = []
+    rejection_message: str = ""
+    hallucination_rate: float = 0.0
+
+
+def _recommendation_for_run(run: PipelineRun) -> GovernanceRecommendation:
+    """Build the approval recommendation from a settled run's plan + snapshot."""
+    from dbt_builder.src.ai.evaluation.conformance import score_plan
+    from dbt_builder.src.ai.evaluation.gold import grade_against_gold, load_gold_models
+    from dbt_builder.src.ai.evaluation.grounding import check_grounding_from_columns
+    from dbt_builder.src.ai.evaluation.recommend import recommend_approval
+
+    plan = run.plan
+    try:
+        from dbt_builder.src.ai.settings import get_settings as _get_ai_settings
+
+        technical = _get_ai_settings().technical_payload_column_set()
+    except Exception:  # noqa: BLE001 — settings not configured in some contexts
+        technical = frozenset()
+
+    grounding = None
+    if run.bronze_snapshot is not None:
+        columns_by_table = {
+            t.name.strip().lower(): {c.name.strip().lower() for c in t.columns}
+            for t in run.bronze_snapshot.tables
+        }
+        if columns_by_table:
+            grounding = check_grounding_from_columns(plan, columns_by_table)
+
+    gold = load_gold_models().get(plan.system_id)
+    gold_score = grade_against_gold(plan, gold) if gold is not None else None
+
+    rec = recommend_approval(
+        conformance=score_plan(plan, technical_columns=technical),
+        grounding=grounding,
+        gold=gold_score,
+    )
+    return GovernanceRecommendation(
+        verdict=rec.verdict.value,
+        blocking_reasons=list(rec.blocking_reasons),
+        review_reasons=list(rec.review_reasons),
+        rejection_message=rec.rejection_message,
+        hallucination_rate=grounding.hallucination_rate if grounding is not None else 0.0,
+    )
+
+
+@router.get("/runs/{run_id}/recommendation", response_model=GovernanceRecommendation)
+def get_run_recommendation(
+    run_id: str,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> GovernanceRecommendation:
+    """Approve/review/reject guidance for a run's plan (empty verdict until modelled)."""
+    run = service.get_pipeline_run(run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Pipeline run {run_id!r} not found."
+        )
+    if run.plan is None:
+        # The plan does not exist until ANALYZE has run; surface an explicit
+        # "not ready" rather than a 500 so the UI can simply hide the card.
+        return GovernanceRecommendation(verdict="", review_reasons=["plan not generated yet"])
+    return _recommendation_for_run(run)
+
+
+@router.get("/runs/{run_id}", response_model=PipelineRun)
+def get_pipeline_run(
+    run_id: str,
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+) -> PipelineRun:
+    run = service.get_pipeline_run(run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline run {run_id!r} not found.",
+        )
+    return run
+
+
+@router.get("/runs", response_model=list[PipelineRun])
+def list_pipeline_runs(
+    service: DwaService = Depends(get_service),  # noqa: B008  FastAPI dependency
+    limit: int = 50,
+) -> list[PipelineRun]:
+    return list(service.list_pipeline_runs(limit=limit))

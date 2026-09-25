@@ -1,0 +1,37 @@
+﻿Learning OFF vs ON — paired permutation test, n=20 seeds (42-61), gpt-4.1
+
+==================== gold_entity_f1 ====================
+IEC_CIM_001            gold_entity_f1                  off->on    1.000    1.000   +0.000    [+0.000,+0.000]   1.000  +0.000  negligible
+SNOW_IT4IT_001         gold_entity_f1                  off->on    0.930    0.936   -0.005    [-0.028,+0.016]   0.583  -0.035  negligible
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== gold_naming_adherence ====================
+IEC_CIM_001            gold_naming_adherence           off->on    1.000    1.000   +0.000    [+0.000,+0.000]   1.000  +0.000  negligible
+SNOW_IT4IT_001         gold_naming_adherence           off->on    0.000    0.343   -0.343    [-0.514,-0.171]   0.002  -0.500       large
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== gold_link_ratio ====================
+IEC_CIM_001            gold_link_ratio                 off->on    2.000    2.000   +0.000    [+0.000,+0.000]   1.000  +0.000  negligible
+SNOW_IT4IT_001         gold_link_ratio                 off->on    1.168    1.159   +0.009    [-0.045,+0.059]   0.868  +0.077  negligible
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== conformance_score ====================
+IEC_CIM_001            conformance_score               off->on    1.000    1.000   +0.000    [+0.000,+0.000]   1.000  +0.000  negligible
+SNOW_IT4IT_001         conformance_score               off->on    0.958    0.962   -0.004    [-0.009,+0.001]   0.132  -0.280       small
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== weighted_error_impact ====================
+IEC_CIM_001            weighted_error_impact           off->on    0.000    0.000   +0.000    [+0.000,+0.000]   1.000  +0.000  negligible
+SNOW_IT4IT_001         weighted_error_impact           off->on   32.500   39.600   -7.100   [-10.150,-4.050]   0.000  -0.705       large
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).
+
+==================== correction_steps ====================
+IEC_CIM_001            correction_steps                off->on    2.100    2.000   +0.100    [+0.000,+0.250]   0.502  +0.100  negligible
+SNOW_IT4IT_001         correction_steps                off->on   12.500   12.150   +0.350    [-1.700,+2.400]   0.776  -0.028  negligible
+
+Δ = mean(A) − mean(B); CI = 95% bootstrap on the per-seed differences; p = exact paired permutation test; δ = Cliff's delta (effect size).

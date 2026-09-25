@@ -23,6 +23,7 @@ from typing import Any
 
 import yaml
 
+from dbt_builder.src.ai.contracts.bv import BvProposal
 from dbt_builder.src.ai.contracts.decisions import ModelingPlan
 from dbt_builder.src.ai.contracts.validation import (
     CheckSummary,
@@ -31,6 +32,11 @@ from dbt_builder.src.ai.contracts.validation import (
     ValidationReport,
 )
 from dbt_builder.src.ai.utils.ids import stable_id
+from dbt_builder.src.ai.validation.dbt_gate import (
+    DbtCommandRunner,
+    DbtGateConfig,
+    run_dbt_gate,
+)
 
 _SYSTEM_COLUMN_NAMES = frozenset({"load_dts", "load_date", "record_source", "cdc_flag"})
 
@@ -229,43 +235,6 @@ def _check_referential_integrity(parsed_yaml: dict[str, Any] | None) -> list[Val
     return issues
 
 
-def _check_dbt_parse(dbt_project_path: str | None) -> list[ValidationIssue]:
-    """Optional ``dbt parse`` dry-run.
-
-    Skipped when no project path is supplied. This lets the UI run the
-    validator on a generated plan before it is materialised into a dbt
-    project tree.
-    """
-    if dbt_project_path is None:
-        return []
-    # Real implementation invokes ``dbt parse --project-dir <path>``; we keep
-    # this thin to avoid hard-coupling Phase A to dbt-core in tests. The
-    # service facade is responsible for constructing the path.
-    try:
-        from dbt.cli.main import dbtRunner  # type: ignore
-
-        runner = dbtRunner()
-        result = runner.invoke(["parse", "--project-dir", dbt_project_path])
-        if not result.success:
-            return [
-                ValidationIssue(
-                    code="DBT_PARSE",
-                    severity=Severity.ERROR,
-                    message=f"dbt parse failed: {result.exception or 'see logs'}",
-                    location=dbt_project_path,
-                )
-            ]
-    except Exception as exc:  # pragma: no cover - environment dependent
-        return [
-            ValidationIssue(
-                code="DBT_PARSE_UNAVAILABLE",
-                severity=Severity.WARNING,
-                message=f"Could not run dbt parse: {exc}",
-            )
-        ]
-    return []
-
-
 # ─── public entry point ─────────────────────────────────────────────────────
 
 
@@ -273,12 +242,17 @@ def validate(
     *,
     plan: ModelingPlan | None = None,
     rendered_yaml: str | None = None,
-    dbt_project_path: str | None = None,
+    bv: BvProposal | None = None,
+    dbt_config: DbtGateConfig | None = None,
+    dbt_runner: DbtCommandRunner | None = None,
 ) -> ValidationReport:
     """Run all applicable checks and return a single :class:`ValidationReport`.
 
     At least one of ``plan`` / ``rendered_yaml`` should be supplied. Passing
-    both gives the strongest coverage (Pydantic + YAML + referential).
+    both gives the strongest coverage (Pydantic + YAML + referential). When
+    ``dbt_config.enabled`` the plan is also materialised into the configured
+    dbt project and run through ``dbt parse``/``compile``(/``build``); any dbt
+    failure is an ERROR, so the approval gate blocks a plan that won't compile.
     """
     issues: list[ValidationIssue] = []
     checks_run: list[str] = []
@@ -297,9 +271,9 @@ def validate(
         issues.extend(_check_referential_integrity(parsed_yaml))
         checks_run.append("referential_integrity")
 
-    if dbt_project_path is not None:
-        issues.extend(_check_dbt_parse(dbt_project_path))
-        checks_run.append("dbt_parse")
+    if dbt_config is not None and dbt_config.enabled:
+        issues.extend(run_dbt_gate(plan, bv, config=dbt_config, runner=dbt_runner))
+        checks_run.append("dbt_compile")
 
     summary = CheckSummary(
         errors=sum(1 for i in issues if i.severity is Severity.ERROR),

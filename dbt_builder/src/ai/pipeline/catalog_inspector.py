@@ -22,6 +22,7 @@ from dbt_builder.src.ai.contracts.catalog import (
     VaultColumn,
     VaultEntity,
 )
+from dbt_builder.src.ai.pipeline._parallel import ordered_parallel_map
 
 DescribeTable = Callable[[str, str, str], Iterable[tuple[str, str, bool, str | None]]]
 """Signature: ``(catalog, schema, table) -> iterable of (name, dtype, nullable, comment)``."""
@@ -57,6 +58,7 @@ def inspect_catalog(
     list_entities: ListEntities,
     describe_table: DescribeTable,
     metadata_yaml_path: str | Path | None = None,
+    describe_parallelism: int = 1,
 ) -> CatalogSnapshot:
     """Build a :class:`CatalogSnapshot` for ``catalog.schema_name``.
 
@@ -72,9 +74,15 @@ def inspect_catalog(
         Optional path to the existing ``system_metadata.yml`` to record on the
         snapshot. Parsing is opportunistic: a malformed file is logged via the
         snapshot's ``metadata_yaml_path`` field but does not fail inspection.
+    describe_parallelism
+        Number of ``describe_table`` calls to issue concurrently. ``1`` keeps
+        the legacy serial behaviour; production wires in
+        :attr:`AISettings.catalog_describe_parallelism`.
     """
-    entities: list[VaultEntity] = []
-    for name, kind_hint in list_entities(catalog, schema_name):
+    raw_entities = list(list_entities(catalog, schema_name))
+
+    def _describe(item: tuple[str, str]) -> VaultEntity:
+        name, kind_hint = item
         kind = kind_hint or _classify_kind(name)
         cols = tuple(
             VaultColumn(
@@ -85,7 +93,9 @@ def inspect_catalog(
             )
             for col_name, raw_dtype, nullable, comment in describe_table(catalog, schema_name, name)
         )
-        entities.append(VaultEntity(name=name, kind=kind, columns=cols))
+        return VaultEntity(name=name, kind=kind, columns=cols)
+
+    entities = ordered_parallel_map(_describe, raw_entities, max_workers=describe_parallelism)
 
     yaml_path_str: str | None = None
     if metadata_yaml_path is not None:

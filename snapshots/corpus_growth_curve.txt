@@ -1,0 +1,11 @@
+Open item #3 — successive-runs / corpus-growth curve (H1c), ServiceNow, k=10, mean over seeds [42, 43, 44]
+Grows ServiceNow's OWN approved corpus 0->125 objects (CIM 21 always present).
+
+snow_ex  corpus  naming  ent_F1   conf  issues  wimpact
+      0      21   0.000   0.933  0.956    5.33     29.7
+      5      26   0.714   0.793  0.943    9.67     49.3
+     10      31   0.833   0.643  0.945    9.00     36.0
+     20      41   0.833   0.632  0.953    7.33     26.7
+     40      61   0.905   0.956  0.957    6.33     40.0
+     80     101   0.857   0.900  0.955    7.00     42.0
+    125     146   0.667   0.978  0.964    5.67     40.7

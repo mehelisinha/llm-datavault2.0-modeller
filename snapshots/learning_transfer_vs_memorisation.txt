@@ -1,0 +1,31 @@
+﻿Cross-domain TRANSFER vs MEMORISATION CEILING — ServiceNow, learning OFF vs ON(k=10), n=20 (seeds 62-81)
+========================================================================================================
+Two ON arms, identical seeds, differing only in whether the target system's OWN approved
+model is retrievable:
+  * TRANSFER (leave-one-out): corpus = 21 CIM examples only  -> exp_clean_loo.json
+  * CEILING  (full corpus)  : corpus = 146 incl. ServiceNow's own model -> exp_mem_ceiling.json
+
+                         OFF      ON(transfer)   ON(ceiling)
+naming adherence        0.000        0.000          0.729     <- entire naming 'gain' is memorisation
+gold_entity_f1          0.93/0.953   0.947          0.967
+conformance             0.96/0.954   0.956          0.967
+weighted_error_impact   33.95/33.15  31.60          39.00     <- ceiling arm HURTS error impact
+gold_link_ratio(->1.0)  1.155/1.105  1.064          1.223     <- transfer improves parsimony; ceiling worsens it
+
+--- significance: MEMORISATION CEILING (full corpus), OFF vs ON ---
+
+== gold_naming_adherence ==
+SNOW_IT4IT_001         gold_naming_adherence           off->on    0.000    0.729   -0.729    [-0.893,-0.536]   0.000  -0.750       large
+
+
+== gold_link_ratio ==
+SNOW_IT4IT_001         gold_link_ratio                 off->on    1.105    1.223   -0.118    [-0.177,-0.059]   0.003  -0.615       large
+
+
+== weighted_error_impact ==
+SNOW_IT4IT_001         weighted_error_impact           off->on   33.150   39.000   -5.850    [-8.400,-3.200]   0.001  -0.743       large
+
+
+== gold_entity_f1 ==
+SNOW_IT4IT_001         gold_entity_f1                  off->on    0.953    0.967   -0.014    [-0.033,+0.006]   0.179  -0.215       small
+

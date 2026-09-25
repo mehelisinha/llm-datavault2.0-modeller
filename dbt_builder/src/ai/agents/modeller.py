@@ -34,15 +34,29 @@ from __future__ import annotations
 
 import json
 import logging
+import math
+import time
 from collections import Counter
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from threading import BoundedSemaphore, Condition, Lock
+from typing import TYPE_CHECKING, Any, get_args
 
 from pydantic import ValidationError
 
+from dbt_builder.src.ai.agents.tool_loop import (
+    ToolLoopError,
+    ToolSpec,
+    run_tool_loop,
+)
 from dbt_builder.src.ai.contracts.decisions import (
+    SAT_CAP_PER_HUB,
     DecisionConfidence,
+    HubDecision,
+    LinkDecision,
     ModelingPlan,
+    SatelliteDecision,
 )
 from dbt_builder.src.ai.contracts.payloads import (
     DiscoveryPayload,
@@ -53,22 +67,143 @@ from dbt_builder.src.ai.contracts.payloads import (
 if TYPE_CHECKING:
     from openai import AzureOpenAI
 
+    from dbt_builder.src.ai.reference import ReferenceLoader
     from dbt_builder.src.ai.settings import AISettings
 
 _LOG = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-    "You are a senior Data Vault 2.0 modelling expert. "
-    "You receive a JSON description of a source system (tables and columns) "
-    "and propose a raw-vault model: hubs (business-key entities), links "
-    "(relationships between hubs), and satellites (descriptive payloads). "
-    "Follow Dan Linstedt's classical DV2 conventions: one hub per business "
-    "concept, links carry no descriptive payload, and each satellite hangs "
-    "off exactly one hub. Use snake_case names with a 'hub_', 'link_', or "
-    "'sat_' prefix. Hash-key columns must be UPPER_SNAKE and start with 'HK_'. "
-    "Return STRICT JSON matching the provided schema. Do not include any "
-    "prose outside the JSON object."
+# Name of the rule file loaded from the prompts package (or the directory in
+# ``AISettings.ai_prompts_dir``). The file holds ONLY the modelling rules; the
+# strict-JSON output contract below is appended in code so the transport
+# contract can never be edited away from the rule file.
+_RV_RULES_NAME = "rv_modelling_rules"
+
+# Output contract — kept in code, NOT in the editable rule file. Azure
+# response_format=json_object guarantees JSON syntax but not field shape, so we
+# still spell out the expected schema in the user prompt; this line forbids any
+# surrounding prose.
+_OUTPUT_CONTRACT = (
+    "OUTPUT FORMAT: Return STRICT JSON matching the provided schema. No prose, "
+    "no markdown, no commentary outside the JSON object."
 )
+
+# Built-in fallback rules — byte-identical to ``prompts/rv_modelling_rules.md``.
+# Used only when that file (and any ``ai_prompts_dir`` override) is missing or
+# unreadable, so the agent degrades gracefully instead of sending an empty
+# system prompt. The file is the canonical, ops-editable source.
+_BUILTIN_RV_RULES = (
+    "You are a senior Data Vault 2.0 modelling expert applying Dan Linstedt's "
+    "classical conventions. You receive a JSON description of a source system "
+    "(tables and their columns, including descriptions, samples, cardinality, "
+    "null-rate, and key signals) and propose a raw-vault model: HUBS, LINKS, "
+    "and SATELLITES. Be thorough — under-modelling links and multi-hub tables "
+    "is the most common mistake and must be avoided.\n\n"
+    "MANDATORY RULES:\n"
+    "1. BUSINESS-KEY SELECTION. Choose a real, human-meaningful business key "
+    "whenever the table has one (e.g. `iso3166_3` for a country, `user`+`group` "
+    "for a membership table, `task` for a task reference). Only fall back to "
+    "`sys_id` / `id` / GUID-like surrogates when no semantic key exists. "
+    "High-cardinality NOT-NULL columns with low null_rate and high "
+    "cardinality_ratio that are NOT GUIDs are your candidates.\n"
+    "2. MULTI-HUB DECOMPOSITION. A single source table OFTEN yields MORE THAN "
+    "ONE HUB. Any table whose primary purpose is to associate two entities "
+    "(e.g. `sys_user_grmember` has `user` and `group`; `task_sla` has `task` "
+    "and `sla`) MUST produce one hub per referenced entity (`hub_user`, "
+    "`hub_group`) PLUS a link joining them (`link_user_group`). Do not collapse "
+    "such tables into a single `sys_id` hub.\n"
+    "3. LINK GENERATION IS REQUIRED. For EVERY table you process, scan all "
+    "columns for FK-like references (columns named like `<entity>`, "
+    "`<entity>_id`, `parent`, `manager`, `owner`, `contact`, `company`, "
+    "`group`, `user`, `department`, `location`, `country`, `vendor`, "
+    "`assigned_to`, `caller_id`, etc., or columns whose samples are GUIDs "
+    "pointing at another hub). EACH such FK column produces a link "
+    "(`link_<src>_<target>`) with two hash keys. Tables with ZERO links are "
+    "extremely rare — only pure reference tables (e.g. country code lookup) "
+    "have none. NEVER return an empty `links: []` list when the catalog has "
+    "association tables.\n"
+    "4. SELF-REFERENCING LINKS. Hierarchy columns (`parent`, `manager`, "
+    "`reports_to`) produce a self-link with `HK_<HUB>_CHILD` and "
+    "`HK_<HUB>_PARENT` FKs.\n"
+    "5. EFFECTIVITY SATELLITES. For EVERY link you create, also create an "
+    "`eff_sat_<link_name>` with `driving_fk` set to the primary side and "
+    "`secondary_fk` listing the other side(s).\n"
+    "6. DESCRIPTIVE SATELLITES — SPLIT BY RATE OF CHANGE. A hub carries its "
+    "descriptive (non-key) columns in satellites split by how fast those "
+    "columns change, so a volatile column never forces a rewrite of stable "
+    "history: `_details` (subgroup `details`, change_velocity `static`) for "
+    "quasi-static attributes (name, type, category, manufacturer, model, "
+    "serial, descriptions); `_operational` (subgroup `operational`, "
+    "change_velocity `dynamic`) for frequently changing status/state/flag "
+    "columns; `_measurements` (subgroup `measurements`, change_velocity "
+    "`dynamic`) for continuous numeric readings/amounts. A hub whose columns "
+    "span more than one velocity MUST emit more than one satellite (at least "
+    "`_details` + `_operational` when it has both); a hub whose columns are "
+    "all one velocity emits a single satellite (omit `subgroup`, set the "
+    "honest `change_velocity`). Maximum 3 satellites per hub. Set `subgroup` "
+    "and `change_velocity` on every satellite. PAYLOAD HYGIENE: a satellite "
+    "payload contains ONLY descriptive columns — NEVER business keys, NEVER "
+    "foreign-key columns (those drive links), and NEVER technical/CDC/audit/"
+    "system columns (load/record-source, change-data-capture flags, audit "
+    "timestamps). Do "
+    "not drop genuine descriptive columns to save tokens. When a deterministic "
+    "split hint is supplied in the user prompt (`satellite_split_hints`), copy "
+    "the blueprints verbatim — do NOT invent extra subgroups or reorder them.\n"
+    "7. NAMING. snake_case with prefixes `hub_`, `link_`, `sat_`, `eff_sat_`. "
+    "Hash keys UPPER_SNAKE prefixed `HK_`. Hash-diffs prefixed `HD_`.\n"
+    "8. CROSS-BATCH AWARENESS. You may be processing only a subset of the "
+    "full catalog. Still emit links/hubs for any entity referenced by the "
+    "tables in front of you — downstream consolidation will deduplicate.\n"
+    "9. SERVICENOW PATTERNS (apply only when the source system is ServiceNow "
+    "or table names match these patterns):\n"
+    "   - `sys_id` (32-char GUID) is the universal physical key. Use it as "
+    "the business key ONLY when no semantic alternative exists. For tables "
+    "like `incident`, `change_request`, `problem`, `task`, the semantic key "
+    "is `number` (e.g. `INC0010001`) — prefer it over `sys_id`.\n"
+    "   - `task`-derived tables (`incident`, `problem`, `change_request`, "
+    "`sc_task`, `change_task`, `sc_req_item`) all inherit from `task`. Model "
+    "each as its OWN hub keyed on its own `number`, NOT a single `hub_task`. "
+    "Do not invent inheritance hubs.\n"
+    "   - `sys_user_grmember` is the canonical association table: emit "
+    "`hub_user` (key `user_name`), `hub_group` (key `name`) and "
+    "`link_user_group` with FKs `user`, `group`.\n"
+    "   - `cmdb_ci_*` tables share a `name` business key. Each `cmdb_ci_*` "
+    "table is its own hub (`hub_cmdb_ci_server`, `hub_cmdb_ci_database`), "
+    "NOT a single polymorphic `hub_cmdb_ci`.\n"
+    "   - `sys_choice` is a composite-key reference table: business key is "
+    "the tuple (`name`, `element`, `value`). Emit a single hub with "
+    "`business_keys=['name','element','value']`.\n"
+    "10. IEC 61968 / CIM PATTERNS (apply only when the source system is CIM):\n"
+    "   - `mRID` (or `mrid`) is the universal CIM identifier. Use it as the "
+    "business key for every CIM hub. Lowercase the column in `business_keys`.\n"
+    "   - `Terminal` is the join entity between `ConductingEquipment` and "
+    "`ConnectivityNode`. Emit `hub_terminal` plus `link_terminal_equipment` "
+    "(FKs `terminal_mrid`, `conducting_equipment_mrid`) AND "
+    "`link_terminal_node` (FKs `terminal_mrid`, `connectivity_node_mrid`).\n"
+    "   - Class hierarchy (`PowerSystemResource` → `Equipment` → "
+    "`ConductingEquipment`) is NOT modelled as inheritance hubs. Each "
+    "concrete class is its own hub keyed on `mrid`.\n"
+    "11. DETERMINISTIC ORDERING. Emit `hubs`, `links`, `satellites` lists "
+    "sorted alphabetically by `name` (case-insensitive). Within each entry, "
+    "emit `business_keys`, `fk_columns`, and `payload` in the SAME ORDER you "
+    "see them in the input columns — do not re-sort columns. This ordering "
+    "is structural; downstream tools depend on it being run-stable."
+)
+
+
+@lru_cache(maxsize=1)
+def _system_prompt() -> str:
+    """Assemble the modeller system prompt: file rules + code output contract.
+
+    Rules come from ``prompts/rv_modelling_rules.md`` (overridable via
+    ``AISettings.ai_prompts_dir``); the strict-JSON ``_OUTPUT_CONTRACT`` is
+    always appended in code. Falls back to ``_BUILTIN_RV_RULES`` when the rule
+    file is absent. Cached because it is read on every completion.
+    """
+    from dbt_builder.src.ai.prompts import load_rules
+
+    rules = load_rules(_RV_RULES_NAME) or _BUILTIN_RV_RULES
+    return f"{rules}\n\n{_OUTPUT_CONTRACT}"
+
 
 # Confidence string -> ordinal weight for tie-breaking.
 _CONFIDENCE_WEIGHT = {
@@ -80,6 +215,471 @@ _CONFIDENCE_WEIGHT = {
 # Cap how much of each column's profile we ship to keep prompts compact.
 _MAX_SAMPLE_VALUES_PER_COLUMN = 3
 _MAX_TABLES_IN_PROMPT = 50
+# When a table has more than this many columns it is considered "wide" and
+# its prompt representation is compressed: long free-text values are skipped
+# but the modeller still receives every column's name, type, and the key /
+# cardinality signals it needs to (a) pick a real business key over a
+# surrogate GUID and (b) detect FK relationships across tables. Dropping
+# those signals collapses the plan quality drastically (hubs default to
+# table names, FK columns degenerate to self-references), which is far
+# worse than spending a few extra tokens.
+_WIDE_TABLE_COLUMN_THRESHOLD = 40
+# Per-column maximum length for free-text fields (description, individual
+# sample value) sent to the model in wide-table mode. Long free-text
+# description blobs are summarised at this length; column names,
+# types, and key signals are always preserved in full.
+_WIDE_TABLE_TEXT_TRUNCATE = 80
+
+
+# ----- Process-global Azure OpenAI rate limiting ---------------------------
+# Two coordinated gates protect against quota exhaustion:
+#
+# 1. ``_LLM_SEMAPHORE`` bounds *simultaneously in-flight* requests (RPM-ish).
+# 2. ``_LLM_TOKEN_BUCKET`` bounds *tokens consumed per minute* (TPM).
+#
+# Azure OpenAI returns 429 when either limit is exceeded. Real workloads with
+# uneven prompt sizes hit TPM first (e.g. 4 × 80k-token requests = 320k
+# tokens/min against a 60k/min deployment), so a request-count semaphore on
+# its own is insufficient. Both gates are initialised lazily from settings
+# on first use and fall back to permissive values when settings cannot be
+# loaded (e.g. unit tests with no env).
+_LLM_SEMAPHORE: BoundedSemaphore | None = None
+_LLM_SEMAPHORE_LOCK = Lock()
+
+# Rough character-to-token ratio used to estimate prompt cost without
+# pulling in a tokenizer dependency. 4 chars/token is the documented OpenAI
+# heuristic for English-heavy JSON payloads and is conservative enough that
+# the token bucket never under-counts in practice.
+_CHARS_PER_TOKEN = 4
+
+
+class _TokenBucket:
+    """Thread-safe token bucket used to pace Azure OpenAI calls by TPM.
+
+    ``capacity`` is the max burst (one minute's worth of tokens). ``refill``
+    is tokens-per-second. ``acquire(n)`` blocks until ``n`` tokens are
+    available, then deducts them. Requests larger than ``capacity`` are
+    clamped to ``capacity`` so a single oversized call cannot deadlock the
+    bucket; the bucket then has to refill from empty before the next call
+    runs, which is the desired self-throttling behaviour.
+    """
+
+    def __init__(self, *, capacity: float, refill_per_sec: float) -> None:
+        self._capacity = float(capacity)
+        self._refill = float(refill_per_sec)
+        self._tokens = float(capacity)
+        self._last_refill = time.monotonic()
+        self._cv = Condition()
+
+    def acquire(self, n: float) -> None:
+        n = max(n, 0.0)
+        # Oversized requests (single call cost > one minute's quota) cannot
+        # be served honestly. Clamping them silently — the previous behaviour
+        # — lets the SDK fire the request and immediately get 429'd by Azure
+        # because the *actual* per-minute consumption exceeds quota. Instead
+        # we wait until the bucket is fully refilled and then drain it; this
+        # forces sequencing (one oversized call per minute) and emits a clear
+        # warning so the operator knows to either lower max_prompt_tokens or
+        # raise the deployment's TPM.
+        if n > self._capacity:
+            _LOG.warning(
+                "LLM call estimated at %.0f tokens exceeds per-minute bucket "
+                "capacity %.0f — forcing serial pacing. Lower modeller_max_"
+                "prompt_tokens or raise llm_tokens_per_minute.",
+                n,
+                self._capacity,
+            )
+            n = self._capacity
+            with self._cv:
+                while True:
+                    now = time.monotonic()
+                    self._tokens = min(
+                        self._capacity,
+                        self._tokens + (now - self._last_refill) * self._refill,
+                    )
+                    self._last_refill = now
+                    if self._tokens >= self._capacity - 1e-6:
+                        self._tokens = 0.0
+                        return
+                    wait = (self._capacity - self._tokens) / self._refill
+                    self._cv.wait(timeout=max(wait, 0.05))
+        with self._cv:
+            while True:
+                now = time.monotonic()
+                self._tokens = min(
+                    self._capacity,
+                    self._tokens + (now - self._last_refill) * self._refill,
+                )
+                self._last_refill = now
+                if self._tokens >= n:
+                    self._tokens -= n
+                    return
+                # Sleep just long enough to accumulate the missing tokens,
+                # then re-check. Condition.wait releases the lock so other
+                # callers can also try (one will win the next refill).
+                missing = n - self._tokens
+                wait = missing / self._refill if self._refill > 0 else 0.05
+                self._cv.wait(timeout=max(wait, 0.05))
+
+
+_LLM_TOKEN_BUCKET: _TokenBucket | None = None
+_LLM_TOKEN_BUCKET_LOCK = Lock()
+
+
+def _get_llm_semaphore() -> BoundedSemaphore:
+    """Return the process-global RPM gate, building it from settings on first call."""
+    global _LLM_SEMAPHORE
+    if _LLM_SEMAPHORE is not None:
+        return _LLM_SEMAPHORE
+    with _LLM_SEMAPHORE_LOCK:
+        if _LLM_SEMAPHORE is None:
+            try:
+                from dbt_builder.src.ai.settings import get_settings
+
+                permits = get_settings().max_concurrent_llm_calls
+            except Exception:
+                permits = 16
+            _LLM_SEMAPHORE = BoundedSemaphore(value=permits)
+            _LOG.info("ModellingAgent LLM concurrency gate initialised with %d permit(s)", permits)
+        return _LLM_SEMAPHORE
+
+
+def _get_llm_token_bucket() -> _TokenBucket:
+    """Return the process-global TPM bucket, building it from settings on first call.
+
+    Falls back to a very large bucket (effectively no throttling) when
+    settings cannot be loaded so unit tests are unaffected.
+    """
+    global _LLM_TOKEN_BUCKET
+    if _LLM_TOKEN_BUCKET is not None:
+        return _LLM_TOKEN_BUCKET
+    with _LLM_TOKEN_BUCKET_LOCK:
+        if _LLM_TOKEN_BUCKET is None:
+            try:
+                from dbt_builder.src.ai.settings import get_settings
+
+                tpm = get_settings().llm_tokens_per_minute
+            except Exception:
+                tpm = 10_000_000  # effectively unbounded for tests
+            _LLM_TOKEN_BUCKET = _TokenBucket(capacity=float(tpm), refill_per_sec=float(tpm) / 60.0)
+            _LOG.info(
+                "ModellingAgent LLM token bucket initialised: %d tokens/min (~%.0f tokens/sec)",
+                tpm,
+                float(tpm) / 60.0,
+            )
+        return _LLM_TOKEN_BUCKET
+
+
+def _estimate_call_tokens(messages: Sequence[dict[str, Any]], kwargs: dict[str, Any]) -> int:
+    """Estimate total tokens a chat call will consume against the TPM quota.
+
+    Azure counts both prompt and completion tokens. We estimate the prompt
+    from ``len(json.dumps(messages)) / 4`` (the standard OpenAI heuristic)
+    and assume the completion uses its full budget so we under-throttle
+    only when the model returns short answers (safe direction).
+    """
+    try:
+        prompt_chars = sum(len(m.get("content") or "") for m in messages)
+    except Exception:
+        prompt_chars = 0
+    prompt_tokens = math.ceil(prompt_chars / _CHARS_PER_TOKEN)
+    completion_budget = int(kwargs.get("max_completion_tokens") or kwargs.get("max_tokens") or 0)
+    return prompt_tokens + completion_budget
+
+
+# ── Tolerant plan-dict coercion ───────────────────────────────────────────────
+# The ModelingPlan contract is intentionally strict (``extra="forbid"``). More
+# capable / verbose models (e.g. gpt-4.1) tend to add descriptive keys the
+# contract rejects, which makes every otherwise-good plan fail validation. We
+# reshape the raw LLM dict at the boundary — dropping unknown keys, normalising
+# common field-name variants, coercing scalars to lists, lowercasing enum-ish
+# values, capping satellites per hub, and dropping individually schema-invalid
+# satellites (so one bad entity can't fail an otherwise-good plan) — so the
+# strict contract still holds without forcing every model to emit a byte-perfect
+# schema. This NEVER invents data; it only reshapes/prunes what the model
+# already produced.
+def _literal_str_values(model: type, field: str) -> frozenset[str]:
+    """Return the string members of a (possibly Optional) ``Literal`` field.
+
+    Derived from the pydantic model so the accepted values track the contract
+    instead of being re-listed here.
+    """
+    out: set[str] = set()
+    stack: list[Any] = [model.model_fields[field].annotation]
+    while stack:
+        for arg in get_args(stack.pop()):
+            if isinstance(arg, str):
+                out.add(arg)
+            else:
+                stack.append(arg)  # descend into Union / Optional members
+    return frozenset(out)
+
+
+def _field_min_items(model: type, field: str) -> int:
+    """Minimum item count required on a (list/tuple) contract field, or 0.
+
+    Read from the pydantic field metadata so coercion tracks the contract's
+    ``min_length`` instead of repeating the literal.
+    """
+    for constraint in model.model_fields[field].metadata:
+        min_length = getattr(constraint, "min_length", None)
+        if isinstance(min_length, int):
+            return min_length
+    return 0
+
+
+# Accepted fields / enum values are derived from the contracts (single source of
+# truth) — not re-listed — so coercion never drifts from ModelingPlan. ``kind``
+# is excluded so the model's discriminator default always applies.
+_HUB_FIELDS = frozenset(HubDecision.model_fields) - {"kind"}
+_LINK_FIELDS = frozenset(LinkDecision.model_fields) - {"kind"}
+_SAT_FIELDS = frozenset(SatelliteDecision.model_fields) - {"kind"}
+_CONFIDENCE_VALUES = frozenset(c.value for c in DecisionConfidence)
+_SUBGROUP_VALUES = _literal_str_values(SatelliteDecision, "subgroup")
+_VELOCITY_VALUES = _literal_str_values(SatelliteDecision, "change_velocity")
+_PLAN_SAT_CAP = SAT_CAP_PER_HUB  # the contract's per-hub satellite cap
+_LINK_MIN_FK = _field_min_items(LinkDecision, "fk_columns")  # a link relates >= this many hubs
+
+# Rate-of-change velocity implied by a satellite's split subgroup (DV2
+# semantics): ``details`` is quasi-static history; operational flags and
+# continuous measurements both change frequently. The asserts tie this to the
+# contract vocabulary so it can never silently drift from ModelingPlan.
+_VELOCITY_BY_SUBGROUP = {
+    "details": "static",
+    "operational": "dynamic",
+    "measurements": "dynamic",
+}
+assert set(_VELOCITY_BY_SUBGROUP) == set(_SUBGROUP_VALUES), "subgroup vocabulary drift"
+assert set(_VELOCITY_BY_SUBGROUP.values()) <= set(_VELOCITY_VALUES), "velocity vocabulary drift"
+
+
+def _coerce_entity(raw: Any, allowed: frozenset[str], aliases: dict[str, str]) -> dict[str, Any]:
+    """Keep only ``allowed`` keys (after applying ``aliases``); drop the rest."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in raw.items():
+        target = aliases.get(key, key)
+        if target in allowed and target not in out:
+            out[target] = value
+    return out
+
+
+def _union_preserving_order(*lists: Any) -> list[Any]:
+    """Concatenate list/tuple inputs into one list, first-occurrence order, no repeats.
+
+    Used to merge the business keys of hubs the model proposed more than once
+    under the same name — keeping every distinct key without re-introducing the
+    duplicates the hub contract forbids.
+    """
+    out: list[Any] = []
+    for lst in lists:
+        if not isinstance(lst, (list, tuple)):
+            continue
+        for item in lst:
+            if item not in out:
+                out.append(item)
+    return out
+
+
+def _drop_invalid_enum(entity: dict[str, Any], key: str, allowed: frozenset[str]) -> None:
+    """Lowercase ``entity[key]`` and drop it (so the model default applies) if invalid."""
+    value = entity.get(key)
+    if isinstance(value, str):
+        value = value.lower()
+        if value in allowed:
+            entity[key] = value
+        else:
+            entity.pop(key, None)
+
+
+def _clean_payload(payload: Any, *, excluded: frozenset[str] | set[str]) -> list[Any]:
+    """Drop ``excluded`` columns from a satellite payload, order-preserving.
+
+    ``excluded`` is a pre-built, lower-cased set of columns that must never sit
+    in a descriptive hashdiff — the satellite's own business key, foreign-key
+    columns, and technical/system columns. Comparison is case-insensitive so
+    ``KOSTL`` and ``kostl`` match. Nothing is invented; columns are only removed.
+    """
+    if not isinstance(payload, (list, tuple)):
+        return []
+    return [col for col in payload if not (isinstance(col, str) and col.lower() in excluded)]
+
+
+def _subgroup_from_name(name: Any) -> str | None:
+    """The split subgroup a satellite name encodes (``..._details`` → details), or None."""
+    if not isinstance(name, str):
+        return None
+    return next((sg for sg in _SUBGROUP_VALUES if name.endswith(f"_{sg}")), None)
+
+
+def _apply_split_metadata(sat: dict[str, Any]) -> None:
+    """Fill ``subgroup`` / ``change_velocity`` for a rate-of-change-split satellite.
+
+    Splits are encoded in the satellite name (``..._details`` / ``..._operational``
+    / ``..._measurements``). When the model performs the split but omits the audit
+    metadata, derive it: the subgroup is the name's split suffix (or whatever the
+    model already set), and a split satellite's velocity follows its subgroup
+    (:data:`_VELOCITY_BY_SUBGROUP`). Single (unsplit) satellites are left as-is, so
+    their honest model-supplied velocity (often ``mixed``) is preserved.
+    """
+    subgroup = sat.get("subgroup") or _subgroup_from_name(sat.get("name"))
+    if not subgroup:
+        return
+    sat["subgroup"] = subgroup
+    sat["change_velocity"] = _VELOCITY_BY_SUBGROUP.get(subgroup, sat.get("change_velocity"))
+
+
+def _merge_named(items: list[dict[str, Any]], *, union_key: str) -> list[dict[str, Any]]:
+    """Collapse same-named entity dicts, unioning their ``union_key`` list field.
+
+    The ModelingPlan contract requires entity names unique within their kind;
+    batched generation over PII / non-PII source pairs routinely proposes the
+    same entity twice. Merging (rather than dropping a duplicate) preserves every
+    distinct member of the unioned field — business keys for hubs, fk columns for
+    links, payload columns for satellites — in first-occurrence order, keeping the
+    first occurrence's other fields. Entities without a string ``name`` cannot
+    satisfy the contract and are dropped so one malformed entity can't fail the
+    whole batch. Scales linearly with the entity count.
+    """
+    by_name: dict[str, dict[str, Any]] = {}
+    for item in items:
+        name = item.get("name")
+        if not isinstance(name, str):
+            continue
+        existing = by_name.get(name)
+        if existing is None:
+            by_name[name] = item
+        else:
+            existing[union_key] = _union_preserving_order(
+                existing.get(union_key), item.get(union_key)
+            )
+    return list(by_name.values())
+
+
+def _coerce_plan_dict(data: Any, *, technical_columns: frozenset[str] = frozenset()) -> Any:
+    """Best-effort reshape of LLM plan JSON to fit the strict ModelingPlan schema.
+
+    Enforces every cross-entity invariant the ModelingPlan contract checks, so a
+    single malformed entity never fails an entire batch: names are made unique
+    within each kind by merging same-named entities (see :func:`_merge_named`),
+    then unique *across* kinds by precedence (hub > link > satellite), and
+    satellites that the contract would reject (no payload, unknown parent) are
+    dropped. No data is invented; duplicates are merged, not renamed.
+
+    Satellite payloads are also cleaned for Data Vault correctness: a satellite
+    never carries its own hub's business key, nor a foreign-key column (the
+    business key of another hub that a link on the SAME source table joins) —
+    keys belong in hubs / links, not in a descriptive hashdiff — nor any
+    caller-supplied ``technical_columns`` (CDC / audit / system columns). The
+    foreign-key removal is scoped to columns the plan's links actually establish
+    on that table, so a generic descriptive column (e.g. ``name``) is never
+    stripped just because some unrelated hub happens to key on it. A satellite
+    left with no descriptive columns is dropped.
+    """
+    if not isinstance(data, dict):
+        return data
+    out: dict[str, Any] = {"system_id": data.get("system_id", "")}
+
+    # Hubs — merge same-named (union business keys). Hubs anchor everything else,
+    # so their names take precedence in the cross-kind uniqueness checks below.
+    coerced_hubs: list[dict[str, Any]] = []
+    for raw in data.get("hubs") or []:
+        hub = _coerce_entity(raw, _HUB_FIELDS, {"business_key": "business_keys"})
+        bk = hub.get("business_keys")
+        if isinstance(bk, str):
+            hub["business_keys"] = [bk]
+        _drop_invalid_enum(hub, "confidence", _CONFIDENCE_VALUES)
+        coerced_hubs.append(hub)
+    hubs = _merge_named(coerced_hubs, union_key="business_keys")
+    out["hubs"] = hubs
+    hub_names = {h["name"] for h in hubs}
+
+    # Per-hub business keys, case-folded, indexed by hub name and by hash key.
+    # ``by_name`` strips a satellite's OWN business key; ``by_hash_key`` resolves
+    # a link's fk hash keys back to the source columns (= referenced hubs' BKs).
+    def _bks(hub: dict[str, Any]) -> frozenset[str]:
+        return frozenset(
+            bk.lower() for bk in (hub.get("business_keys") or []) if isinstance(bk, str)
+        )
+
+    bk_by_hub_name = {h["name"]: _bks(h) for h in hubs}
+    bk_by_hash_key = {h["hash_key"]: _bks(h) for h in hubs if isinstance(h.get("hash_key"), str)}
+
+    # Links — merge same-named (union fk columns), then drop those the contract
+    # would reject: a name colliding with a hub (names must be unique across
+    # hubs / links / sats), or fewer than the minimum FK columns (a link relates
+    # two-plus hubs — a one-FK link is malformed and would fail the whole batch).
+    coerced_links: list[dict[str, Any]] = []
+    for raw in data.get("links") or []:
+        link = _coerce_entity(raw, _LINK_FIELDS, {})
+        _drop_invalid_enum(link, "confidence", _CONFIDENCE_VALUES)
+        coerced_links.append(link)
+
+    def _link_ok(ln: dict[str, Any]) -> bool:
+        if ln["name"] in hub_names:
+            return False
+        fks = ln.get("fk_columns")
+        return isinstance(fks, (list, tuple)) and len(fks) >= _LINK_MIN_FK
+
+    links = [ln for ln in _merge_named(coerced_links, union_key="fk_columns") if _link_ok(ln)]
+    out["links"] = links
+    reserved_names = hub_names | {ln["name"] for ln in links}
+
+    # Foreign-key source columns per source table: the business keys of the hubs
+    # each link joins, attributed to the table that hosts the link. Used to strip
+    # FK columns from that table's satellites without touching unrelated tables.
+    fk_columns_by_table: dict[str, set[str]] = {}
+    for ln in links:
+        table = ln.get("source_table")
+        if not isinstance(table, str):
+            continue
+        bucket = fk_columns_by_table.setdefault(table, set())
+        for fk in ln.get("fk_columns") or []:
+            bucket |= bk_by_hash_key.get(fk, frozenset())
+
+    # Satellites — merge same-named (union payload), then drop the ones the
+    # contract would reject: empty payload, non-string / unknown parent hub
+    # (also catches an eff_sat the model invented pointing at a link_*), a name
+    # already used by a hub or link, or any beyond the per-hub split cap.
+    coerced_sats: list[dict[str, Any]] = []
+    for raw in data.get("satellites") or []:
+        sat = _coerce_entity(raw, _SAT_FIELDS, {"columns": "payload"})
+        payload = sat.get("payload")
+        if isinstance(payload, str):
+            sat["payload"] = [payload]
+        _drop_invalid_enum(sat, "confidence", _CONFIDENCE_VALUES)
+        _drop_invalid_enum(sat, "subgroup", _SUBGROUP_VALUES)
+        _drop_invalid_enum(sat, "change_velocity", _VELOCITY_VALUES)
+        _apply_split_metadata(sat)
+        coerced_sats.append(sat)
+
+    sats: list[dict[str, Any]] = []
+    per_hub: dict[str, int] = {}
+    for sat in _merge_named(coerced_sats, union_key="payload"):
+        parent = sat.get("parent_hub")
+        table = sat.get("source_table")
+        # Excluded = this hub's own BK + FK columns established on this table +
+        # technical. ``parent`` / ``table`` may be malformed (non-string) on a
+        # bad entity; fall back to empty so cleaning never raises.
+        own_bk = bk_by_hub_name.get(parent, frozenset()) if isinstance(parent, str) else frozenset()
+        fk_cols = fk_columns_by_table.get(table, set()) if isinstance(table, str) else set()
+        excluded = frozenset(own_bk | fk_cols | technical_columns)
+        payload = _clean_payload(sat.get("payload"), excluded=excluded)
+        sat["payload"] = payload
+        if not payload:
+            continue  # only keys/technical columns — nothing descriptive to track
+        if not isinstance(parent, str) or parent not in hub_names:
+            continue
+        if sat["name"] in reserved_names:
+            continue  # name already claimed by a hub or link — would collide
+        seen = per_hub.get(parent, 0)
+        if seen >= _PLAN_SAT_CAP:
+            continue  # keep the first 3 satellites per hub; drop over-cap extras
+        per_hub[parent] = seen + 1
+        sats.append(sat)
+    out["satellites"] = sats
+    return out
 
 
 class ModellingAgentError(RuntimeError):
@@ -104,6 +704,37 @@ class ModellingAgent:
     max_tokens
         Token budget per completion. gpt-5 may legitimately need more;
         empty-response retries auto-double this once.
+    sample_parallelism
+        How many of the ``samples`` completions to issue concurrently.
+        Defaults to ``1`` (sequential) for backward-compatibility with
+        direct callers and tests. The :func:`get_modelling_agent` factory
+        defaults this to ``samples`` so the analyze step collapses to one
+        completion's wall-clock RTT in production.
+    batch_size
+        When > 0 and the payload's table count exceeds this, ``propose``
+        splits tables into fixed-size batches and runs each batch's
+        completion concurrently. Plans are then merged by name-union.
+        Use to keep latency bounded on large catalogues. ``0`` (default for
+        direct construction) disables batching.
+    batch_parallelism
+        Maximum concurrent batches. ``0`` means "as many as batches" so the
+        total wall clock collapses to one batch's RTT.
+    batch_samples
+        Samples drawn per batch when batched mode is active. Defaults to
+        ``1`` because batching already buys parallelism across tables;
+        per-batch voting compounds fan-out and triggers 429s. Set to ``3``
+        if you want per-batch voting and your Azure deployment can absorb
+        ``num_batches × 3`` concurrent calls.
+    max_prompt_tokens
+        Soft cap on per-batch prompt size (estimated tokens). When > 0,
+        ``_propose_batched`` flushes a batch early if adding the next
+        table would push its prompt over this cap, even when the batch
+        has fewer than ``batch_size`` tables. Prevents a single wide-table
+        batch from blowing the per-request TPM allowance.
+    large_catalog_threshold
+        When the payload's table count exceeds this, sampling drops to one
+        completion (no majority vote). Applied per-batch when batching is
+        active, and to the whole payload otherwise. ``0`` disables.
     """
 
     def __init__(
@@ -114,17 +745,92 @@ class ModellingAgent:
         api_version: str = "",
         samples: int = 3,
         max_tokens: int = 4096,
+        tool_specs: tuple[ToolSpec, ...] | None = None,
+        max_tool_rounds: int = 6,
+        sample_parallelism: int = 1,
+        batch_size: int = 0,
+        batch_parallelism: int = 0,
+        batch_samples: int = 1,
+        max_prompt_tokens: int = 0,
+        large_catalog_threshold: int = 0,
+        max_completion_tokens: int = 0,
+        seed: int | None = None,
+        technical_payload_columns: frozenset[str] = frozenset(),
+        reference_loader: ReferenceLoader | None = None,
+        reference_limit: int = 0,
+        link_parsimony: bool = True,
     ) -> None:
         if samples <= 0:
             raise ValueError("samples must be positive")
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
+        if max_completion_tokens < 0:
+            raise ValueError("max_completion_tokens must be >= 0")
+        if max_tool_rounds <= 0:
+            raise ValueError("max_tool_rounds must be positive")
+        if sample_parallelism <= 0:
+            raise ValueError("sample_parallelism must be positive")
+        if batch_size < 0:
+            raise ValueError("batch_size must be >= 0")
+        if batch_parallelism < 0:
+            raise ValueError("batch_parallelism must be >= 0")
+        if batch_samples <= 0:
+            raise ValueError("batch_samples must be positive")
+        if max_prompt_tokens < 0:
+            raise ValueError("max_prompt_tokens must be >= 0")
+        if large_catalog_threshold < 0:
+            raise ValueError("large_catalog_threshold must be >= 0")
         self._client = client
         self._deployment = deployment
         self._api_version = api_version
         self._samples = samples
         self._max_tokens = max_tokens
         self._is_gpt5 = deployment.startswith("gpt-5")
+        self._tool_specs = tool_specs
+        self._max_tool_rounds = max_tool_rounds
+        # Cap parallelism at samples — extra workers would idle.
+        self._sample_parallelism = min(sample_parallelism, samples)
+        self._batch_size = batch_size
+        self._batch_parallelism = batch_parallelism
+        self._batch_samples = batch_samples
+        self._max_prompt_tokens = max_prompt_tokens
+        self._large_catalog_threshold = large_catalog_threshold
+        # Hard ceiling on completion tokens per request. ``0`` disables the
+        # clamp. Enforced in :meth:`_build_kwargs` so EVERY budget — including
+        # the doubled retry budget — stays at or below the model's limit and
+        # never triggers an Azure ``max_tokens is too large`` HTTP 400.
+        self._max_completion_tokens = max_completion_tokens
+        # ``None`` disables seeding (legacy non-deterministic sampling).
+        # An integer is used as the base; each sample adds its index to
+        # keep voting samples distinct yet individually reproducible.
+        self._seed = seed
+        # Non-key technical columns stripped from every satellite payload during
+        # coercion (see :func:`_clean_payload`). Lower-cased for case-insensitive
+        # matching; keys/FKs are stripped automatically and need not be listed.
+        self._technical_payload_columns = frozenset(c.lower() for c in technical_payload_columns)
+        # Feedback learning: an optional corpus of previously-approved DV objects
+        # and how many to inject as few-shot examples. ``None`` / ``0`` disables
+        # retrieval so the prompt is byte-identical to the pre-learning agent.
+        self._reference_loader = reference_loader
+        self._reference_limit = max(0, reference_limit)
+        # Deterministic post-generation hygiene: prune structurally invalid /
+        # duplicate links the LLM over-produces (see agents.plan_hygiene).
+        self._link_parsimony = link_parsimony
+        _LOG.info(
+            "ModellingAgent ready: deployment=%s samples=%d sample_parallelism=%d "
+            "max_tokens=%d max_completion_tokens=%d batch_size=%d batch_parallelism=%d "
+            "batch_samples=%d max_prompt_tokens=%d large_catalog_threshold=%d",
+            deployment,
+            samples,
+            self._sample_parallelism,
+            max_tokens,
+            max_completion_tokens,
+            batch_size,
+            batch_parallelism,
+            batch_samples,
+            max_prompt_tokens,
+            large_catalog_threshold,
+        )
 
     @property
     def deployment(self) -> str:
@@ -135,93 +841,507 @@ class ModellingAgent:
     def propose(self, payload: DiscoveryPayload) -> ModelingPlan:
         """Return a validated :class:`ModelingPlan` for ``payload``.
 
+        Wraps the generation strategy with a deterministic hygiene pass
+        (:func:`prune_redundant_links`) so structurally invalid / duplicate links
+        the model over-produces are removed before the plan is returned.
+        """
+        plan = self._propose_dispatch(payload)
+        if self._link_parsimony:
+            from dbt_builder.src.ai.agents.plan_hygiene import prune_redundant_links
+
+            plan = prune_redundant_links(plan)
+        return plan
+
+    def _propose_dispatch(self, payload: DiscoveryPayload) -> ModelingPlan:
+        """Return a validated :class:`ModelingPlan` for ``payload``.
+
+        Dispatches to one of two strategies, transparently to the caller:
+
+        * **Batched** (``batch_size > 0`` and ``len(tables) > batch_size``):
+          tables are split into fixed-size batches, each batch produces its
+          own plan in parallel, and the plans are merged. Trades cross-batch
+          link discovery for ~linear speedup on large catalogues.
+        * **Single** (default for small payloads): one ``DiscoveryPayload``
+          → N samples with majority vote.
+
+        In both strategies, when ``large_catalog_threshold > 0`` and the
+        relevant table count exceeds it, sampling drops to one completion
+        to keep latency bounded.
+
         Raises
         ------
         ModellingAgentError
             If no sample yields a parseable, schema-valid plan.
         """
-        user_prompt = _build_user_prompt(payload)
+        n_tables = len(payload.tables)
+        if self._batch_size > 0 and n_tables > self._batch_size:
+            return self._propose_batched(payload)
+        effective_samples = self._effective_samples(n_tables)
+        # Adaptive path so a small-but-wide catalogue whose output overflows
+        # the model's completion ceiling is split-and-retried rather than failed.
+        return self._propose_voted_adaptive(payload, samples=effective_samples)
+
+    # ------------------------------------------------------------------ batching
+
+    def _effective_samples(self, n_tables: int) -> int:
+        """Per-call sample count after the large-catalogue threshold."""
+        if self._large_catalog_threshold > 0 and n_tables > self._large_catalog_threshold:
+            return 1
+        return self._samples
+
+    def _propose_batched(self, payload: DiscoveryPayload) -> ModelingPlan:
+        """Split tables into batches, propose each in parallel, merge plans.
+
+        Each batch carries the same :class:`SourceSystem` so the resulting
+        plans share a ``system_id`` and can be unioned safely. The per-batch
+        sample count is computed from ``batch_size`` (the per-batch table
+        count cap), not the total — batches are normally small enough to
+        stay below the large-catalogue threshold.
+        """
+        import time as _time
+
+        tables = tuple(payload.tables)
+        size = self._batch_size
+        batches: list[tuple[SourceTable, ...]] = _chunk_tables(
+            tables, max_tables=size, max_prompt_tokens=self._max_prompt_tokens
+        )
+        batch_payloads = [payload.model_copy(update={"tables": b}) for b in batches]
+        max_workers = self._batch_parallelism or len(batch_payloads)
+        per_batch_samples = self._batch_samples
+        batch_sizes = [len(b.tables) for b in batch_payloads]
+        _LOG.info(
+            "ModellingAgent.propose: batching %d tables into %d batch(es) "
+            "(sizes=%s, max_tables=%d, max_prompt_tokens=%d), "
+            "parallelism=%d, samples_per_batch=%d",
+            len(tables),
+            len(batch_payloads),
+            batch_sizes,
+            size,
+            self._max_prompt_tokens,
+            max_workers,
+            per_batch_samples,
+        )
+        t0 = _time.perf_counter()
+
+        def _one_batch(idx_and_payload: tuple[int, DiscoveryPayload]) -> ModelingPlan | None:
+            idx, sub_payload = idx_and_payload
+            t_batch = _time.perf_counter()
+            try:
+                plan = self._propose_voted_adaptive(sub_payload, samples=per_batch_samples)
+            except ModellingAgentError as exc:
+                # One batch failing (even after adaptive splitting) must not
+                # discard the whole catalogue — skip it and keep the rest so a
+                # long large-catalogue run still yields a reviewable plan. The
+                # dropped tables are named so the operator can re-run them.
+                _LOG.warning(
+                    "ModellingAgent batch %d/%d produced no valid plan after "
+                    "adaptive splitting; SKIPPING its %d table(s): %s. Cause: %s",
+                    idx + 1,
+                    len(batch_payloads),
+                    len(sub_payload.tables),
+                    ", ".join(t.name for t in sub_payload.tables),
+                    exc,
+                )
+                return None
+            _LOG.info(
+                "ModellingAgent batch %d/%d ok in %.1fs (tables=%d, hubs=%d, links=%d, sats=%d)",
+                idx + 1,
+                len(batch_payloads),
+                _time.perf_counter() - t_batch,
+                len(sub_payload.tables),
+                len(plan.hubs),
+                len(plan.links),
+                len(plan.satellites),
+            )
+            return plan
+
+        if max_workers <= 1 or len(batch_payloads) == 1:
+            results = [_one_batch((i, p)) for i, p in enumerate(batch_payloads)]
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                results = list(pool.map(_one_batch, enumerate(batch_payloads)))
+
+        plans = [p for p in results if p is not None]
+        if not plans:
+            raise ModellingAgentError(
+                f"All {len(batch_payloads)} batch(es) failed to produce a valid "
+                "plan. See per-batch warnings above for the failing tables."
+            )
+        skipped = len(results) - len(plans)
+        if skipped:
+            _LOG.warning(
+                "ModellingAgent: %d of %d batch(es) skipped; merged plan covers "
+                "the remaining %d batch(es).",
+                skipped,
+                len(batch_payloads),
+                len(plans),
+            )
+        merged = _merge_plans(plans, system_id=payload.system.system_id)
+        _LOG.info(
+            "ModellingAgent.propose: %d batch(es) merged in %.1fs wall clock "
+            "(hubs=%d, links=%d, sats=%d)",
+            len(batch_payloads),
+            _time.perf_counter() - t0,
+            len(merged.hubs),
+            len(merged.links),
+            len(merged.satellites),
+        )
+        return merged
+
+    # ------------------------------------------------------------------ voting
+
+    def _propose_voted_adaptive(
+        self, payload: DiscoveryPayload, *, samples: int, _depth: int = 0
+    ) -> ModelingPlan:
+        """Vote on ``payload``; if every sample fails, split the tables and retry.
+
+        The dominant failure on wide catalogues is *output truncation*: the
+        JSON plan a batch must emit exceeds the model's completion-token
+        ceiling, so every sample returns unterminated JSON and is dropped,
+        leaving no valid plan. Halving the table set halves the required
+        output; recursing until each piece fits (down to a single table)
+        makes the modeller self-tune to any table width without a guessed
+        ``batch_size``. The per-piece plans are merged by name-union, exactly
+        like cross-batch merging — the only cost is losing links between
+        tables that land on opposite sides of a split (rare, and far better
+        than failing the whole run).
+        """
+        tables = tuple(payload.tables)
+        try:
+            return self._propose_voted(payload, samples=samples)
+        except ModellingAgentError as exc:
+            # Splitting only helps OUTPUT TRUNCATION (the JSON came back
+            # unterminated because the plan exceeded the completion budget).
+            # A schema-invalid failure means the model returned a full but
+            # malformed plan — halving the tables won't fix that, it just
+            # wastes calls and time. Re-raise so the real cause surfaces fast.
+            if len(tables) <= 1 or "invalid JSON" not in str(exc):
+                raise
+            mid = len(tables) // 2
+            _LOG.warning(
+                "ModellingAgent: batch of %d tables produced no valid plan "
+                "(likely output truncation); splitting into %d + %d and retrying "
+                "(depth=%d).",
+                len(tables),
+                mid,
+                len(tables) - mid,
+                _depth + 1,
+            )
+            left = payload.model_copy(update={"tables": tables[:mid]})
+            right = payload.model_copy(update={"tables": tables[mid:]})
+            left_plan = self._propose_voted_adaptive(left, samples=samples, _depth=_depth + 1)
+            right_plan = self._propose_voted_adaptive(right, samples=samples, _depth=_depth + 1)
+            return _merge_plans([left_plan, right_plan], system_id=payload.system.system_id)
+
+    def _propose_voted(self, payload: DiscoveryPayload, *, samples: int) -> ModelingPlan:
+        """Draw ``samples`` completions for ``payload``, vote, return winner.
+
+        Used both by the single-prompt path and as the per-batch primitive
+        in :meth:`_propose_batched`.
+        """
+        import time as _time
+
+        _t0 = _time.perf_counter()
+        user_prompt = _build_user_prompt(payload, reference_block=self._reference_block(payload))
+        parallelism = min(self._sample_parallelism, samples)
+        _LOG.info(
+            "ModellingAgent.propose: drawing %d sample(s) with parallelism=%d "
+            "(prompt=%d chars, %d tables)",
+            samples,
+            parallelism,
+            len(user_prompt),
+            len(payload.tables),
+        )
+        if parallelism <= 1 or samples <= 1:
+            per_sample = [
+                self._draw_sample(idx, user_prompt, payload.system.system_id)
+                for idx in range(samples)
+            ]
+        else:
+            per_sample = self._draw_samples_parallel(
+                user_prompt, payload.system.system_id, samples=samples, max_workers=parallelism
+            )
+        _LOG.info(
+            "ModellingAgent.propose: all %d sample(s) finished in %.1fs (wall clock)",
+            samples,
+            _time.perf_counter() - _t0,
+        )
+
         candidates: list[ModelingPlan] = []
         errors: list[str] = []
-
-        for sample_idx in range(self._samples):
-            raw = self._one_completion(user_prompt)
-            if not raw:
-                errors.append(f"sample {sample_idx}: empty response after retry")
-                continue
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                errors.append(f"sample {sample_idx}: invalid JSON ({exc})")
-                continue
-            if not isinstance(data, dict):
-                errors.append(
-                    f"sample {sample_idx}: top-level JSON is {type(data).__name__}, expected object"
-                )
-                continue
-            # Force the system_id on the way in so the model can't drift.
-            data["system_id"] = payload.system.system_id
-            try:
-                candidates.append(ModelingPlan.model_validate(data))
-            except ValidationError as exc:
-                errors.append(f"sample {sample_idx}: schema invalid ({exc.error_count()} errors)")
-                _LOG.debug("Modelling sample %d failed validation: %s", sample_idx, exc)
+        for plan, error in per_sample:
+            if plan is not None:
+                candidates.append(plan)
+            if error is not None:
+                errors.append(error)
 
         if not candidates:
             raise ModellingAgentError(
                 "ModellingAgent produced no valid plans across "
-                f"{self._samples} samples. Details: " + "; ".join(errors)
+                f"{samples} samples. Details: " + "; ".join(errors)
             )
         return _vote(candidates)
 
     # ---------------------------------------------------------------- internals
 
-    def _one_completion(self, user_prompt: str) -> str:
+    def _reference_block(self, payload: DiscoveryPayload) -> str:
+        """Select the most relevant approved examples for ``payload``, as a prompt block.
+
+        Returns ``""`` when no corpus is wired or ``reference_limit`` is 0 — the
+        prompt is then byte-identical to the pre-learning agent. Otherwise the
+        payload's table names drive a lexical lookup against the corpus; matches
+        are unioned in table order (deterministic), deduped by name, and capped
+        at ``reference_limit`` so prompt cost stays bounded regardless of batch
+        size. Selection is fully reproducible for an identical corpus + payload.
+        """
+        if self._reference_loader is None or self._reference_limit <= 0:
+            return ""
+        ordered: list[Any] = []
+        seen: set[str] = set()
+        for table in payload.tables:
+            for example in self._reference_loader.select_relevant(
+                table.name, limit=self._reference_limit
+            ):
+                if example.name not in seen:
+                    seen.add(example.name)
+                    ordered.append(example)
+                if len(ordered) >= self._reference_limit:
+                    break
+            if len(ordered) >= self._reference_limit:
+                break
+        if not ordered:
+            return ""
+        return self._reference_loader.to_prompt_block(ordered)
+
+    def _draw_samples_parallel(
+        self,
+        user_prompt: str,
+        system_id: str,
+        *,
+        samples: int | None = None,
+        max_workers: int | None = None,
+    ) -> list[tuple[ModelingPlan | None, str | None]]:
+        """Issue ``samples`` completions concurrently, preserving order.
+
+        Order matters: :func:`_vote` tie-breaks by ``candidates.index(p)``,
+        and stable ordering keeps the chosen plan reproducible run-to-run
+        for an identical set of model responses.
+        """
+        n = self._samples if samples is None else samples
+        workers = self._sample_parallelism if max_workers is None else max_workers
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(
+                pool.map(
+                    lambda idx: self._draw_sample(idx, user_prompt, system_id),
+                    range(n),
+                )
+            )
+
+    def _draw_sample(
+        self, sample_idx: int, user_prompt: str, system_id: str
+    ) -> tuple[ModelingPlan | None, str | None]:
+        """One completion + parse + validate. Returns ``(plan, error)``."""
+        import time as _time
+
+        _t0 = _time.perf_counter()
+        raw = self._one_completion(user_prompt, sample_idx=sample_idx)
+        _LOG.info(
+            "ModellingAgent sample %d completed in %.1fs (%d chars)",
+            sample_idx,
+            _time.perf_counter() - _t0,
+            len(raw or ""),
+        )
+        if not raw:
+            return None, f"sample {sample_idx}: empty response after retry"
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            # The most common cause of invalid JSON from a JSON-mode call is
+            # the model hitting ``max_tokens`` mid-string. Retry once with a
+            # doubled budget before giving up — this rescues batches that
+            # would otherwise force the whole pipeline to fail after minutes.
+            # Skip the retry when the budget is already at the model ceiling:
+            # doubling would clamp back to the same value and re-truncate
+            # identically, wasting a call and TPM. The caller drops this
+            # sample and votes on the survivors instead.
+            if not self._has_retry_headroom(self._max_tokens):
+                _LOG.warning(
+                    "Modelling sample %d: invalid JSON (%s); completion budget %d already "
+                    "at model ceiling %d — dropping sample (no retry headroom). "
+                    "Lower modeller_batch_size / modeller_max_prompt_tokens so each batch's "
+                    "output fits, or raise modeller_max_completion_tokens if the deployment allows.",
+                    sample_idx,
+                    exc,
+                    self._max_tokens,
+                    self._max_completion_tokens,
+                )
+                return None, f"sample {sample_idx}: invalid JSON ({exc}); no retry headroom"
+            _LOG.warning(
+                "Modelling sample %d: invalid JSON (%s); retrying with doubled token budget",
+                sample_idx,
+                exc,
+            )
+            retry_raw = self._call_single(
+                [
+                    {"role": "system", "content": _system_prompt()},
+                    {"role": "user", "content": user_prompt},
+                ],
+                self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
+            )
+            if not retry_raw:
+                return None, f"sample {sample_idx}: invalid JSON ({exc}); retry empty"
+            try:
+                data = json.loads(retry_raw)
+            except json.JSONDecodeError as exc2:
+                return None, f"sample {sample_idx}: invalid JSON after retry ({exc2})"
+        if not isinstance(data, dict):
+            return (
+                None,
+                f"sample {sample_idx}: top-level JSON is {type(data).__name__}, expected object",
+            )
+        # Reshape verbose/variant model output to the strict contract, then
+        # force the system_id so the model can't drift it.
+        data = _coerce_plan_dict(data, technical_columns=self._technical_payload_columns)
+        if isinstance(data, dict):
+            data["system_id"] = system_id
+        try:
+            return ModelingPlan.model_validate(data), None
+        except ValidationError as exc:
+            errs = exc.errors()
+            first = errs[0] if errs else {}
+            loc = ".".join(str(p) for p in first.get("loc", ()))
+            msg = first.get("msg", "")
+            _LOG.warning(
+                "Modelling sample %d failed validation (%d errors); first: %s @ %s",
+                sample_idx,
+                exc.error_count(),
+                msg,
+                loc,
+            )
+            return (
+                None,
+                f"sample {sample_idx}: schema invalid ({exc.error_count()} errors; "
+                f"first: {msg} @ {loc})",
+            )
+
+    def _one_completion(self, user_prompt: str, *, sample_idx: int = 0) -> str:
         """One chat call with model-specific kwargs and one empty-response retry."""
-        kwargs = self._build_kwargs(self._max_tokens)
+        kwargs = self._build_kwargs(self._max_tokens, sample_idx=sample_idx)
         content = self._call(user_prompt, kwargs)
         if content or not self._is_gpt5:
             return content
         # gpt-5 occasionally returns empty content on the first attempt; retry
-        # once with a doubled token budget. This is a documented quirk.
+        # once with a doubled token budget. Retry always bypasses the tool loop
+        # (which is incompatible with response_format=json_object).
         _LOG.warning("gpt-5 returned empty content; retrying with doubled budget")
-        return self._call(user_prompt, self._build_kwargs(self._max_tokens * 2))
+        return self._call_single(
+            [
+                {"role": "system", "content": _system_prompt()},
+                {"role": "user", "content": user_prompt},
+            ],
+            self._build_kwargs(self._max_tokens * 2, sample_idx=sample_idx),
+        )
 
-    def _build_kwargs(self, token_budget: int) -> dict[str, Any]:
+    def _clamp_budget(self, token_budget: int) -> int:
+        """Clamp a requested completion budget to the model's hard ceiling.
+
+        The empty-response / truncated-JSON retries double the budget; without
+        this clamp a 16384 budget becomes 32768 and Azure rejects the request
+        with ``max_tokens is too large`` (HTTP 400), failing the whole run.
+        ``self._max_completion_tokens == 0`` disables the clamp.
+        """
+        if self._max_completion_tokens > 0 and token_budget > self._max_completion_tokens:
+            _LOG.debug(
+                "Clamping completion budget %d -> %d (model ceiling)",
+                token_budget,
+                self._max_completion_tokens,
+            )
+            return self._max_completion_tokens
+        return token_budget
+
+    def _has_retry_headroom(self, token_budget: int) -> bool:
+        """True when doubling ``token_budget`` would actually raise the cap.
+
+        When the budget is already at (or above) the model ceiling, a
+        "retry with doubled budget" would clamp back to the same value and
+        re-truncate identically — a wasted call that also burns TPM. Used to
+        skip the truncated-JSON retry in that case.
+        """
+        if self._max_completion_tokens <= 0:
+            return True
+        return token_budget < self._max_completion_tokens
+
+    def _build_kwargs(self, token_budget: int, *, sample_idx: int = 0) -> dict[str, Any]:
+        token_budget = self._clamp_budget(token_budget)
+        kwargs: dict[str, Any]
         if self._is_gpt5:
-            return {
+            kwargs = {
                 "temperature": 1.0,
                 "max_completion_tokens": token_budget,
                 "response_format": {"type": "json_object"},
             }
-        return {
-            "temperature": 0.0,
-            "max_tokens": token_budget,
-            "response_format": {"type": "json_object"},
-        }
+        else:
+            kwargs = {
+                "temperature": 0.0,
+                "max_tokens": token_budget,
+                "response_format": {"type": "json_object"},
+            }
+        # Per-sample seed: base + sample_idx keeps each vote independent
+        # while making the same (input, sample_idx) pair reproducible.
+        if self._seed is not None:
+            kwargs["seed"] = self._seed + sample_idx
+        return kwargs
 
     def _call(self, user_prompt: str, kwargs: dict[str, Any]) -> str:
-        response = self._client.chat.completions.create(
-            model=self._deployment,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            **kwargs,
-        )
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": _system_prompt()},
+            {"role": "user", "content": user_prompt},
+        ]
+        if self._tool_specs:
+            try:
+                return run_tool_loop(
+                    client=self._client,
+                    deployment=self._deployment,
+                    call_kwargs=kwargs,
+                    initial_messages=messages,
+                    tools=self._tool_specs,
+                    max_rounds=self._max_tool_rounds,
+                )
+            except ToolLoopError as exc:
+                _LOG.warning("Tool loop failed (%s); falling back to single-shot call", exc)
+        return self._call_single(messages, kwargs)
+
+    def _call_single(self, messages: list[dict[str, Any]], kwargs: dict[str, Any]) -> str:
+        # Two-stage gating: first reserve TPM (blocks until our deployment's
+        # token bucket has capacity), then take an RPM permit. Order matters:
+        # reserving tokens first means workers queue at the token bucket
+        # rather than holding an RPM permit while waiting for TPM, which
+        # would deadlock at low concurrency settings.
+        estimated = _estimate_call_tokens(messages, kwargs)
+        _get_llm_token_bucket().acquire(estimated)
+        with _get_llm_semaphore():
+            response = self._client.chat.completions.create(
+                model=self._deployment,
+                messages=messages,
+                **kwargs,
+            )
         return (response.choices[0].message.content or "").strip()
 
 
 # ====================================================================== prompt
 
 
-def _build_user_prompt(payload: DiscoveryPayload) -> str:
+def _build_user_prompt(payload: DiscoveryPayload, *, reference_block: str = "") -> str:
     """Render a compact JSON description of the source system.
 
     We include a concise JSON-schema hint inside the prompt because Azure
     response_format=json_object guarantees JSON syntax but not field shape.
     Keeping the schema hint here (rather than relying on the SDK's structured
     outputs) keeps the agent portable across SDK / API-version variations.
+
+    ``reference_block`` (when non-empty) prepends previously-approved reference
+    objects so the model imitates the shop's established naming / business-key
+    conventions. Empty by default → byte-identical to the pre-learning prompt.
     """
     tables: list[SourceTable] = list(payload.tables[:_MAX_TABLES_IN_PROMPT])
     body = {
@@ -268,8 +1388,17 @@ def _build_user_prompt(payload: DiscoveryPayload) -> str:
             }
         ],
     }
+    preamble = ""
+    if reference_block:
+        preamble = (
+            "APPROVED REFERENCE EXAMPLES (previously human-approved Data Vault "
+            "objects from this shop — mirror their structure, naming and "
+            "business-key style when a source table is similar; do NOT copy them "
+            "verbatim if the source differs):\n" + reference_block + "\n\n"
+        )
     return (
-        "Source system:\n"
+        preamble
+        + "Source system:\n"
         + json.dumps(body, indent=2, ensure_ascii=False)
         + "\n\nReturn JSON with EXACTLY these top-level keys: "
         "system_id, hubs, links, satellites.\n"
@@ -278,29 +1407,109 @@ def _build_user_prompt(payload: DiscoveryPayload) -> str:
     )
 
 
+def _estimate_table_tokens(table: SourceTable) -> int:
+    """Rough token estimate for the JSON form of a single table.
+
+    Used by :func:`_chunk_tables` to decide when a batch's prompt is large
+    enough to flush early. Same 4-chars/token heuristic as the runtime
+    token bucket so the two stay consistent.
+    """
+    try:
+        return math.ceil(len(json.dumps(_summarise_table(table))) / _CHARS_PER_TOKEN)
+    except Exception:
+        return 0
+
+
+def _chunk_tables(
+    tables: Sequence[SourceTable],
+    *,
+    max_tables: int,
+    max_prompt_tokens: int,
+) -> list[tuple[SourceTable, ...]]:
+    """Size-balanced batching: respect both per-batch table count and token budget.
+
+    A batch is flushed when adding the next table would exceed *either* the
+    balanced table count or ``max_prompt_tokens`` (when > 0). Single tables
+    that exceed the token cap on their own are emitted as a one-table batch
+    so we never silently drop input. Preserves input order so related tables
+    that are adjacent in the catalog stay in the same batch.
+
+    The per-batch table count is *balanced* rather than greedy: instead of
+    packing ``max_tables`` into every batch and leaving a tiny remainder
+    (e.g. 9 tables, cap 8 → ``[8, 1]``), it spreads tables evenly across the
+    minimum number of batches (→ ``[5, 4]``). A lone trailing table is the
+    worst case for plan quality — with no siblings the model often emits a
+    degenerate plan that fails validation, and a single-table batch cannot be
+    split further to recover. Balancing removes that failure mode.
+    """
+    n = len(tables)
+    if max_tables > 0 and n > max_tables:
+        n_batches = math.ceil(n / max_tables)
+        balanced_max = math.ceil(n / n_batches)
+    else:
+        balanced_max = max_tables
+
+    out: list[tuple[SourceTable, ...]] = []
+    cur: list[SourceTable] = []
+    cur_tokens = 0
+    for t in tables:
+        t_tokens = _estimate_table_tokens(t) if max_prompt_tokens > 0 else 0
+        too_many = balanced_max > 0 and len(cur) >= balanced_max
+        too_big = max_prompt_tokens > 0 and cur and (cur_tokens + t_tokens) > max_prompt_tokens
+        if cur and (too_many or too_big):
+            out.append(tuple(cur))
+            cur, cur_tokens = [], 0
+        cur.append(t)
+        cur_tokens += t_tokens
+    if cur:
+        out.append(tuple(cur))
+    return out
+
+
 def _summarise_table(table: SourceTable) -> dict[str, Any]:
-    return {
+    wide = len(table.columns) > _WIDE_TABLE_COLUMN_THRESHOLD
+    out: dict[str, Any] = {
         "name": table.name,
         "fully_qualified_name": table.fully_qualified_name,
-        "description": table.description,
-        "columns": [_summarise_column(c) for c in table.columns],
+        "columns": [_summarise_column(c, compact=wide) for c in table.columns],
     }
+    if table.description:
+        # Always keep table-level description — it's the single best hint for
+        # naming hubs after concepts instead of source table names. Truncate
+        # only in wide mode to bound token cost.
+        if wide and len(table.description) > _WIDE_TABLE_TEXT_TRUNCATE * 2:
+            out["description"] = table.description[: _WIDE_TABLE_TEXT_TRUNCATE * 2]
+        else:
+            out["description"] = table.description
+    return out
 
 
-def _summarise_column(col: SourceColumn) -> dict[str, Any]:
+def _summarise_column(col: SourceColumn, *, compact: bool = False) -> dict[str, Any]:
     out: dict[str, Any] = {
         "name": col.name,
         "type": col.inferred_type.value,
         "nullable": col.nullable,
     }
+    # Description and key signals are mandatory for plan quality — without
+    # them the modeller cannot tell a surrogate GUID from a real business
+    # key, and FK relationships across tables disappear. Keep them in both
+    # compact and verbose modes; only truncate long descriptions in compact.
     if col.description:
-        out["description"] = col.description
+        if compact and len(col.description) > _WIDE_TABLE_TEXT_TRUNCATE:
+            out["description"] = col.description[:_WIDE_TABLE_TEXT_TRUNCATE]
+        else:
+            out["description"] = col.description
     if col.profile is not None:
         out["null_rate"] = round(col.profile.null_rate, 3)
         out["cardinality_ratio"] = round(col.profile.cardinality_ratio, 3)
         out["is_likely_key"] = col.profile.is_likely_key
         if col.profile.sample_values:
-            out["samples"] = list(col.profile.sample_values[:_MAX_SAMPLE_VALUES_PER_COLUMN])
+            samples = list(col.profile.sample_values[:_MAX_SAMPLE_VALUES_PER_COLUMN])
+            if compact:
+                samples = [
+                    (s[:_WIDE_TABLE_TEXT_TRUNCATE] if isinstance(s, str) else s) for s in samples
+                ]
+            out["samples"] = samples
     return out
 
 
@@ -338,7 +1547,132 @@ def _vote(candidates: Sequence[ModelingPlan]) -> ModelingPlan:
     return finalists[0]
 
 
+def _merge_plans(plans: Sequence[ModelingPlan], *, system_id: str) -> ModelingPlan:
+    """Union per-batch plans into a single :class:`ModelingPlan`.
+
+    Dedup strategy: keep the first decision per ``name``. Tables don't
+    overlap across batches in the current batching scheme, so collisions
+    are rare; when they do occur (e.g. the model reuses a generic hub
+    name like ``hub_party``), preferring the earlier batch keeps the
+    merge deterministic.
+
+    Quality caveat: links between hubs in different batches cannot be
+    produced — the modeller only sees one batch at a time. Callers that
+    need cross-batch links should widen ``modeller_batch_size`` or run a
+    follow-up reconciliation pass (not implemented in this version).
+    """
+    if not plans:
+        raise ValueError("_merge_plans requires at least one plan")
+    if len(plans) == 1:
+        return plans[0]
+
+    seen_hub: set[str] = set()
+    seen_link: set[str] = set()
+    seen_sat: set[str] = set()
+    hubs: list[Any] = []
+    links: list[Any] = []
+    sats: list[Any] = []
+    for p in plans:
+        for h in p.hubs:
+            if h.name not in seen_hub:
+                seen_hub.add(h.name)
+                hubs.append(h)
+        for ln in p.links:
+            if ln.name not in seen_link:
+                seen_link.add(ln.name)
+                links.append(ln)
+        for s in p.satellites:
+            if s.name not in seen_sat:
+                seen_sat.add(s.name)
+                sats.append(s)
+
+    # Drop satellites whose parent hub didn't survive the merge — the
+    # ModelingPlan validator would otherwise reject the whole plan.
+    hub_names = {h.name for h in hubs}
+    dropped = [s.name for s in sats if s.parent_hub not in hub_names]
+    if dropped:
+        _LOG.warning(
+            "_merge_plans: dropping %d satellite(s) with unknown parent hub: %s",
+            len(dropped),
+            ", ".join(dropped[:5]) + ("…" if len(dropped) > 5 else ""),
+        )
+        sats = [s for s in sats if s.parent_hub in hub_names]
+
+    return ModelingPlan(
+        system_id=system_id,
+        hubs=tuple(hubs),
+        links=tuple(links),
+        satellites=tuple(sats),
+    )
+
+
 # ====================================================================== factory
+
+
+# Bounded retry for the intermittently-flaky warehouse corpus load (see body).
+_CORPUS_LOAD_ATTEMPTS = 3
+_CORPUS_LOAD_RETRY_SLEEP_S = 3.0
+
+
+def _load_reference_corpus(
+    settings: AISettings, *, exclude_catalogs: tuple[str, ...] = ()
+) -> ReferenceLoader | None:
+    """Build a corpus-backed :class:`ReferenceLoader`, or ``None`` on any failure.
+
+    Called once per agent construction (not per completion). A missing warehouse,
+    empty corpus, or any load error degrades gracefully to ``None`` so modelling
+    still runs — just without few-shot examples — rather than failing the run.
+
+    ``exclude_catalogs`` drops corpus rows from those source catalogs before
+    building the loader. This is the **leave-one-out** hook the ablation study
+    uses to prevent train/test leakage — testing system X with X's own approved
+    model excluded, so retrieval measures genuine transfer, not memorisation.
+    """
+    import time as _time
+
+    from dbt_builder.src.ai.reference import ReferenceLoader
+    from dbt_builder.src.ai.store.corpus import make_example_store
+
+    # The warehouse token exchange is intermittently flaky (transient
+    # "Failed to invoke the Azure CLI" / token-exchange errors). Without a retry
+    # a single hiccup makes this return None, silently degrading a learning-ON
+    # run to a no-corpus run — which corrupts any OFF-vs-ON comparison. Retry a
+    # few times before giving up; a *permanent* failure still degrades gracefully.
+    last_exc: Exception | None = None
+    for attempt in range(1, _CORPUS_LOAD_ATTEMPTS + 1):
+        try:
+            store = make_example_store(settings)
+            if store is None:
+                return None
+            rows = store.load_latest()
+            if exclude_catalogs:
+                excl = {c.lower() for c in exclude_catalogs}
+                rows = tuple(r for r in rows if r.catalog.lower() not in excl)
+            loader = ReferenceLoader.from_corpus_rows(rows)
+            _LOG.info(
+                "ModellingAgent: loaded %d approved example(s) from the learning corpus"
+                "%s",
+                len(loader.all()),
+                f" (excluding catalogs {list(exclude_catalogs)})" if exclude_catalogs else "",
+            )
+            return loader
+        except Exception as exc:  # noqa: BLE001 — never let corpus load fail a run
+            last_exc = exc
+            if attempt < _CORPUS_LOAD_ATTEMPTS:
+                _LOG.warning(
+                    "ModellingAgent: corpus load attempt %d/%d failed (%s); retrying...",
+                    attempt,
+                    _CORPUS_LOAD_ATTEMPTS,
+                    exc,
+                )
+                _time.sleep(_CORPUS_LOAD_RETRY_SLEEP_S)
+    _LOG.warning(
+        "ModellingAgent: could not load approved-YAML corpus after %d attempt(s) (%s); "
+        "proceeding without few-shot examples.",
+        _CORPUS_LOAD_ATTEMPTS,
+        last_exc,
+    )
+    return None
 
 
 def get_modelling_agent(
@@ -347,6 +1681,18 @@ def get_modelling_agent(
     deployment: str | None = None,
     samples: int = 3,
     max_tokens: int | None = None,
+    tool_specs: tuple[ToolSpec, ...] | None = None,
+    max_tool_rounds: int = 6,
+    sample_parallelism: int | None = None,
+    batch_size: int | None = None,
+    batch_parallelism: int | None = None,
+    batch_samples: int | None = None,
+    max_prompt_tokens: int | None = None,
+    large_catalog_threshold: int | None = None,
+    max_completion_tokens: int | None = None,
+    reference_loader_override: ReferenceLoader | None = None,
+    reference_limit_override: int | None = None,
+    learning_exclude_catalogs: tuple[str, ...] = (),
 ) -> ModellingAgent:
     """Build a :class:`ModellingAgent` from settings.
 
@@ -356,18 +1702,72 @@ def get_modelling_agent(
     ``max_tokens`` defaults to the per-deployment budget configured on
     :class:`AISettings` (see :meth:`AISettings.modeller_max_tokens_for`).
     Pass an explicit integer to override (useful for tests pinning behaviour).
+
+    ``sample_parallelism`` defaults to
+    :attr:`AISettings.modeller_sample_parallelism`; the setting's ``0``
+    sentinel expands to ``samples`` so all completions run concurrently.
+
+    ``batch_size``, ``batch_parallelism``, and ``large_catalog_threshold``
+    default to the matching ``modeller_*`` settings. With defaults, any
+    payload above ``modeller_batch_size`` tables is split into batches
+    that run in parallel and use a single completion each, keeping
+    wall-clock latency roughly constant as the catalogue grows.
     """
     from openai import AzureOpenAI
 
     from dbt_builder.src.ai.settings import get_settings
 
     cfg = settings or get_settings()
-    chosen = deployment or cfg.primary_chat_deployment
+    # Prefer the modeller-specific deployment (defaults to gpt-4o) so the
+    # hot, fan-out-heavy modelling step does not share gpt-5's tight TPM
+    # with the rest of the pipeline. An explicit ``deployment`` argument
+    # (used by tests and ops scripts) always wins.
+    chosen = (
+        deployment or getattr(cfg, "modeller_chat_deployment", None) or cfg.primary_chat_deployment
+    )
     budget = max_tokens if max_tokens is not None else cfg.modeller_max_tokens_for(chosen)
+    if sample_parallelism is None:
+        configured = cfg.modeller_sample_parallelism
+        sample_parallelism = samples if configured == 0 else configured
+    if batch_size is None:
+        batch_size = cfg.modeller_batch_size
+    if batch_parallelism is None:
+        batch_parallelism = cfg.modeller_batch_parallelism
+    if batch_samples is None:
+        batch_samples = cfg.modeller_batch_samples
+    if max_prompt_tokens is None:
+        max_prompt_tokens = cfg.modeller_max_prompt_tokens
+    if large_catalog_threshold is None:
+        large_catalog_threshold = cfg.modeller_large_catalog_threshold
+    if max_completion_tokens is None:
+        max_completion_tokens = cfg.modeller_completion_cap()
+    # Feedback learning: load the approved-example corpus once, only when enabled.
+    # An explicit ``reference_loader_override`` (used by the ablation harness to
+    # inject a leave-one-out corpus) always wins and bypasses settings gating.
+    reference_loader: ReferenceLoader | None = None
+    reference_limit = 0
+    if reference_loader_override is not None:
+        reference_loader = reference_loader_override
+        reference_limit = (
+            reference_limit_override
+            if reference_limit_override is not None
+            else getattr(cfg, "learning_examples_k", 0)
+        )
+    elif getattr(cfg, "learning_examples_enabled", False):
+        reference_limit = (
+            reference_limit_override
+            if reference_limit_override is not None
+            else getattr(cfg, "learning_examples_k", 0)
+        )
+        if reference_limit > 0:
+            reference_loader = _load_reference_corpus(
+                cfg, exclude_catalogs=learning_exclude_catalogs
+            )
     client = AzureOpenAI(
         azure_endpoint=cfg.azure_openai_endpoint,
         api_key=cfg.azure_openai_api_key.get_secret_value(),
         api_version=cfg.azure_openai_api_version,
+        max_retries=cfg.llm_max_retries,
     )
     return ModellingAgent(
         client=client,
@@ -375,4 +1775,18 @@ def get_modelling_agent(
         api_version=cfg.azure_openai_api_version,
         samples=samples,
         max_tokens=budget,
+        tool_specs=tool_specs,
+        max_tool_rounds=max_tool_rounds,
+        sample_parallelism=sample_parallelism,
+        batch_size=batch_size,
+        batch_parallelism=batch_parallelism,
+        batch_samples=batch_samples,
+        max_prompt_tokens=max_prompt_tokens,
+        large_catalog_threshold=large_catalog_threshold,
+        max_completion_tokens=max_completion_tokens,
+        seed=None if cfg.llm_seed < 0 else cfg.llm_seed,
+        technical_payload_columns=cfg.technical_payload_column_set(),
+        reference_loader=reference_loader,
+        reference_limit=reference_limit,
+        link_parsimony=bool(getattr(cfg, "link_parsimony_enabled", True)),
     )

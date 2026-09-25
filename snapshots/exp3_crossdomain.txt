@@ -1,0 +1,60 @@
+﻿# Experiment 3 - cross-domain control (CIM, seeds 42-43)
+# command: python -m dbt_builder.src.ai.evaluation experiment --system IEC_CIM_001 --condition off --condition loo_k3:k=3,exclude=iec_cim+edh_unreg_silver_dev_st --condition full_k10:k=10 --condition loo_k10:k=10,exclude=iec_cim+edh_unreg_silver_dev_st --seeds 42,43
+# generated: 2026-07-30 22:53
+systems=['IEC_CIM_001']  conditions=['off', 'loo_k3', 'full_k10', 'loo_k10']  seeds=[42, 43]  samples=1
+
+[IEC_CIM_001    off        s=42] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 7s
+[IEC_CIM_001    off        s=43] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 6s
+At C:\Users\user\AppData\Local\Temp\claude\C--Users-user-OneDrive---E-ON-Desktop-DWA\cf4f9cbd-901d-42
+84-b9bb-092f0532a08b\scratchpad\regen_snapshots.ps1:13 char:12
+ 
+[IEC_CIM_001    loo_k3     s=42] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 7s
+[IEC_CIM_001    loo_k3     s=43] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 5s
+[IEC_CIM_001    full_k10   s=42] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 5s
+[IEC_CIM_001    full_k10   s=43] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 6s
+[IEC_CIM_001    loo_k10    s=42] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 5s
+[IEC_CIM_001    loo_k10    s=43] ef1=1.00 nam=1.00 conf=1.00 iss=0 wimpact=0 lr=2.00 | model 6s
+
+=== STUDY SUMMARY (means over seeds) ===
+
+IEC_CIM_001/off:
+  gold_entity_f1         1.0
+  gold_naming_adherence  1.0
+  conformance_score      1.0
+  issue_count            0.0
+  weighted_error_impact  0.0
+  gold_link_ratio        2.0
+  correction_steps       2.5
+  taxonomy raw     : {}
+
+IEC_CIM_001/loo_k3:
+  gold_entity_f1         1.0
+  gold_naming_adherence  1.0
+  conformance_score      1.0
+  issue_count            0.0
+  weighted_error_impact  0.0
+  gold_link_ratio        2.0
+  correction_steps       2.0
+  taxonomy raw     : {}
+
+IEC_CIM_001/full_k10:
+  gold_entity_f1         1.0
+  gold_naming_adherence  1.0
+  conformance_score      1.0
+  issue_count            0.0
+  weighted_error_impact  0.0
+  gold_link_ratio        2.0
+  correction_steps       2.0
+  taxonomy raw     : {}
+
+IEC_CIM_001/loo_k10:
+  gold_entity_f1         1.0
+  gold_naming_adherence  1.0
+  conformance_score      1.0
+  issue_count            0.0
+  weighted_error_impact  0.0
+  gold_link_ratio        2.0
+  correction_steps       2.0
+  taxonomy raw     : {}
+
+results written to C:\Users\user\OneDrive - ExampleCorp\Desktop\DWA\dwa\output\exp3_crossdomain.json

@@ -145,7 +145,12 @@ def _system_block(system: SourceSystem, *, load_frequency: str) -> dict[str, Any
 
 
 def _staging_model_name(source_table: str) -> str:
-    return f"stg_{source_table}"
+    # Strip any catalog/schema qualifier defensively. The decision contract
+    # already normalises this, but rendering must never produce names like
+    # `stg_catalog.schema.table` even if a caller supplies an unvalidated
+    # plan (e.g. from a fixture or a manual edit).
+    bare = source_table.rsplit(".", 1)[-1]
+    return f"stg_{bare}"
 
 
 def _hub_block(hub: HubDecision) -> dict[str, Any]:

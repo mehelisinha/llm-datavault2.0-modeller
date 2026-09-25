@@ -1,0 +1,18 @@
+{
+  "description": "Ground-truth expert impact labels for the CIM drift dataset (Experiment 6, H2b). Each entry is one atomic change between edh_unreg_silver_dev_st.bronze (approved contract) and edh_unreg_silver_dev_st.cim_drifted (drifted). Labels assigned from the DV impact taxonomy: additive / cosmetic / breaking.",
+  "catalog": "edh_unreg_silver_dev_st",
+  "approved_schema": "bronze",
+  "drifted_schema": "cim_drifted",
+  "changes": [
+    {"table": "conducting_equipment", "change": "add_column", "column": "owner", "detail": "STRING added", "expert_impact": "additive"},
+    {"table": "conducting_equipment", "change": "remove_column", "column": "serial_number", "detail": "STRING removed", "expert_impact": "breaking"},
+    {"table": "conducting_equipment", "change": "type_change", "column": "mrid", "detail": "string -> bigint (business key)", "expert_impact": "breaking"},
+    {"table": "terminals", "change": "type_change", "column": "sequence_number", "detail": "bigint -> decimal(38,0), lossless widening on a non-key column", "expert_impact": "cosmetic"},
+    {"table": "terminals", "change": "add_column", "column": "phase_code", "detail": "STRING added", "expert_impact": "additive"},
+    {"table": "terminals", "change": "type_change", "column": "phases", "detail": "string -> int, incompatible", "expert_impact": "breaking"},
+    {"table": "connectivity_nodes", "change": "table_removed", "column": null, "detail": "source table absent -> orphaned vault entity", "expert_impact": "breaking"},
+    {"table": "cim_measurements", "change": "table_added", "column": null, "detail": "new source table -> new hub", "expert_impact": "additive"}
+  ],
+  "class_counts": {"additive": 3, "cosmetic": 1, "breaking": 4},
+  "notes": "Cosmetic is under-represented (n=1): the CIM source types offer few clean compatible widenings (no INT->BIGINT candidates; only sequence_number BIGINT->DECIMAL). Add more numeric columns or drift ServiceNow to balance the cosmetic class."
+}

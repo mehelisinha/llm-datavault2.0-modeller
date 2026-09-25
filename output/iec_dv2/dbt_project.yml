@@ -44,9 +44,3 @@ models:
         +materialized: incremental
         +incremental_strategy: merge
       +catalog: edh_unreg_silver_dev_st
-    business_vault:
-      +schema: iec61968_cim_business_vault
-      +materialized: table
-      +tags:
-      - business_vault
-      +catalog: edh_unreg_silver_dev_st
