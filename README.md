@@ -6,7 +6,7 @@ It then writes the result as a metadata YAML file.
 A deterministic engine turns that YAML into a runnable dbt project.
 A human always reviews and approves the result before it is used.
 
-Demo video link: https://youtu.be/5ZJ1LW4zIVQ
+## Demo video link: https://youtu.be/5ZJ1LW4zIVQ
 
 ## About this thesis
 
