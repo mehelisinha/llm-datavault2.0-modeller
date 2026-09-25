@@ -1,0 +1,84 @@
+﻿# Experiment 2 - learning curve + transfer probe (ServiceNow, seeds 42-43)
+# command: python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --condition off --condition k1:k=1 --condition k3:k=3 --condition k5:k=5 --condition k10:k=10 --condition loo_k10:k=10,exclude=edh_unreg_consumption_dev --seeds 42,43
+# generated: 2026-07-30 22:47
+systems=['SNOW_IT4IT_001']  conditions=['off', 'k1', 'k3', 'k5', 'k10', 'loo_k10']  seeds=[42, 43]  samples=1
+
+[SNOW_IT4IT_001 off        s=42] ef1=0.93 nam=0.00 conf=0.95 iss=7 wimpact=40 lr=1.18 | model 31s
+[SNOW_IT4IT_001 off        s=43] ef1=0.93 nam=0.00 conf=0.97 iss=5 wimpact=30 lr=0.91 | model 20s
+At C:\Users\user\AppData\Local\Temp\claude\C--Users-user-OneDrive---E-ON-Desktop-DWA\cf4f9cbd-901d-42
+84-b9bb-092f0532a08b\scratchpad\regen_snapshots.ps1:13 char:12
+ 
+[SNOW_IT4IT_001 k1         s=42] ef1=0.88 nam=0.00 conf=0.93 iss=8 wimpact=38 lr=1.18 | model 59s
+[SNOW_IT4IT_001 k1         s=43] ef1=0.93 nam=0.00 conf=0.97 iss=5 wimpact=31 lr=1.00 | model 29s
+[SNOW_IT4IT_001 k3         s=42] ef1=0.93 nam=0.00 conf=0.97 iss=5 wimpact=33 lr=1.18 | model 22s
+[SNOW_IT4IT_001 k3         s=43] ef1=0.88 nam=0.00 conf=0.96 iss=7 wimpact=39 lr=1.36 | model 21s
+[SNOW_IT4IT_001 k5         s=42] ef1=0.93 nam=0.00 conf=0.94 iss=7 wimpact=39 lr=1.27 | model 15s
+[SNOW_IT4IT_001 k5         s=43] ef1=0.93 nam=0.00 conf=0.95 iss=7 wimpact=44 lr=1.27 | model 26s
+[SNOW_IT4IT_001 k10        s=42] ef1=1.00 nam=0.86 conf=0.96 iss=6 wimpact=40 lr=1.18 | model 15s
+[SNOW_IT4IT_001 k10        s=43] ef1=1.00 nam=0.86 conf=0.96 iss=6 wimpact=43 lr=1.27 | model 18s
+[SNOW_IT4IT_001 loo_k10    s=42] ef1=0.93 nam=0.00 conf=0.94 iss=7 wimpact=36 lr=1.18 | model 16s
+[SNOW_IT4IT_001 loo_k10    s=43] ef1=0.93 nam=0.00 conf=0.97 iss=5 wimpact=32 lr=1.18 | model 24s
+
+=== STUDY SUMMARY (means over seeds) ===
+
+SNOW_IT4IT_001/off:
+  gold_entity_f1         0.933
+  gold_naming_adherence  0.0
+  conformance_score      0.957
+  issue_count            6.0
+  weighted_error_impact  35.0
+  gold_link_ratio        1.045
+  correction_steps       12.0
+  taxonomy raw     : {'surrogate_business_key': 8, 'hub_without_satellite': 4}
+
+SNOW_IT4IT_001/k1:
+  gold_entity_f1         0.904
+  gold_naming_adherence  0.0
+  conformance_score      0.95
+  issue_count            6.5
+  weighted_error_impact  34.5
+  gold_link_ratio        1.091
+  correction_steps       14.0
+  taxonomy raw     : {'surrogate_business_key': 9, 'hub_without_satellite': 4}
+
+SNOW_IT4IT_001/k3:
+  gold_entity_f1         0.904
+  gold_naming_adherence  0.0
+  conformance_score      0.962
+  issue_count            6.0
+  weighted_error_impact  36.0
+  gold_link_ratio        1.273
+  correction_steps       13.5
+  taxonomy raw     : {'surrogate_business_key': 10, 'hub_without_satellite': 2}
+
+SNOW_IT4IT_001/k5:
+  gold_entity_f1         0.933
+  gold_naming_adherence  0.0
+  conformance_score      0.947
+  issue_count            7.0
+  weighted_error_impact  41.5
+  gold_link_ratio        1.273
+  correction_steps       14.0
+  taxonomy raw     : {'surrogate_business_key': 10, 'hub_without_satellite': 4}
+
+SNOW_IT4IT_001/k10:
+  gold_entity_f1         1.0
+  gold_naming_adherence  0.857
+  conformance_score      0.959
+  issue_count            6.0
+  weighted_error_impact  41.5
+  gold_link_ratio        1.227
+  correction_steps       5.5
+  taxonomy raw     : {'surrogate_business_key': 8, 'hub_without_satellite': 4}
+
+SNOW_IT4IT_001/loo_k10:
+  gold_entity_f1         0.933
+  gold_naming_adherence  0.0
+  conformance_score      0.951
+  issue_count            6.0
+  weighted_error_impact  34.0
+  gold_link_ratio        1.182
+  correction_steps       13.5
+  taxonomy raw     : {'surrogate_business_key': 8, 'hub_without_satellite': 4}
+
+results written to C:\Users\user\OneDrive - ExampleCorp\Desktop\DWA\dwa\output\exp2_curve.json

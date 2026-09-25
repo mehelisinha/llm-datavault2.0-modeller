@@ -1,0 +1,23 @@
+# Gold DV2 model for the IEC 61968 / CIM source system.
+#
+# Structural format: each hub is keyed by (source_table, business_keys) — the
+# naming-independent entity identity — plus the expected concept `name`. Grading
+# matches entities by (source_table, business_key) and reports naming adherence
+# separately (see gold.py / RUBRIC.md). system_id matches iec_cim_discovery.yaml.
+#
+# Source tables come from poc/metadata/iec_cim_discovery.yaml. Every CIM hub is
+# keyed on mRID.
+system_id: IEC_CIM_001
+discovery_payload: poc/metadata/iec_cim_discovery.yaml
+hubs:
+  - {source_table: conducting_equipment, business_keys: [mrid], name: hub_conducting_equipment}
+  - {source_table: connectivity_nodes,   business_keys: [mrid], name: hub_connectivity_node}
+  - {source_table: terminals,            business_keys: [mrid], name: hub_terminal}
+# Reference counts only (names are naming-confounded, so not name-matched).
+links:
+  - link_terminal_equipment_node
+satellites:
+  - sat_conducting_equipment_details
+  - sat_conducting_equipment_operational
+  - sat_connectivity_node_details
+  - sat_terminal_details

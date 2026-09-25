@@ -1,0 +1,22 @@
+Clean leave-one-out re-run — ServiceNow, learning OFF vs ON(k=10)
+corpus after LOO exclude ['edh_unreg_consumption_dev', 'edh_unreg_bronze_dev']: 21 CIM examples
+seeds: 62-81 (n=20)
+
+SNOW_IT4IT_001/off:
+  gold_entity_f1         0.93
+  gold_naming_adherence  0.0
+  conformance_score      0.96
+  issue_count            5.55
+  weighted_error_impact  33.95
+  gold_link_ratio        1.155
+  correction_steps       12.2
+
+SNOW_IT4IT_001/on:
+  gold_entity_f1         0.947
+  gold_naming_adherence  0.0
+  conformance_score      0.956
+  issue_count            5.6
+  weighted_error_impact  31.6
+  gold_link_ratio        1.064
+  correction_steps       11.95
+

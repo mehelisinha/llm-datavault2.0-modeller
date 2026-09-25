@@ -72,3 +72,27 @@ def tmp_yaml(tmp_path: Path) -> Iterator[Path]:
     target = tmp_path / "yaml"
     target.mkdir()
     yield target
+
+
+@pytest.fixture(autouse=True)
+def _force_local_metadata_backend(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Pin the metadata store backend to ``local`` for every AI test.
+
+    Without this, any test that constructs a ``DwaService`` and calls
+    ``approve()`` would write fixture objects (hub_x, ...) into the REAL
+    Databricks learning corpus, because the store factories default their
+    backend from settings and a developer ``.env`` points at Delta. Forcing
+    ``local`` keeps the suite hermetic (no network, no creds, no corpus
+    poisoning) and fast. An env var takes precedence over ``.env`` in
+    pydantic-settings; the settings cache is cleared before and after so the
+    override is picked up and never leaks between tests.
+
+    Tests that exercise the Delta path use stub executors and build the stores
+    directly, so they are unaffected.
+    """
+    from dbt_builder.src.ai.settings import get_settings
+
+    monkeypatch.setenv("DWA_AI_METADATA_STORE_BACKEND", "local")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()

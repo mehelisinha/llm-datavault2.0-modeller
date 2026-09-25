@@ -21,6 +21,11 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Imported eagerly: ``catalog`` has no dependency on ``payloads``, so this is
+# safe and lets the tool-loop in the modeller surface the existing vault state
+# to the LLM as one of its available tools.
+from dbt_builder.src.ai.contracts.catalog import CatalogSnapshot  # noqa: E402
+
 
 class InferredType(str, Enum):
     """Coarse-grained semantic type used by the modelling agents.
@@ -199,6 +204,14 @@ class DiscoveryPayload(BaseModel):
     tables: tuple[SourceTable, ...] = Field(
         default=(),
         description="Tables discovered in the source system.",
+    )
+    catalog_snapshot: CatalogSnapshot | None = Field(
+        default=None,
+        description=(
+            "Current vault catalog snapshot. When present the tool-loop in the "
+            "modeller can answer 'get_existing_vault_entities' calls so the LLM "
+            "avoids re-proposing entities that already exist."
+        ),
     )
 
     @field_validator("tables")

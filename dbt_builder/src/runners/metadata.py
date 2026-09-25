@@ -110,6 +110,18 @@ class Metadata:
     # Project model
     # ------------------------------------------------------------------
 
+    def _generates_business_vault(self) -> bool:
+        """True when this runner actually emits business-vault models.
+
+        The dbt_project.yml must not declare config for a model group that has no
+        models — dbt warns about such "unused config paths". Business-vault
+        generation is not implemented in this runner (see
+        :meth:`get_all_component_models`), so the flag is derived from the real
+        generators rather than hardcoded: the moment a business-vault generator is
+        added here, its schema config re-appears automatically.
+        """
+        return False
+
     def get_project_model(self) -> DVProjectModel:
         """Return a DVProjectModel for dbt_project.yml."""
         schemas = self._schema_names
@@ -131,7 +143,11 @@ class Metadata:
             catalog=self.system["catalog"],
             stg_schema=schemas.staging,
             raw_vault_schema=schemas.raw_vault,
-            business_vault_schema=schemas.business_vault,
+            # Only declare the business-vault config when BV models are actually
+            # generated, else dbt warns about an unused config path.
+            business_vault_schema=(
+                schemas.business_vault if self._generates_business_vault() else None
+            ),
         )
 
     # ------------------------------------------------------------------

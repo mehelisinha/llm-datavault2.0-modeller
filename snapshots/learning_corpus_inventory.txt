@@ -1,0 +1,22 @@
+Approved-YAML learning corpus — composition (read via make_example_store / load_latest)
+=======================================================================================
+Total approved raw-vault examples: 146
+
+By source catalog:
+   edh_unreg_consumption_dev   86    ServiceNow IT4IT (primary approved model)
+   edh_unreg_bronze_dev        39    ServiceNow / IT4IT (architecture entities)
+   edh_unreg_silver_dev_st     13    IEC CIM (electrical grid)
+   iec_cim                      8    IEC CIM (electrical grid)
+
+By kind:
+   satellite   71
+   link        42
+   hub         33
+
+Note for H1c (feedback learning) evaluation:
+   The corpus contains ServiceNow's OWN approved model (edh_unreg_consumption_dev
+   + edh_unreg_bronze_dev). A valid cross-domain transfer test therefore uses
+   leave-one-out: both ServiceNow-family catalogs are excluded, leaving only the
+   21 CIM examples. Any naming/structure gain the 'on' arm then shows is genuine
+   cross-domain transfer (grid -> IT service management), not memorisation of the
+   system's own approved answer.

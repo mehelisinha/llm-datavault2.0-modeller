@@ -22,6 +22,7 @@ from dbt_builder.src.ai.contracts.catalog import (
     BronzeSnapshot,
     BronzeTable,
 )
+from dbt_builder.src.ai.pipeline._parallel import ordered_parallel_map
 
 ListTables = Callable[[str, str], Iterable[str]]
 """Signature: ``(catalog, schema) -> iterable of table names``."""
@@ -71,6 +72,7 @@ def read_bronze(
     describe_table: DescribeTable,
     include_patterns: tuple[str, ...] = (),
     exclude_patterns: tuple[str, ...] = (),
+    describe_parallelism: int = 1,
 ) -> BronzeSnapshot:
     """Build a :class:`BronzeSnapshot` for ``catalog.schema_name``.
 
@@ -78,16 +80,21 @@ def read_bronze(
     (case-insensitive). Empty include = include everything; exclude wins on
     conflict. Defaults exclude common temp / staging suffixes are NOT applied
     here — pass them explicitly so the choice is auditable per environment.
-    """
-    tables: list[BronzeTable] = []
-    missing_bks: list[str] = []
 
+    ``describe_parallelism`` controls how many ``describe_table`` calls run
+    concurrently. Defaults to ``1`` (serial) to preserve the original
+    contract for direct callers; the service wires in
+    :attr:`AISettings.catalog_describe_parallelism` for production runs.
+    """
+    selected: list[str] = []
     for table_name in list_tables(catalog, schema_name):
         if include_patterns and not _matches_any(table_name, include_patterns):
             continue
         if exclude_patterns and _matches_any(table_name, exclude_patterns):
             continue
+        selected.append(table_name)
 
+    def _describe(table_name: str) -> tuple[str, tuple[BronzeColumn, ...]]:
         cols = tuple(
             BronzeColumn(
                 name=col_name,
@@ -100,6 +107,13 @@ def read_bronze(
                 catalog, schema_name, table_name
             )
         )
+        return table_name, cols
+
+    described = ordered_parallel_map(_describe, selected, max_workers=describe_parallelism)
+
+    tables: list[BronzeTable] = []
+    missing_bks: list[str] = []
+    for table_name, cols in described:
         if not cols:
             # An empty column list would fail BronzeTable validation; record
             # the table as a missing-BK warning instead so the UI can show it.

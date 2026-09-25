@@ -1,0 +1,81 @@
+# DWA — Concepts & Rationale (Thesis Working Notes)
+
+> **Status:** Local-only. This folder lives under `documentation/thesis/` and is
+> excluded from git via `.gitignore` (`documentation/thesis/`). Nothing here is
+> committed or pushed. It is a personal reference for the MSc thesis and the
+> private project write-up.
+
+## Purpose
+
+This folder documents **every concept** the DWA project applies — Data
+Engineering, Data Vault 2.0, AI/LLM orchestration, and the ML-adjacent
+retrieval/embedding machinery — and, just as importantly, **why each concept
+was chosen** over the alternatives. It is written from a reading of the actual
+source code (`dbt_builder/src/ai/**`), not from the marketing description.
+
+## Files
+
+| File | What it covers |
+|------|----------------|
+| [`findings.md`](./findings.md) | **The consolidated results document.** Every evaluation metric by its full name — what it measures, the measured value, what the result *means*, and which hypothesis it supports — covering the new reliability metrics (hallucination/grounding, self-consistency, idempotency, validation pass rate, token cost, Cohen's kappa, bootstrap CIs) and all of Experiments 1–7, plus a hypothesis scorecard, reproduction commands, and an explicit list of what is *not* measured. Written for direct use in the results/discussion chapters. |
+| [`methodology-classification.md`](./methodology-classification.md) | **Research-type classification** (agreed): applied Design Science Research, evaluated via controlled experimental / comparative / benchmarking methods, quantitative-dominant mixed methods. Axis-by-axis table, what it is *not*, and DSR anchor references. |
+| [`literature-review-scope.md`](./literature-review-scope.md) | **Literature-review scope + search strategy**: 9 themes, each with paste-ready search strings, target venues (for ranking checks), and verified anchor references; databases, ranking tools (CORE/SJR), the gap statement, and inclusion/exclusion criteria. |
+| [`RQ-Hypothesis.md`](./RQ-Hypothesis.md) | **The reframed research questions and hypotheses** (RQ1–RQ3, sub-hypotheses H1a–H1d, H2a–H2c, H3a–H3c), rewritten after building the prototype and running Experiments 1–4. The authoritative, human-readable statement of what the thesis claims and tests. Supersedes the proposal wording. |
+| [`research-plan-and-experiment-map.md`](./research-plan-and-experiment-map.md) | **RQ → experiment map**: the three baselines as actually built, what Experiments 1–4 contribute and to which RQ, the gap analysis, the Experiment 5 (three-arm) design incl. the decision-(b) recommendation, the Experiment 7 (safety/governance) sketch, threats to validity + stronger scientific alternatives, and recommended sequencing. |
+| [`use-case-b-drift-design.md`](./use-case-b-drift-design.md) | **Use Case B (RQ2) design**: deterministic drift engine (exists) vs AI impact classifier (to build on `ai/usecaseB-drift`), the additive/cosmetic/breaking taxonomy reconciliation, Experiment 6 design (recall / impact accuracy / effort), and exactly what drifted Databricks dataset the author must create. |
+| [`concepts-and-rationale.md`](./concepts-and-rationale.md) | The **AI half** + cross-cutting concepts: the LLM pipeline (modelling, voting, review, RAG/embeddings), Data Vault 2.0 theory, data engineering, and MLOps — every concept, where it lives, and why. |
+| [`dv-components-sql-engine.md`](./dv-components-sql-engine.md) | The **deterministic code-generation half**: the `dv_components` engine that compiles the metadata YAML into a runnable dbt + AutomateDV project (typed models, factories, meta-templating, AutomateDV wrapping, design patterns). |
+| [`performance-evolution.md`](./performance-evolution.md) | **Methodology evolution**: how YAML generation went from slow (`ai/phase-b-agents-ui`) to fast (`ai/plan-review-modelling`) — the slow baseline, the commit table, and the detailed reason each optimisation was adopted. |
+| [`experiments-and-evaluation.md`](./experiments-and-evaluation.md) | **Feedback learning + evaluation** (`ai/feedback-learning`): how approved YAML is stored in Databricks and fed back as few-shot examples, what is stored where, how to verify a generated model, and every Phase 4–6 experiment (conformance, coverage, blast-radius, gold P/R/F1, ablation, learning curve) with the CLI to run them. |
+| [`experiment-1-modeller-ablation.md`](./experiment-1-modeller-ablation.md) | **Experiment 1 — ablation** (OFF vs leave-one-out vs full-corpus). Finding: entity identification is at ceiling and learning-independent; the naming convention is *not* transferred by k=3 few-shot (it transfers only at higher k, inside the modeller — Exp 2 — not from the reviewer, which Exp 4 shows is naming-neutral). Structural, naming-independent metrics; 3 seeds/arm. |
+| [`experiment-2-learning-curve.md`](./experiment-2-learning-curve.md) | **Experiment 2 — learning curve** (k=0…10) + leave-one-out transfer probe. Finding: naming transfer is **threshold-gated** (0→1.0 at k≈10) and is **instance-level copying, not convention generalisation** (LOO at k=10 stays 0). Corrects the thesis claim into a precise, conditional one. |
+| [`experiment-3-cross-domain-control.md`](./experiment-3-cross-domain-control.md) | **Experiment 3 — CIM cross-domain control.** Findings: cross-domain examples are **inert on CIM**; on ServiceNow, under a verified-load leave-one-out control (findings §2.8), they give a significant *structural* gain (link parsimony) with **no naming transfer and no harm** — feedback transfers structure across domains, not naming. The naming effect is **invisible on CIM because its tables are already concept-named** → its scope condition is a *table-vs-concept naming gap* (e.g. ServiceNow prefixes). Consolidated 1–3 map of where feedback helps, is inert, and is safe. |
+| [`experiment-4-endtoend-taxonomy.md`](./experiment-4-endtoend-taxonomy.md) | **Experiment 4 — end-to-end reviewer + error-taxonomy shift.** Findings: the gpt-5.2 reviewer **resolves dangling link FKs** but **introduces surrogate-key hubs** → conformance up, entity_f1 (vs gold) down, naming neutral, and **blast-radius-weighted impact rises even as issue count falls**. Revises Exp 1: clean naming comes from the *modeller's learning*, not the reviewer. End-to-end quality is a **trade-off**, not a scalar win. |
+| [`experiment-5-baseline-comparison.md`](./experiment-5-baseline-comparison.md) | **Experiment 5 — three-arm comparison (Manual vs Deterministic vs Full).** Answers RQ1/H1a. Findings: the AI's lift over the rule-based baseline is **large on hard schemas** (ServiceNow entity_f1 0.94 vs 0.50) and **nil on easy ones** (CIM both 1.0); the AI's value is the judgement calls rules can't make (splitting one table into two entities, semantic keys, excluding telemetry tables). The reviewer trades entity fidelity for conformance (H1d). Both automated arms mishandle link count in **opposite** directions (rules under-link, LLM over-links). **H3b (effort)** answered objectively via `correction_steps` — the full system reaches the gold in the fewest manual edits (~9.5 vs 25 vs 29 on ServiceNow); a practitioner time figure is stated as an assumption, not a measurement. |
+| [`experiment-6-drift.md`](./experiment-6-drift.md) | **Experiment 6 — Use Case B drift (RQ2).** Ran on a **real** CIM drift dataset (`cim_drifted` vs `bronze`, 8 labelled changes). **H2a:** deterministic recall **1.00** (all changes detected). **H2b:** AI accuracy **1.00** vs rule-only **0.88** — the AI correctly calls the one compatible widening *cosmetic* where the rule over-calls *breaking*; both keep 100% breaking recall (cost 0 vs 1). Honest limits: cosmetic n=1 (advantage rests on one case); the synthetic PoC's orphaned-table miss did **not** recur on real data. **H2c (effort):** the pipeline removes the whole 28-step discovery burden — 36 manual actions → 1 (rule) / **0** (AI). Design: **hybrid** (AI + rule safety-floor). |
+| [`experiment-7-safety-governance.md`](./experiment-7-safety-governance.md) | **Experiment 7 — safety & governance (RQ3).** **H3a refuted as built: 62% block rate** — the gate blocked plan/validation risks but was blind to *schema-drift* risk (breaking key retype, dropped column, orphaned table all sailed through), even though the diff already computed it. Diagnosed → fixed (supervisor now escalates deterministic BREAKING impact to HIGH) → **re-measured 100%**, without over-blocking benign drift. **H3c now supported** — with the store populated (35 records, 10 approved / 5 rejected), audit-trail completeness is 1.00 and the approval rate 0.667 (findings §3C). A genuine find-and-fix DSR iteration. |
+
+### Reproducible runner (all four experiments, one command)
+
+Experiments 1–4 are the same operation under different knobs, run through one
+declarative CLI — **no scratchpad scripts, no hardcoded paths**. A system is
+named by its gold `system_id` (its discovery-payload path is read from the gold
+file); a condition is a parsed spec (`off`, `on:k=10`,
+`loo:k=10,exclude=cat_a+cat_b`, `e2e:k=10,review=1`). Wiring lives in
+`dbt_builder/src/ai/evaluation/study.py`; pure logic is unit-tested with injected
+fakes in `tests/ai/test_study.py` (no network). Reproduce each experiment with:
+
+```bash
+# Exp 1 — ablation (ServiceNow: OFF vs leave-one-out vs full corpus)
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition "loo:k=3,exclude=edh_unreg_consumption_dev" --condition "on:k=3" --seeds 42,43,44
+
+# Exp 2 — learning curve + transfer probe
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 \
+  --condition off --condition on:k=1 --condition on:k=3 --condition on:k=5 --condition on:k=10 \
+  --condition "loo:k=10,exclude=edh_unreg_consumption_dev" --seeds 42,43
+
+# Exp 3 — CIM cross-domain control
+python -m dbt_builder.src.ai.evaluation experiment --system IEC_CIM_001 \
+  --condition off --condition "loo:k=3,exclude=iec_cim+edh_unreg_silver_dev_st" \
+  --condition on:k=10 --condition "loo:k=10,exclude=iec_cim+edh_unreg_silver_dev_st" --seeds 42,43
+
+# Exp 4 — end-to-end reviewer + taxonomy shift
+python -m dbt_builder.src.ai.evaluation experiment --system SNOW_IT4IT_001 --system IEC_CIM_001 \
+  --condition "e2e_off:k=0,review=1" --condition "e2e_on:k=10,review=1" --seeds 42,43
+```
+
+> The two halves meet at the **metadata YAML**: the AI side emits it, the
+> `dv_components` engine compiles it. Read `concepts-and-rationale.md` first for
+> the overall pipeline, then `dv-components-sql-engine.md` for the SQL builder.
+
+## How to cite this in the thesis
+
+Each section in `concepts-and-rationale.md` is structured as:
+
+1. **What it is** — the concept, in plain terms.
+2. **Where it lives** — the file(s) implementing it (`path:symbol`).
+3. **Why it was chosen** — the trade-off / decision rationale.
+
+You can lift the "what" and "why" almost verbatim into the thesis body and use
+the "where" as the implementation evidence appendix.

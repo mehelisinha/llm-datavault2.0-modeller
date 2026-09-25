@@ -56,3 +56,14 @@ class ApprovalRecord(BaseModel):
         default=None,
         description="plan_id of the version this record was derived from (edit chain).",
     )
+    rendered_yaml: str | None = Field(
+        default=None,
+        description="The rendered metadata YAML submitted with the DRAFT review request.",
+    )
+    yaml_path: str | None = Field(
+        default=None,
+        description=(
+            "Storage path / ADLS Gen2 URL where the approved YAML was persisted. "
+            "Populated only on APPROVED records."
+        ),
+    )
